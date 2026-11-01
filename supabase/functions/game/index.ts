@@ -16,14 +16,15 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
 const CRON_SECRET = Deno.env.get('CRON_SECRET') ?? '';
 const SPEED = Number(Deno.env.get('GAME_SPEED') ?? '1'); // 1 = one game year per real week
-// Accounts that may change the city's time speed for everyone (comma-separated e-mails).
-const ADMINS = (Deno.env.get('ADMIN_EMAILS') ?? 'thomas@teglbjerg.com').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
+// Admin accounts (time speed for everyone, test tools). The ADMIN_EMAILS secret (comma-separated) overrides this list.
+const ADMIN_LIST = ['thomas@teglbjerg.com', 'mikkel@teglbjerg.com'];
+const ADMINS = (Deno.env.get('ADMIN_EMAILS') ?? ADMIN_LIST.join(',')).split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
 
-  let body: { action?: string; args?: Record<string, unknown>; city?: string };
+  let body: { action?: string; args?: Record<string, unknown>; city?: string; as?: string };
   try { body = await req.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const action = String(body.action ?? 'sync');
   const cityId = String(body.city ?? 'aurex-bay').slice(0, 40);
@@ -42,6 +43,10 @@ Deno.serve(async (req) => {
   }
   const isAdmin = !!user && !user.is_anonymous && ADMINS.includes(String(user.email ?? '').toLowerCase());
   if (action === 'adminSpeed' && !isAdmin) return json({ result: { ok: false, msg: 'Only an admin can change the game speed.' } });
+  // The administrator player (unlimited money): only admin accounts may create it or act as it.
+  const asAdmin = body.as === Engine.ADMIN_ID;
+  if ((asAdmin || action === 'adminPlay') && !isAdmin) return json({ result: { ok: false, msg: 'Only an admin can play the administrator.' }, admin: false });
+  if (asAdmin && action === 'join') return json({ result: { ok: false, msg: 'Switch back to your own tycoon first.' }, admin: true });
   const out = (body: Record<string, unknown>) => json({ ...body, admin: isAdmin });
 
   for (let attempt = 0; attempt < 6; attempt++) {
@@ -73,6 +78,10 @@ Deno.serve(async (req) => {
         await admin.from('city_players').upsert({ city_id: cityId, user_id: userId, name: av.name });
         changed = true;
       }
+    } else if (action === 'adminPlay') {
+      const had = !!city.players[Engine.ADMIN_ID];
+      Engine.ensureAdmin(city, now);
+      if (!had) { console.log(JSON.stringify({ city: cityId, admin: user?.email, created: Engine.ADMIN_ID })); changed = true; }
     } else if (action === 'adminSpeed') {
       // The whole city changes pace: time so far is kept, only the rate from now on changes.
       const speed = Number(args.speed);
@@ -82,7 +91,8 @@ Deno.serve(async (req) => {
       console.log(JSON.stringify({ city: cityId, admin: user?.email, speed }));
       changed = true;
     } else if (action !== 'sync' && action !== 'tick') {
-      result = Engine.apply(city, userId!, action, args, now);
+      if (asAdmin) Engine.ensureAdmin(city, now);
+      result = Engine.apply(city, asAdmin ? Engine.ADMIN_ID : userId!, action, args, now);
       changed = true;
     }
 

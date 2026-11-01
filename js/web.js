@@ -113,7 +113,7 @@ function dealer(cat, u) {
   if (u.path[0] === 'item') {
     const cid = u.path[1], it = L.ITEM[cid]; if (!it || it.cat !== cat) return head + '<div class="dl-body"><h2>Not found</h2></div>';
     const inStock = c.life.dealer.includes(cid), price = L.itemValue(c, cid) * LC.dealerMarkup, h = c.life.items[cid].h, w = L.wineWindow(it, c.m / 12);
-    const owner = Object.values(c.players).find((x) => x.id !== meId() && x.life && x.life.items.some((i) => i.cid === cid));
+    const owner = Object.values(c.players).find((x) => x.id !== meId() && !x.admin && x.life && x.life.items.some((i) => i.cid === cid));
     return head + `<div class="dl-body dl-item"><div class="dl-img" style="${itemBg(cid)}"></div><div class="dl-info"><span class="dl-kick">${it.rarity} · ${esc(it.medium)}</span><h1>${esc(it.name)}</h1><p class="dl-maker">${esc(it.maker)} · ${it.year}</p>
       <div class="dl-price">${inStock ? money(price) : 'Not in stock'}</div>
       <ul class="dl-facts"><li>${it.ed === 1 ? 'One of a kind' : `${L.ownedCount(c, cid)} of ${it.ed} in Aurex Bay collections`}</li>${w ? `<li>${esc(w)}</li>` : ''}${it.set ? `<li>Part of the ${esc(SETS[it.set].name)} set (+${Math.round(SETS[it.set].bonus * 100)}% when complete)</li>` : ''}<li>Market value ${money(L.itemValue(c, cid))}</li></ul>
@@ -121,7 +121,7 @@ function dealer(cat, u) {
       <h3>Value history</h3>${lineChart([{ v: h, c: 'currentColor', fill: true, w: 2.2 }], h.map((_, i) => shortDate(c.m - h.length + 1 + i)), { fmt: (v) => money(v), label: 'Value history', h: 140 })}</div></div>`;
   }
   if (u.path[0] === 'collectors') {
-    const owned = Object.values(c.players).filter((x) => x.id !== meId() && x.life).flatMap((x) => x.life.items.filter((i) => L.ITEM[i.cid].cat === cat).map((i) => ({ x, i })));
+    const owned = Object.values(c.players).filter((x) => x.id !== meId() && !x.admin && x.life).flatMap((x) => x.life.items.filter((i) => L.ITEM[i.cid].cat === cat).map((i) => ({ x, i })));
     return head + `<div class="dl-body"><h2>${esc(d.private)}</h2><p>Pieces that are not for sale. Owners sometimes accept a good offer.</p><div class="dl-list">${owned.map(({ x, i }) => `<div class="dl-row"><span class="dl-thumb" style="${itemBg(i.cid)}"></span><div><b>${esc(L.ITEM[i.cid].name)}</b><span>${esc(x.name)} · worth ${money(L.instValue(c, x, i))}</span></div><button class="dl-btn sm ghost" data-a="tradeOpen" data-to="${x.id}">Make an offer</button></div>`).join('') || '<p>Nobody else owns pieces like these yet.</p>'}</div></div>`;
   }
   if (u.path[0] === 'sell') {
