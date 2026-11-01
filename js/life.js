@@ -207,7 +207,7 @@ function collectionView() {
     return `<section class="cgroup"><button class="cg-h" data-a="lifeRoom" data-v="${cat}">${ricon(cat, 18)}<b>${esc(ROOMS[cat].name)}</b><span>${esc(s.text)} · ${money(L.collectionValue(c, p, cat))}</span><em>Open ›</em></button>
       ${its.length ? `<div class="cstrip">${its.map((i) => cardHTML(i.cid, { a: 'item', attrs: `data-uid="${i.uid}"`, value: L.instValue(c, p, i, sets), cost: i.cost, tag: i.lot ? 'At auction' : i.lent ? 'Museum' : '' })).join('')}</div>` : `<p class="empty">${s.open ? 'Nothing here yet. Visit the auction house or the dealer.' : esc(s.text) + '.'}</p>`}</section>`;
   }).join('');
-  const others = Object.values(c.players).filter((x) => x.id !== meId() && x.life && x.life.items.length).sort((a, b) => L.collectionValue(c, b) - L.collectionValue(c, a));
+  const others = Object.values(c.players).filter((x) => x.id !== meId() && !x.admin && x.life && x.life.items.length).sort((a, b) => L.collectionValue(c, b) - L.collectionValue(c, a));
   return `${groups}<section class="box"><h2>Other collectors <small>Trade or admire</small></h2><div class="in"><div class="rows">${others.map((o) => `<button class="crow" data-a="tradeOpen" data-to="${o.id}"><span class="av" style="${o.avatar ? `background-image:url(${o.avatar})` : `background:${o.color}`};--avc:${o.color}"></span><div class="grow"><b>${esc(o.name)}</b><span>${o.life.items.length} pieces · ${esc(L.prestige(c, o).name)}</span></div><div class="right"><b>${money(L.collectionValue(c, o))}</b><span>Propose trade ›</span></div></button>`).join('')}</div></div></section>`;
 }
 function auctionView() {
@@ -270,7 +270,7 @@ function itemInfo(cid) {
 }
 function itemModal(st) {
   const c = city(), p = me(), i = p.life.items.find((x) => x.uid === st.uid); if (!i) return '<article class="sheet lifep"><p>This piece is no longer yours.</p></article>';
-  const it = L.ITEM[i.cid], v = L.instValue(c, p, i), others = Object.values(c.players).filter((x) => x.id !== meId());
+  const it = L.ITEM[i.cid], v = L.instValue(c, p, i), others = Object.values(c.players).filter((x) => x.id !== meId() && !x.admin);
   const busy = !!i.lot;
   return `<article class="sheet lifep"><span class="cap">${esc(ROOMS[it.cat].name)} · ${esc(it.maker)}</span><h2>${esc(it.name)}</h2>${itemInfo(i.cid)}
     <div class="kpis sm"><div class="stat"><small>Value now</small><b>${money(v)}</b></div><div class="stat"><small>You paid</small><b>${i.cost ? money(i.cost) : 'Gift'}</b></div><div class="stat"><small>Gain</small><b class="${v - (i.cost || 0) >= 0 ? 'up' : 'down'}">${money(v - (i.cost || 0), true)}</b></div><div class="stat"><small>${esc(COLLECT_CATS[it.cat].careName || 'Storage')}</small><b>${money(v * COLLECT_CATS[it.cat].care)}</b><span class="sub">per year</span></div></div>
@@ -301,7 +301,7 @@ function lotModal(st) {
     <p class="empty">With the buyer's premium you pay up to ${money(amt * (1 + LC.auctionPremium))}. Account: ${money(p.life.wallet)}.</p>`}</article>`;
 }
 function tradeModal(st) {
-  const c = city(), p = me(), others = Object.values(c.players).filter((x) => x.id !== meId() && x.life);
+  const c = city(), p = me(), others = Object.values(c.players).filter((x) => x.id !== meId() && !x.admin && x.life);
   const to = c.players[st.to] || others[0]; st.to = to.id;
   const sets = L.completeSets(p);
   const pickCard = (pl, i, side) => cardHTML(i.cid, { a: 'tradePick', attrs: `data-side="${side}" data-uid="${i.uid}"`, cls: 'sm' + ((side === 'give' ? st.give : st.get).includes(i.uid) ? ' picked' : ''), value: L.instValue(c, pl, i), noDelta: true });

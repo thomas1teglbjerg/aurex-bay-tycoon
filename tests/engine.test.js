@@ -77,4 +77,16 @@ const json = JSON.stringify(c2); console.log('city JSON size', Math.round(json.l
 // Watertower Sound (music) replaces the Ironport Film Production on L26
 { const c5 = E.createCity(1_700_000_000_000, { speed: 1 }); const l = c5.listings.find((x) => x.id === 'L26');
   assert(l.type === 'music' && l.title === 'Watertower Sound' && l.d === 'ironport' && E.listingPrice(l) === 12, 'Watertower Sound on L26'); }
+// the administrator player: unlimited money, hidden from standings and news, never taken over
+{ let t = 1_700_000_000_000; const c6 = E.createCity(t, { speed: 2016 }); E.addPlayer(c6, 'z', 'Z', t);
+  const a = E.ensureAdmin(c6, t); assert(a.admin && c6.players[E.ADMIN_ID] === a && E.BR.brandOf(c6, E.ADMIN_ID), 'admin player with a parent company');
+  assert(!E.standings(c6).some((x) => x.id === E.ADMIN_ID), 'admin not in the standings');
+  const newsN = c6.news.length, free = c6.listings.filter((l) => !l.owner).sort((x, y) => E.listingPrice(y) - E.listingPrice(x));
+  free.slice(0, 3).forEach((l) => assert(E.apply(c6, E.ADMIN_ID, 'buy', { lid: l.id }, t).ok, 'admin buys ' + l.id));
+  assert(c6.players[E.ADMIN_ID].cash >= E.ADMIN_CASH, 'admin cash refilled after buying');
+  assert(!c6.news.slice(0, c6.news.length - newsN).some((n) => String(n.title + n.text).includes(E.ADMIN_NAME)), 'admin stays out of the news');
+  t += E.realMsPerMonth(c6) * 6; E.advance(c6, t); assert(c6.players[E.ADMIN_ID].cash >= E.ADMIN_CASH && !E.inactive(c6, c6.players[E.ADMIN_ID]), 'still unlimited and never inactive');
+  assert(E.protection(c6, free[0]).safe, 'admin companies are protected');
+  assert(E.ensureAdmin(c6, t) === c6.players[E.ADMIN_ID], 'ensureAdmin is idempotent');
+  assert(E.apply(c6, 'z', 'buy', { lid: c6.listings.find((l) => !l.owner).id }, t).ok !== undefined, 'normal players unaffected'); }
 console.log('OK');

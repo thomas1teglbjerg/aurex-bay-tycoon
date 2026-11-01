@@ -4,7 +4,7 @@
 //                    Players sign in with e-mail + password, so their city follows them to any device.
 import * as E from '../supabase/functions/_shared/engine.js';
 
-const CITY_KEY = 'aurex-city-v2', ME_KEY = 'aurex-me-v2', ACT_KEY = 'aurex-lastact-';
+const CITY_KEY = 'aurex-city-v2', ME_KEY = 'aurex-me-v2', ACT_KEY = 'aurex-lastact-', AS_KEY = 'aurex-as';
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* storage blocked: demo still runs for this visit */ } },
@@ -22,14 +22,23 @@ export function createLocalBackend(opts = {}) {
   const save = (force) => { const t = Date.now(); if (force || t - lastSave > 4000) { store.set(CITY_KEY, JSON.stringify(city)); lastSave = t; } };
   const emit = () => subs.forEach((f) => f());
   let lastAct = Number(store.get(ACT_KEY + me)) || Date.now();
+  // ?admin=1 in the demo tries out the administrator player on this device
+  const adminDemo = /[?&]admin=1\b/.test(location.search);
+  let as = adminDemo && store.get(AS_KEY) === E.ADMIN_ID && city.players[E.ADMIN_ID] ? E.ADMIN_ID : null;
+  const acting = () => (as && me && city.players[as] ? as : me);
   return {
-    mode: 'local', canSetSpeed: true,
+    mode: 'local', canSetSpeed: true, admin: adminDemo,
+    get self() { return me; },
     // who is online: in the demo only you are; bots are not players at a screen
     get online() { return me ? [{ id: me, lastAct }] : []; },
     onPresence() { /* nothing changes besides your own actions */ },
-    get city() { return city; }, get me() { return me; },
+    get city() { return city; }, get me() { return acting(); },
+    async playAs(who) {
+      if (who === E.ADMIN_ID) { if (!adminDemo) return { ok: false, msg: 'Only an admin can play the administrator.' }; E.ensureAdmin(city, Date.now()); as = E.ADMIN_ID; } else as = null;
+      store.set(AS_KEY, as || ''); save(true); emit(); return { ok: true };
+    },
     async join({ first, last } = {}) { const av = E.BR.checkAvatarName(first, last); if (!av.ok) return av; me = 'local-' + Math.random().toString(36).slice(2, 9); store.set(ME_KEY, me); lastAct = Date.now(); E.addPlayer(city, me, av.name, Date.now(), av); save(true); emit(); return { ok: true }; },
-    async act(action, args) { lastAct = Date.now(); store.set(ACT_KEY + me, String(lastAct)); const r = E.apply(city, me, action, args, Date.now()); save(true); emit(); return r; },
+    async act(action, args) { lastAct = Date.now(); store.set(ACT_KEY + me, String(lastAct)); const r = E.apply(city, acting(), action, args, Date.now()); save(true); emit(); return r; },
     tick() { const w = city.wk, over = city.over; E.advance(city, Date.now()); save(); if (city.wk !== w || city.over !== over) emit(); },
     async setSpeed(s) { E.setSpeed(city, s, Date.now()); save(true); emit(); },
     async reset() { store.del(CITY_KEY); store.del(ME_KEY); city = E.createCity(Date.now(), { speed: city.clock.speed }); me = null; save(true); emit(); },
@@ -59,12 +68,19 @@ export async function createOnlineBackend(cfg) {
   let city = null, live = false, admin = false, recovery = /type=recovery/.test(location.hash);
   const emit = () => subs.forEach((f) => f());
   const uid = () => (session ? session.user.id : null);
+  // An admin can play the shared administrator tycoon; the server checks the account on every action.
+  let as = store.get(AS_KEY) === E.ADMIN_ID ? E.ADMIN_ID : null;
+  const self = () => (city && uid() && city.players[uid()] ? uid() : null);
+  const acting = () => (as && admin && self() && city && city.players[as] ? as : self());
+  const OWN = ['sync', 'join', 'adminPlay', 'adminSpeed']; // these never run as the administrator
   const meta = () => (session && session.user.user_metadata) || {};
   async function call(action, args = {}) {
     if (!session) return { ok: false, msg: 'Log in first.' };
-    const { data, error } = await sb.functions.invoke('game', { body: { action, args, city: cityId } });
+    const asId = as && !OWN.includes(action) ? as : undefined;
+    const { data, error } = await sb.functions.invoke('game', { body: { action, args, city: cityId, as: asId } });
     if (error) return { ok: false, msg: 'The server did not answer. Try again in a moment.' };
     if (data && 'admin' in data) admin = !!data.admin; // the server decides who is admin; this only shows the controls
+    if (!admin && as) { as = null; store.set(AS_KEY, ''); }
     if (data && data.city) { city = data.city; emit(); }
     return (data && data.result) || { ok: true };
   }
@@ -101,7 +117,16 @@ export async function createOnlineBackend(cfg) {
   sb.channel('city-' + cityId).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'cities', filter: `id=eq.${cityId}` }, (payload) => { if (payload.new && payload.new.state) { city = payload.new.state; emit(); } }).subscribe();
   return {
     mode: 'online', get canSetSpeed() { return admin; }, get admin() { return admin; },
-    get city() { return city; }, get me() { return city && uid() && city.players[uid()] ? uid() : null; },
+    get city() { return city; }, get me() { return acting(); }, get self() { return self(); },
+    async playAs(who) {
+      if (who === E.ADMIN_ID) {
+        if (!admin) return { ok: false, msg: 'Only an admin can play the administrator.' };
+        const r = await call('adminPlay'); if (r && r.ok === false) return r;
+        if (!city || !city.players[E.ADMIN_ID]) return { ok: false, msg: 'The administrator is not ready. Try again.' };
+        as = E.ADMIN_ID;
+      } else as = null;
+      store.set(AS_KEY, as || ''); emit(); return { ok: true };
+    },
     // who is signed in: null when signed out; anon = an old guest session that still needs e-mail + password
     get account() { return session ? { email: session.user.email || '', anon: !!session.user.is_anonymous, first: meta().first || '', last: meta().last || '', needsPassword: !!meta().needs_password } : null; },
     get recovery() { return recovery; },

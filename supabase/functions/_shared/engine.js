@@ -34,7 +34,7 @@ const CTX = { listingYield: (...a) => listingYield(...a), credit, debit, notify:
 const LCTX = { feed: (p, m, t, x, k) => feed(p, m, t, x, k), news: (city, m, t, x, k) => news(city, m, t, x, k),
   clientsBoost: (city0, n) => 0 };
 // a tycoon who has not done anything for a while is "away": their specialists drift and unprotected companies can be taken over
-export function inactive(city, p) { return !!p && !p.bot && city.m - (p.lastAct ?? city.m) >= TAKEOVER.inactiveMonths; }
+export function inactive(city, p) { return !!p && !p.bot && !p.admin && city.m - (p.lastAct ?? city.m) >= TAKEOVER.inactiveMonths; }
 const TCTX = { feed: (p, m, t, x, k) => feed(p, m, t, x, k), news: (city, m, t, x, k) => news(city, m, t, x, k), unassign: (city, p, k) => unassign(city, p, k),
   listing: (city, id) => listing(city, id), automationWithout: (l, dept) => { const d = l.ops && l.ops.depts[dept]; return d ? d.w / OPS.needWorkers(l, dept) : 0; } };
 const coopPartners = (city, a, b) => Object.values(city.holdings || {}).some((h) => h.members[a] && h.members[b]);
@@ -106,6 +106,29 @@ export function addPlayer(city, id, name, now, o = {}) {
   news(city, city.m, `${p.name} arrives in Aurex Bay`, 'A new tycoon has opened an office at Harbor Row.', 'info');
   return p;
 }
+// ---------------------------------------------------------------- the administrator player
+// One shared test tycoon for admins: unlimited money, never in the standings, never taken over,
+// and kept out of the city news. Who may play it is checked by the game server (admin e-mails), not here.
+export const ADMIN_ID = 'admin', ADMIN_NAME = 'Administrator', ADMIN_CASH = 1e9;
+export const isAdminPlayer = (p) => !!p && !!p.admin;
+function refillAdmin(city) {
+  const p = city.players[ADMIN_ID]; if (!p || !p.admin) return;
+  if (!(p.cash >= ADMIN_CASH)) p.cash = ADMIN_CASH;
+  p.loans = []; p.lastAct = city.m;
+  if (p.life && !(p.life.wallet >= ADMIN_CASH)) p.life.wallet = ADMIN_CASH;
+}
+export function ensureAdmin(city, now) {
+  advance(city, now);
+  let p = city.players[ADMIN_ID];
+  if (!p) {
+    p = newPlayer(ADMIN_ID, ADMIN_NAME, city.m, { cash: ADMIN_CASH, color: '#33383f', avatar: 'img/a-you.jpg' });
+    p.admin = true; p.first = 'Admin'; p.last = 'Player'; p.settledG = city.g; p.lastAct = city.m; p.team = {};
+    p.co = { name: 'Aurex Bay Administration', color: 'graphite', font: 'prestige', sym: 'key', hid: null, m: city.m };
+    city.players[ADMIN_ID] = p; LIFE.ensurePlayer(city, p);
+    feed(p, city.m, 'Administrator account', 'Unlimited money for testing. Only admins see this player.', 'info');
+  }
+  refillAdmin(city); return p;
+}
 // Speeds an admin may pick online (the live city): from a quarter of live speed up to demo speed.
 export function validSpeed(s) { return typeof s === 'number' && Number.isFinite(s) && s >= 0.25 && s <= 2016; }
 export function setSpeed(city, speed, now) { advance(city, now); city.clock = { g: gameNow(city, now), at: now, speed }; }
@@ -151,7 +174,7 @@ export function netWorth(city, pid) {
 export function loanCap(city, p) { return Math.max(10, Math.floor((ownedBy(city, 'p', p.id).reduce((a, l) => a + listingValue(l), 0) * 0.5 + 10) / 5) * 5); }
 export function loanRate(city, p) { const life = city.life ? LIFE.tierOf(city, p) * 0.5 + LIFE.bankCut(city, p) : 0; return Math.max(1, r2(CONFIG.LOAN_RATE - (ownedBy(city, 'p', p.id).some((l) => l.type === 'finance') && city.econ !== 'Recession' ? 2 : ownedBy(city, 'p', p.id).some((l) => l.type === 'bank') ? 0.5 : 0) - life)); }
 export function standings(city) {
-  return Object.values(city.players).map((p) => ({ id: p.id, name: p.name, bot: p.bot, color: p.color, avatar: p.avatar, nw: netWorth(city, p.id), inf: p.inf, score: r2(netWorth(city, p.id) + p.inf) })).sort((a, b) => b.score - a.score);
+  return Object.values(city.players).filter((p) => !p.admin).map((p) => ({ id: p.id, name: p.name, bot: p.bot, color: p.color, avatar: p.avatar, nw: netWorth(city, p.id), inf: p.inf, score: r2(netWorth(city, p.id) + p.inf) })).sort((a, b) => b.score - a.score);
 }
 export function intelFor(city, pid) {
   const p = city.players[pid]; if (!p) return null;
@@ -297,6 +320,7 @@ export function advance(city, now) {
   if (loops >= 1600) { city.clock = { g: city.wk / 48, at: now, speed: city.clock.speed }; }
   settleAll(city, Math.max(city.g, Math.min(target, (city.wk + 1) / 48)));
   LOG.arrivals(city, city.g, (sh) => shipmentArrived(city, sh));
+  refillAdmin(city);
 }
 function shipmentArrived(city, sh) {
   const p = city.players[sh.owner]; if (!p || p.bot) return;
@@ -528,7 +552,7 @@ function botSocial(city, m) {
     }));
   });
   if (city.listings.every((l) => l.owner) && rand() < 0.15) {
-    const bot = pick(Object.values(city.players).filter((p) => p.bot && p.cash > 20)); const target = bot && pick(city.listings.filter((l) => l.owner && l.owner.k === 'p' && !city.players[l.owner.id].bot));
+    const bot = pick(Object.values(city.players).filter((p) => p.bot && p.cash > 20)); const target = bot && pick(city.listings.filter((l) => l.owner && l.owner.k === 'p' && !city.players[l.owner.id].bot && !city.players[l.owner.id].admin));
     if (bot && target && !city.offers.some((o) => o.status === 'open' && o.lid === target.id)) { const amt = Math.round(listingValue(target) * (1.1 + rand() * 0.4)); if (bot.cash >= amt) { city.offers.push({ id: uid('o'), lid: target.id, from: bot.id, to: target.owner.id, amount: amt, m, status: 'open' }); feed(city.players[target.owner.id], m, `${bot.name} offers ${amt} M for your ${TYPES[target.type].name}`, 'Accept or decline in the Empire tab.', 'info'); } }
   }
   Object.values(city.players).filter((p) => !p.bot).forEach((h) => {
@@ -570,6 +594,7 @@ function resolveDecisionFor(city, p, did, ix, auto) {
 export function protection(city, l) {
   if (!l.owner || l.owner.k !== 'p') return { safe: true, why: 'Not a private company' };
   const p = city.players[l.owner.id]; if (!p || p.bot) return { safe: true, why: '' };
+  if (p.admin) return { safe: true, why: 'Administrator' };
   if (hasHead(city, l, p, 'robert')) return { safe: true, why: 'Legal head blocks hostile bids' };
   if (l.ops && OPS.automation(l, 'ops') >= 0.8 && OPS.automation(l, 'sales') >= 0.8) return { safe: true, why: 'Fully staffed: it runs itself' };
   if (!inactive(city, p)) return { safe: true, why: 'Owner is active', soft: true };
@@ -605,7 +630,9 @@ function takeoverMonth(city, m) {
   });
 }
 function feed(p, m, title, text, kind) { if (!p) return; p.feed.unshift({ m, title, text, kind }); if (p.feed.length > 60) p.feed.length = 60; }
-function news(city, m, title, text, kind, extra) { city.news.unshift({ m, title, text, kind, ...(extra || {}) }); if (city.news.length > 120) city.news.length = 120; }
+function news(city, m, title, text, kind, extra) {
+  if (city.players[ADMIN_ID] && (quiet || (extra && extra.who === ADMIN_ID) || String(title + ' ' + text).includes(ADMIN_NAME))) return; // the administrator stays out of the news
+  city.news.unshift({ m, title, text, kind, ...(extra || {}) }); if (city.news.length > 120) city.news.length = 120; }
 const ok = (msg) => ({ ok: true, msg });
 const err = (msg) => ({ ok: false, msg });
 function tradeStock(city, p, id, qty) {
@@ -674,6 +701,12 @@ function joinHolding(city, h, p, amount, m) {
 export function apply(city, pid, action, a = {}, now = Date.now()) {
   advance(city, now);
   const p = city.players[pid]; if (!p) return err('Join the city first.');
+  if (!p.admin) return applyAs(city, pid, p, action, a, now);
+  refillAdmin(city); quiet = true;
+  try { return applyAs(city, pid, p, action, a, now); } finally { quiet = false; refillAdmin(city); }
+}
+let quiet = false; // true while the administrator acts: nothing they do reaches the city news
+function applyAs(city, pid, p, action, a, now) {
   const m = city.m;
   if (!p.bot) p.lastAct = m;
   if (action === 'ping') return ok();

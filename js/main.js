@@ -299,22 +299,31 @@ function measureTop() { const t = $('top'); if (t.hidden) return; $('app').style
 const IDLE_MS = 10 * 60 * 1000, WHO_MAX = 6;
 const initials = (p) => ((p.first || '')[0] || '') + ((p.last || '')[0] || '') || String(p.name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('');
 function renderWho() {
-  const box = $('who'), c = city(), my = meId(); if (!box || !c || !me()) return;
-  const t = Date.now();
-  const list = (B.online || []).map((o) => ({ ...o, p: c.players[o.id] })).filter((o) => o.p && !o.p.bot)
+  const box = $('who'), c = city(), my = B.self || meId(), acting = meId(); if (!box || !c || !me()) return;
+  const t = Date.now(), asAdmin = acting === E.ADMIN_ID;
+  const list = (B.online || []).map((o) => ({ ...o, p: c.players[o.id] })).filter((o) => o.p && !o.p.bot && !o.p.admin)
     .map((o) => ({ ...o, idle: t - o.lastAct >= IDLE_MS }))
     .sort((a, b) => (a.id === my) - (b.id === my) || a.idle - b.idle || b.lastAct - a.lastAct);
   const ago = (ms) => { const m = Math.floor(ms / 60000); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`; };
   const chip = (o) => {
     const b = E.BR.brandOf(c, o.id), col = b ? E.BR.colorHex(b.color) : '#55657d';
     const state = o.idle ? `inactive for ${ago(t - o.lastAct)}` : 'active now';
-    const tip = `${o.p.name}${o.id === my ? ' (you)' : ''}${b ? ' · ' + b.name : ''} · ${state}`;
-    return `<span class="who-c${o.idle ? ' idle' : ''}${o.id === my ? ' me' : ''}" style="--c:${col}" title="${esc(tip)}" role="img" aria-label="${esc(tip)}">${b ? symbolIcon(b.sym, 26, 'rgba(255,255,255,0.32)') : ''}<b>${esc(initials(o.p).toUpperCase())}</b><i></i></span>`;
+    const back = asAdmin && o.id === my;
+    const tip = `${o.p.name}${o.id === my ? ' (you)' : ''}${b ? ' · ' + b.name : ''} · ${state}${back ? ' · click to play as yourself again' : ''}`;
+    const cls = `who-c${o.idle ? ' idle' : ''}${o.id === acting ? ' me' : ''}${back ? ' go' : ''}`, inner = `${b ? symbolIcon(b.sym, 26, 'rgba(255,255,255,0.32)') : ''}<b>${esc(initials(o.p).toUpperCase())}</b><i></i>`;
+    return back ? `<button class="${cls}" style="--c:${col}" title="${esc(tip)}" aria-label="${esc(tip)}" data-a="playAs" data-id="">${inner}</button>`
+      : `<span class="${cls}" style="--c:${col}" title="${esc(tip)}" role="img" aria-label="${esc(tip)}">${inner}</span>`;
+  };
+  // Admins only: the administrator tycoon sits at the far right. Click it to play as it, click your own icon to come back.
+  const adminChip = () => {
+    const b = c.players[E.ADMIN_ID] ? E.BR.brandOf(c, E.ADMIN_ID) : null, col = b ? E.BR.colorHex(b.color) : '#33383f';
+    const tip = asAdmin ? 'Administrator (unlimited money) · you are playing as it. Click your own icon to go back.' : 'Administrator (unlimited money) · click to play as it';
+    return `<button class="who-c adm${asAdmin ? ' me' : ' go'}" style="--c:${col}" title="${tip}" aria-label="${tip}" data-a="playAs" data-id="${asAdmin ? '' : E.ADMIN_ID}">${symbolIcon(b ? b.sym : 'key', 26, 'rgba(255,255,255,0.32)')}<b>A</b></button>`;
   };
   const shown = list.slice(0, WHO_MAX), more = list.length - shown.length;
   const act = list.filter((o) => !o.idle).length;
-  const html = shown.map(chip).join('') + (more > 0 ? `<span class="who-more" title="${more} more online">+${more}</span>` : '');
-  box.hidden = !list.length;
+  const html = shown.map(chip).join('') + (more > 0 ? `<span class="who-more" title="${more} more online">+${more}</span>` : '') + (B.admin ? adminChip() : '');
+  box.hidden = !list.length && !B.admin;
   box.setAttribute('aria-label', `${list.length} online, ${act} active`);
   if (box.dataset.h !== html) { box.dataset.h = html; box.innerHTML = html; }
 }
@@ -327,8 +336,8 @@ function renderTop() {
   lg.hidden = !brand; if (lg.dataset.k !== key) { lg.dataset.k = key; lg.innerHTML = brand ? logoFull(brand, { size: 30 }) : ''; }
   const est = E.annualEstimate(c, 'p', p.id), st = E.standings(c);
   $('t-inc').textContent = M(est, true); $('t-inc').className = 'num ' + (est >= 0 ? '' : 'down');
-  $('t-nw').textContent = M(E.netWorth(c, p.id));
-  $('t-rank').textContent = `#${st.findIndex((x) => x.id === p.id) + 1} of ${st.length}`;
+  $('t-nw').textContent = p.admin ? '∞' : M(E.netWorth(c, p.id));
+  $('t-rank').textContent = p.admin ? 'Admin' : `#${st.findIndex((x) => x.id === p.id) + 1} of ${st.length}`;
   const sp = $('speed');
   sp.hidden = !B.canSetSpeed;
   sp.classList.toggle('admin', B.mode === 'online'); sp.setAttribute('aria-label', B.mode === 'online' ? 'Admin: game speed for everyone' : 'Game speed');
@@ -354,7 +363,7 @@ function liveUpdate() {
   const t = now();
   document.querySelectorAll('[data-live]').forEach((el) => {
     const [k, id] = el.dataset.live.split(':');
-    if (k === 'cash') el.textContent = dollars(E.liveCash(c, p.id, t));
+    if (k === 'cash') el.textContent = p.admin ? '∞' : dollars(E.liveCash(c, p.id, t));
     else if (k === 'treasury') el.textContent = dollars(E.liveTreasury(c, id, t));
     else if (k === 'until') el.textContent = dur(msUntilMonth(Number(id)));
     else if (k === 'prog') { const l = E.listing(c, id); if (l && l.upgrade) { const total = E.upgradeMonths({ level: l.upgrade.to - 1 }), left = l.upgrade.doneM - E.gameNow(c, t) * 12; el.style.width = Math.max(2, Math.min(100, (1 - left / total) * 100)) + '%'; } }
@@ -552,7 +561,7 @@ function coopHTML() {
         ${p.id in pr.votes ? `<span class="chip">You voted ${pr.votes[p.id] ? 'yes' : 'no'}</span>` : `<div class="btns"><button class="btn sm gold" data-a="vote" data-hid="${h.id}" data-prid="${pr.id}" data-v="1">Vote yes</button><button class="btn sm" data-a="vote" data-hid="${h.id}" data-prid="${pr.id}" data-v="0">Vote no</button></div>`}</div>`; }).join('');
     const partnerCos = Object.keys(h.members).filter((pid) => pid !== p.id).flatMap((pid) => E.ownedBy(c, 'p', pid));
     const freeAff = c.listings.filter((l) => !l.owner && E.listingPrice(l) <= h.treasury).sort((a, b) => E.listingPrice(b) - E.listingPrice(a));
-    const invitable = Object.values(c.players).filter((x) => !h.members[x.id] && !h.invites.some((i) => i.pid === x.id)).sort((a, b) => (p.net.includes(b.id) ? 1 : 0) - (p.net.includes(a.id) ? 1 : 0));
+    const invitable = Object.values(c.players).filter((x) => !x.admin && !h.members[x.id] && !h.invites.some((i) => i.pid === x.id)).sort((a, b) => (p.net.includes(b.id) ? 1 : 0) - (p.net.includes(a.id) ? 1 : 0));
     return `<div class="coopcard"><header>${logoMark(E.BR.holdingBrand(h), 40)}<div style="flex:1"><b>${esc(h.name)}</b><div style="font-size:13px;opacity:.85">${h.parent ? 'Co-owned parent company' : 'Coop parent company'} · founded ${esc(dateLabel(h.createdM))}${h.parent ? ` · buy-in ${M(h.buyIn || E.BR.MIN_STAKE)} · ${h.open ? 'open to all' : 'invited only'}` : ''}</div></div><span class="chip" style="background:rgba(255,255,255,.15);color:#fff;border-color:rgba(255,255,255,.3)">Your stake ${Math.round(stake * 100)}%</span></header><div class="in">
       <div class="stats"><div class="stat"><small>Treasury</small><b class="num" data-live="treasury:${h.id}">…</b></div><div class="stat"><small>Value (NAV)</small><b class="num">${M(nav)}</b></div><div class="stat"><small>Income / yr</small><b class="num up">${M(r.net, true)}</b></div><div class="stat"><small>Dividend</small><b class="num">${Math.round(h.payout * 100)}% of profit</b></div></div>
       <div><div class="cap" style="margin-bottom:5px">Owners</div><div class="stake">${members.map((m) => `<i style="width:${m.sh / tot * 100}%;background:${m.p.id === p.id ? 'var(--good)' : m.p.color}" title="${esc(m.p.name)}"></i>`).join('')}</div>
@@ -692,6 +701,12 @@ async function onClick(e) {
   if (t.tagName === 'A') e.preventDefault();
   const d = t.dataset, a = d.a, c = city();
   switch (a) {
+    // ---- admins: play as the administrator tycoon, or go back to your own
+    case 'playAs': {
+      const r = await B.playAs(d.id || null);
+      if (r && r.ok === false) { toast(r.msg, 'bad'); return; }
+      closeModal(); setTab('map'); renderAll(); toast(d.id ? 'You are playing as the administrator. Click your own icon to go back.' : 'Back to your own tycoon.', 'good'); return;
+    }
     // ---- the in-game browser
     case 'web': openWeb(d.u || (UI.web && UI.web.url) || HOME_URL); return;
     case 'webGo': navWeb(d.u); return;
