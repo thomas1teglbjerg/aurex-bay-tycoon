@@ -166,21 +166,24 @@ function enterDistrict(id) {
 }
 function updatePins() { renderMarks(); }
 // pan limits: map edge aligned with the viewport edge, or centred when the map is smaller
-function panLimits() {
-  const vp = $('viewport'), W = view.W * view.s, H = view.H * view.s, cw = vp.clientWidth, ch = vp.clientHeight;
+function panLimits(s = view.s) {
+  const vp = $('viewport'), W = view.W * s, H = view.H * s, cw = vp.clientWidth, ch = vp.clientHeight;
   const ax = (dim, size) => size < dim ? [(dim - size) / 2, (dim - size) / 2] : [dim - size, 0];
   const [x0, x1] = ax(cw, W), [y0, y1] = ax(ch, H);
   return { x0, x1, y0, y1, cw, ch };
 }
 // rubber band: the further past the edge, the less the map follows the pointer
 const rubber = (v, lo, hi, dim) => { const f = (d) => dim * (1 - 1 / (d * 0.55 / dim + 1)); return v > hi ? hi + f(v - hi) : v < lo ? lo - f(lo - v) : v; };
+const unrub = (v, lo, hi, dim) => { const g = (d) => (1 / (1 - Math.min(d, dim * 0.99) / dim) - 1) * dim / 0.55; return v > hi ? hi + g(v - hi) : v < lo ? lo - g(lo - v) : v; };
+// zoom gets the same band on a log scale: past min/max the map resists and springs back
+const ZB = 0.4, zClamp = (s) => Math.max(view.min, Math.min(view.max, s));
+let zRaw = null, zAnchor = null; // unbounded scale during an elastic zoom, and the point it zooms around
 function applyView(free) {
   if (!free) { const b = panLimits(); view.x = Math.min(b.x1, Math.max(b.x0, view.x)); view.y = Math.min(b.y1, Math.max(b.y0, view.y)); }
   $('world').style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.s})`;
   $('world').style.setProperty('--inv', String(1 / view.s));
 }
 function fitMap() { const vp = $('viewport'); view.min = Math.max(vp.clientWidth / view.W, vp.clientHeight / view.H); view.max = Math.max(view.min * 3, view.level ? 2 : 2.2); view.s = Math.max(view.min, Math.min(view.s, view.max)); applyView(); }
-function zoomAt(cx, cy, f) { const ns = Math.max(view.min, Math.min(view.max, view.s * f)), k = ns / view.s; view.x = cx - (cx - view.x) * k; view.y = cy - (cy - view.y) * k; view.s = ns; applyView(); }
 let anim = 0;
 function flyTo(x, y, s) {
   const vp = $('viewport'), from = { ...view }, ts = Math.max(view.min, Math.min(view.max, s)), to = { s: ts, x: vp.clientWidth / 2 - x * ts, y: vp.clientHeight * 0.55 - y * ts }, t0 = performance.now();
@@ -188,29 +191,39 @@ function flyTo(x, y, s) {
   const step = (t) => { const k = Math.min(1, (t - t0) / 600), e = 1 - Math.pow(1 - k, 3); view.s = from.s + (to.s - from.s) * e; view.x = from.x + (to.x - from.x) * e; view.y = from.y + (to.y - from.y) * e; applyView(); if (k < 1) anim = requestAnimationFrame(step); };
   anim = requestAnimationFrame(step);
 }
-function snapBack() {
-  const b = panLimits(), fx = view.x, fy = view.y, tx = Math.min(b.x1, Math.max(b.x0, fx)), ty = Math.min(b.y1, Math.max(b.y0, fy)), t0 = performance.now();
-  if (fx === tx && fy === ty) return;
+function zoomFree(cx, cy, f) {
   cancelAnimationFrame(anim);
-  const step = (t) => { const k = Math.min(1, (t - t0) / 380), e = 1 - Math.pow(1 - k, 3); view.x = fx + (tx - fx) * e; view.y = fy + (ty - fy) * e; applyView(k < 1); if (k < 1) anim = requestAnimationFrame(step); };
+  const lo = Math.log(view.min), hi = Math.log(view.max);
+  if (zRaw == null) zRaw = Math.exp(unrub(Math.log(view.s), lo, hi, ZB));
+  zRaw *= f;
+  const ns = Math.exp(rubber(Math.log(zRaw), lo, hi, ZB)), k = ns / view.s;
+  view.x = cx - (cx - view.x) * k; view.y = cy - (cy - view.y) * k; view.s = ns; zAnchor = { x: cx, y: cy }; applyView(true);
+}
+// spring back into range: scale first (around the last zoom point), then pan edges
+function snapBack() {
+  const fs = view.s, ts = zClamp(fs), a = zAnchor || { x: 0, y: 0 }, k0 = ts / fs; zRaw = null; zAnchor = null;
+  const b = panLimits(ts), fx = view.x, fy = view.y;
+  const tx = Math.min(b.x1, Math.max(b.x0, a.x - (a.x - fx) * k0)), ty = Math.min(b.y1, Math.max(b.y0, a.y - (a.y - fy) * k0)), t0 = performance.now();
+  if (fx === tx && fy === ty && fs === ts) return;
+  cancelAnimationFrame(anim);
+  const step = (t) => { const k = Math.min(1, (t - t0) / 380), e = 1 - Math.pow(1 - k, 3); view.s = fs * Math.pow(ts / fs, e); view.x = fx + (tx - fx) * e; view.y = fy + (ty - fy) * e; applyView(k < 1); if (k < 1) anim = requestAnimationFrame(step); };
   anim = requestAnimationFrame(step);
 }
 function setupPanZoom() {
-  const vp = $('viewport'), pts = new Map(); let last = null, moved = 0, raw = null; // raw: unbounded pan position under the finger
-  const unrub = (v, lo, hi, dim) => { const g = (d) => (1 / (1 - Math.min(d, dim * 0.99) / dim) - 1) * dim / 0.55; return v > hi ? hi + g(v - hi) : v < lo ? lo - g(lo - v) : v; };
+  const vp = $('viewport'), pts = new Map(); let last = null, moved = 0, raw = null, pinched = false, wheelT = 0; // raw: unbounded pan position under the finger
   const grab = () => { const b = panLimits(); raw = { x: unrub(view.x, b.x0, b.x1, b.cw), y: unrub(view.y, b.y0, b.y1, b.ch) }; }; // catching the map mid snap-back keeps it under the finger
   const pair = () => { const [a, b] = [...pts.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
-  vp.addEventListener('pointerdown', (e) => { cancelAnimationFrame(anim); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (pts.size === 1) { moved = 0; grab(); } last = pts.size === 2 ? pair() : null; vp.classList.add('drag'); });
+  vp.addEventListener('pointerdown', (e) => { cancelAnimationFrame(anim); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (pts.size === 1) { moved = 0; pinched = false; grab(); } last = pts.size === 2 ? pair() : null; vp.classList.add('drag'); });
   window.addEventListener('pointermove', (e) => {
     const p = pts.get(e.pointerId); if (!p) return;
     const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY; moved += Math.abs(dx) + Math.abs(dy);
-    if (pts.size === 1) { if (!raw) grab(); raw.x += dx; raw.y += dy; const b = panLimits(); view.x = rubber(raw.x, b.x0, b.x1, b.cw); view.y = rubber(raw.y, b.y0, b.y1, b.ch); applyView(true); }
-    else if (pts.size === 2 && last) { const c = pair(), r = vp.getBoundingClientRect(); zoomAt(c.x - r.left, c.y - r.top, c.d / Math.max(1, last.d)); view.x += c.x - last.x; view.y += c.y - last.y; applyView(); last = c; raw = null; }
+    if (pts.size === 1) { if (pinched) return; if (!raw) grab(); raw.x += dx; raw.y += dy; const b = panLimits(); view.x = rubber(raw.x, b.x0, b.x1, b.cw); view.y = rubber(raw.y, b.y0, b.y1, b.ch); applyView(true); }
+    else if (pts.size === 2 && last) { const c = pair(), r = vp.getBoundingClientRect(); zoomFree(c.x - r.left, c.y - r.top, c.d / Math.max(1, last.d)); view.x += c.x - last.x; view.y += c.y - last.y; zAnchor = { x: c.x - r.left, y: c.y - r.top }; applyView(true); last = c; raw = null; pinched = true; }
   });
-  const up = (e) => { if (!pts.delete(e.pointerId)) return; last = pts.size === 2 ? pair() : null; raw = null; if (!pts.size) { vp.classList.remove('drag'); snapBack(); } };
+  const up = (e) => { if (!pts.delete(e.pointerId)) return; last = pts.size === 2 ? pair() : null; raw = null; if (!pts.size) vp.classList.remove('drag'); if (pts.size < 2) snapBack(); }; // after a pinch the last finger waits for release
   window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
   vp.addEventListener('click', (e) => { if (moved > 8) { e.stopPropagation(); e.preventDefault(); } }, true);
-  vp.addEventListener('wheel', (e) => { e.preventDefault(); const r = vp.getBoundingClientRect(); zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.0015)); }, { passive: false });
+  vp.addEventListener('wheel', (e) => { e.preventDefault(); const r = vp.getBoundingClientRect(); zoomFree(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.0015)); clearTimeout(wheelT); wheelT = setTimeout(() => { if (!pts.size) snapBack(); }, 160); }, { passive: false });
   window.addEventListener('resize', () => { fitMap(); measureTop(); hideMapCard(); });
   vp.addEventListener('pointerdown', () => hideMapCard());
 }
