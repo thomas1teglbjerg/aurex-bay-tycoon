@@ -6,7 +6,8 @@ import * as OPS from './ops.js';
 import * as LOG from './logistics.js';
 import * as LIFE from './life.js';
 import * as TAL from './talent.js';
-export { OPS, LOG, LIFE, TAL };
+import * as BR from './brand.js';
+export { OPS, LOG, LIFE, TAL, BR };
 OPS.setFreightQuote((cid, v, q, route) => LOG.freight(cid, v, q, route));
 
 const TRADE_MULT = { Boom: 1.3, Stable: 1, Recession: 0.6, Crisis: 0.4 };
@@ -80,11 +81,15 @@ function newPlayer(id, name, m, o = {}) {
   return { id, name, bot: !!o.bot, style: o.style || null, color: o.color || '#1b2b44', avatar: o.avatar || null, cash: o.cash ?? CONFIG.START_CASH, inf: 0, settledG: m / 12,
     staff: [], assign: {}, loans: [], shares: {}, cost: {}, realized: 0, rlz: {}, phist: [], policy: 'balanced', net: [], inbox: [], feed: [], hist: [], joinedM: m, est: {} };
 }
-export function addPlayer(city, id, name, now) {
+// o.first / o.last: the avatar name chosen at sign-up (name is then "First Last")
+export function addPlayer(city, id, name, now, o = {}) {
   advance(city, now);
   if (city.players[id]) return city.players[id];
   const g = city.g, bonus = Math.min(40, Math.round(g * 8));
-  const p = newPlayer(id, (name || 'New tycoon').slice(0, 24), Math.floor(g * 12), { cash: CONFIG.START_CASH + bonus, color: '#1b2b44', avatar: 'img/a-you.jpg' });
+  const av = o.first || o.last ? BR.checkAvatarName(o.first, o.last) : null;
+  const p = newPlayer(id, (av && av.ok ? av.name : name || 'New tycoon').slice(0, 34), Math.floor(g * 12), { cash: CONFIG.START_CASH + bonus, color: '#1b2b44', avatar: 'img/a-you.jpg' });
+  if (av && av.ok) { p.first = av.first; p.last = av.last; }
+  p.co = null; // the parent company is founded right after joining (coFound / coJoin)
   p.settledG = g; p.lastAct = city.m; p.team = {}; city.players[id] = p; LIFE.ensurePlayer(city, p);
   feed(p, city.m, 'Welcome to Aurex Bay', `You start with ${CONFIG.START_CASH + bonus} M${bonus ? ` (including a ${bonus} M late-arrival grant)` : ''} and an office at Harbor Row. Your companies earn money around the clock, also while you are away.`, 'info');
   news(city, city.m, `${p.name} arrives in Aurex Bay`, 'A new tycoon has opened an office at Harbor Row.', 'info');
@@ -774,17 +779,64 @@ export function apply(city, pid, action, a = {}, now = Date.now()) {
     }
     case 'holdingInvite': { const h = city.holdings[a.hid]; const t = city.players[a.pid]; if (!h || !h.members[pid]) return err('Not your coop.'); if (!t) return err('Unknown player.'); if (h.members[t.id]) return err('Already an owner.'); if (h.invites.some((i) => i.pid === t.id)) return err('Already invited.');
       h.invites.push({ pid: t.id, by: pid, m }); if (!t.bot) feed(t, m, `${p.name} invites you to co-own ${h.name}`, 'Open the Coop tab to invest.', 'info'); return ok(`${t.name} is invited. Bots answer next game month.`); }
-    case 'holdingJoin': { const h = city.holdings[a.hid]; const amt = Math.round(Number(a.amt) || 0); if (!h) return err('Unknown coop.'); if (!h.members[pid] && !h.invites.some((i) => i.pid === pid)) return err('You need an invitation.'); if (amt < 1 || p.cash < amt) return err('Not enough cash.');
+    case 'holdingJoin': { const h = city.holdings[a.hid]; const amt = Math.round(Number(a.amt) || 0); if (!h) return err('Unknown coop.'); if (!h.members[pid] && !h.open && !h.invites.some((i) => i.pid === pid)) return err('You need an invitation.');
+      if (!h.members[pid] && h.buyIn && amt < h.buyIn) return err(`The buy-in for ${h.name} is ${h.buyIn} M.`); if (amt < 1 || p.cash < amt) return err('Not enough cash.');
       h.invites = h.invites.filter((i) => i.pid !== pid); joinHolding(city, h, p, amt, m); return ok(`You invested ${amt} M in ${h.name}.`); }
+    // ---- parent company: every human empire runs under one (own, or co-owned with a buy-in)
+    case 'coFound': {
+      if (BR.brandOf(city, pid) && !p.bot) return err('You already have a parent company.');
+      const n = BR.checkCoName(city, a.name, { pid }); if (!n.ok) return n;
+      const b = BR.checkBrand(a); if (!b.ok) return b;
+      if (a.mode === 'coop') {
+        const amt = Math.round(Number(a.amt) || 0), buyIn = Math.max(BR.MIN_STAKE, Math.round(Number(a.buyIn) || amt));
+        if (amt < BR.MIN_STAKE) return err(`Put in at least ${BR.MIN_STAKE} M.`); if (p.cash < amt) return err(`You have ${r2(p.cash)} M.`);
+        const h = makeHolding(city, pid, n.name, amt, m); h.parent = true; h.brand = { color: b.color, font: b.font, sym: b.sym }; h.buyIn = buyIn; h.open = a.open !== false; h.color = BR.colorHex(b.color);
+        p.co = { hid: h.id, m };
+        news(city, m, `${p.name} founds ${h.name}`, `A co-owned parent company. New owners buy in from ${buyIn} M.`, 'info', { who: pid });
+        return ok(`${h.name} is founded. Invite co-owners from the Coop tab.`);
+      }
+      p.co = { name: n.name, color: b.color, font: b.font, sym: b.sym, hid: null, m };
+      news(city, m, `${p.name} founds ${n.name}`, 'A new parent company opens an office at Harbor Row.', 'info', { who: pid });
+      return ok(`${n.name} is founded. Your empire runs under it.`);
+    }
+    case 'coJoin': {
+      if (BR.brandOf(city, pid)) return err('You already have a parent company.');
+      const h = city.holdings[a.hid]; if (!h || !h.parent) return err('Unknown parent company.');
+      if (!h.open && !h.invites.some((i) => i.pid === pid)) return err(`${h.name} only takes invited co-owners.`);
+      const amt = Math.round(Number(a.amt) || h.buyIn || BR.MIN_STAKE);
+      if (amt < (h.buyIn || BR.MIN_STAKE)) return err(`The buy-in is ${h.buyIn || BR.MIN_STAKE} M.`); if (p.cash < amt) return err(`The buy-in is ${amt} M and you have ${r2(p.cash)} M.`);
+      h.invites = h.invites.filter((i) => i.pid !== pid); joinHolding(city, h, p, amt, m); p.co = { hid: h.id, m };
+      return ok(`You bought into ${h.name} for ${amt} M.`);
+    }
+    case 'coBrand': {
+      const cur = BR.brandOf(city, pid); if (!cur || cur.auto) return err('Found your parent company first.');
+      const h = cur.hid ? city.holdings[cur.hid] : null; if (h && h.founder !== pid) return err(`Only the founder can change the logo of ${h.name}.`);
+      const n = BR.checkCoName(city, a.name ?? cur.name, { pid, hid: cur.hid }); if (!n.ok) return n;
+      const b = BR.checkBrand({ color: a.color ?? cur.color, font: a.font ?? cur.font, sym: a.sym ?? cur.sym }); if (!b.ok) return b;
+      if (h) { h.name = n.name; h.brand = { color: b.color, font: b.font, sym: b.sym }; h.color = BR.colorHex(b.color); } else Object.assign(p.co, { name: n.name, color: b.color, font: b.font, sym: b.sym });
+      return ok('The logo is updated.');
+    }
+    case 'avatarName': { // players from before e-mail accounts pick their first + last name once
+      if (p.first) return err('Your avatar name is already set.');
+      const av = BR.checkAvatarName(a.first, a.last); if (!av.ok) return av;
+      p.first = av.first; p.last = av.last; p.name = av.name; return ok(`You are ${av.name}.`);
+    }
+    case 'holdingBuyIn': {
+      const h = city.holdings[a.hid]; if (!h || !h.members[pid]) return err('Not your coop.');
+      if (a.amt != null) { const v = Math.round(Number(a.amt) || 0); if (v < BR.MIN_STAKE) return err(`The buy-in is at least ${BR.MIN_STAKE} M.`); h.buyIn = v; }
+      if (a.open != null) h.open = !!a.open;
+      return ok(h.open ? `Anyone can buy in from ${h.buyIn || BR.MIN_STAKE} M.` : 'Only invited players can buy in.');
+    }
     case 'holdingPropose': { const h = city.holdings[a.hid]; if (!h || !h.members[pid]) return err('Not your coop.'); const pr = { id: uid('p'), by: pid, kind: a.kind, lid: a.lid || null, pct: a.pct, votes: { [pid]: true }, m, dueM: m + 1, status: 'open' };
       if (!['buy', 'upgrade', 'sell', 'payout'].includes(pr.kind)) return err('Unknown proposal.'); h.proposals.push(pr); botVotes(city, h, pr); closeProposal(city, h, pr, false); return ok(pr.status === 'open' ? 'Proposal sent to your co-owners.' : `Proposal ${pr.status}.`); }
     case 'holdingVote': { const h = city.holdings[a.hid]; if (!h || !h.members[pid]) return err('Not your coop.'); const pr = h.proposals.find((x) => x.id === a.prid && x.status === 'open'); if (!pr) return err('Voting has closed.'); pr.votes[pid] = !!a.yes; closeProposal(city, h, pr, false); return ok(); }
     case 'holdingLeave': {
       const h = city.holdings[a.hid]; if (!h || !h.members[pid]) return err('Not your coop.');
       const stake = holdingStake(city, h, pid), value = r2(holdingNav(city, h) * stake * 0.9);
-      if (Object.keys(h.members).length === 1) { ownedBy(city, 'h', h.id).forEach((l) => { h.treasury += listingValue(l) * 0.8; releaseListing(city, l); }); p.cash += h.treasury; delete city.holdings[h.id]; return ok('The coop is dissolved and its assets sold.'); }
+      const dropParent = () => { if (p.co && p.co.hid === h.id) p.co = null; }; // the player then founds or joins a new parent company
+      if (Object.keys(h.members).length === 1) { ownedBy(city, 'h', h.id).forEach((l) => { h.treasury += listingValue(l) * 0.8; releaseListing(city, l); }); p.cash += h.treasury; delete city.holdings[h.id]; dropParent(); return ok('The coop is dissolved and its assets sold.'); }
       if (h.treasury < value) return err(`The treasury has ${r2(h.treasury)} M. Your stake is worth ${value} M. Propose a sale first.`);
-      h.treasury -= value; p.cash += value; delete h.members[pid]; return ok(`You sold your stake for ${value} M.`);
+      h.treasury -= value; p.cash += value; delete h.members[pid]; dropParent(); return ok(`You sold your stake for ${value} M.`);
     }
     default: return err('Unknown action.');
   }

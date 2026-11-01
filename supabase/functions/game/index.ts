@@ -27,15 +27,16 @@ Deno.serve(async (req) => {
   const cityId = String(body.city ?? 'aurex-bay').slice(0, 40);
   const args = body.args ?? {};
 
-  // Who is calling? Cron uses a shared secret; players use their (anonymous) Supabase session.
+  // Who is calling? Cron uses a shared secret; players use their Supabase session (e-mail + password; older anonymous players keep playing).
   let userId: string | null = null;
+  let user: { id: string; is_anonymous?: boolean; user_metadata?: Record<string, unknown> } | null = null;
   if (action === 'tick') {
     if (!CRON_SECRET || req.headers.get('x-cron-secret') !== CRON_SECRET) return json({ error: 'Forbidden' }, 403);
   } else {
     const token = (req.headers.get('Authorization') ?? '').replace('Bearer ', '');
     const { data, error } = await admin.auth.getUser(token);
     if (error || !data.user) return json({ error: 'Sign in first' }, 401);
-    userId = data.user.id;
+    userId = data.user.id; user = data.user;
   }
 
   for (let attempt = 0; attempt < 6; attempt++) {
@@ -58,8 +59,13 @@ Deno.serve(async (req) => {
     let changed = city.wk !== weekBefore; // the engine moves in weekly steps
     if (action === 'join') {
       if (!city.players[userId!]) {
-        Engine.addPlayer(city, userId!, String(args.name ?? 'Tycoon').slice(0, 24), now);
-        await admin.from('city_players').upsert({ city_id: cityId, user_id: userId, name: String(args.name ?? 'Tycoon').slice(0, 24) });
+        // New tycoons sign up with e-mail and password; the avatar name (first + last) comes with the account.
+        if (user?.is_anonymous) return json({ result: { ok: false, msg: 'Create an account with e-mail and password first.' }, city });
+        const meta = user?.user_metadata ?? {};
+        const av = Engine.BR.checkAvatarName(String(args.first ?? meta.first ?? ''), String(args.last ?? meta.last ?? ''));
+        if (!av.ok) return json({ result: av, city });
+        Engine.addPlayer(city, userId!, av.name, now, { first: av.first, last: av.last });
+        await admin.from('city_players').upsert({ city_id: cityId, user_id: userId, name: av.name });
         changed = true;
       }
     } else if (action !== 'sync' && action !== 'tick') {

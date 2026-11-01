@@ -17,4 +17,5 @@
 - Department header images: `img/d-<dept>.jpg` are optional; the CSS falls back to the company art.
 - Every `.box > h2` in the panel folds its box (`applyCollapsed`/`toggleBox` in main.js, remembered in localStorage per page and title).
 - Money below 1 M shows as thousands (`M()` in util.js, and `kfix` inside `esc()` rewrites "0.26 M" in any text). Specialists leading a department add `TAL.headYpi(rating)` × size YPI to that company on top of their role passive.
+- Accounts and parent companies: online players sign up with e-mail + password (`js/backends.js` `signUp`/`signIn`/`secure` for old anonymous guests); the avatar name (first + last) rides in the Supabase user metadata and `join`. Before playing, every human founds a parent company (`coFound`: solo, or co-owned = a holding with `parent`, `brand`, `buyIn`, `open`) or buys into one (`coJoin`). Rules and the 15 symbols / colours / fonts live in `_shared/brand.js` (`brandOf`, `needsParent`); logos are drawn by `js/brand.js`; the sign-up and founding screens are `js/onboard.js`, gated by `gate()` in main.js.
 - UI copy is English; keep it short and concrete.

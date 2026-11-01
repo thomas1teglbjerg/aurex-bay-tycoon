@@ -1,6 +1,7 @@
 // Two interchangeable backends with the same surface:
 //   LocalBackend   — the whole city runs in this browser (demo, no login, bots as rivals)
-//   OnlineBackend  — the city lives in Supabase; the Edge Function runs the same engine server-side
+//   OnlineBackend  — the city lives in Supabase; the Edge Function runs the same engine server-side.
+//                    Players sign in with e-mail + password, so their city follows them to any device.
 import * as E from '../supabase/functions/_shared/engine.js';
 
 const CITY_KEY = 'aurex-city-v2', ME_KEY = 'aurex-me-v2';
@@ -23,7 +24,7 @@ export function createLocalBackend(opts = {}) {
   return {
     mode: 'local', canSetSpeed: true,
     get city() { return city; }, get me() { return me; },
-    async join(name) { me = 'local-' + Math.random().toString(36).slice(2, 9); store.set(ME_KEY, me); E.addPlayer(city, me, name, Date.now()); save(true); emit(); return { ok: true }; },
+    async join({ first, last } = {}) { const av = E.BR.checkAvatarName(first, last); if (!av.ok) return av; me = 'local-' + Math.random().toString(36).slice(2, 9); store.set(ME_KEY, me); E.addPlayer(city, me, av.name, Date.now(), av); save(true); emit(); return { ok: true }; },
     async act(action, args) { const r = E.apply(city, me, action, args, Date.now()); save(true); emit(); return r; },
     tick() { const w = city.wk, over = city.over; E.advance(city, Date.now()); save(); if (city.wk !== w || city.over !== over) emit(); },
     async setSpeed(s) { E.setSpeed(city, s, Date.now()); save(true); emit(); },
@@ -33,27 +34,87 @@ export function createLocalBackend(opts = {}) {
   };
 }
 
+// Supabase sign-in messages, said the game's way
+function authMsg(e) {
+  const m = String((e && e.message) || e || '');
+  if (/invalid login credentials/i.test(m)) return 'Wrong e-mail or password.';
+  if (/already (registered|been registered)|already exists/i.test(m)) return 'That e-mail already has an account. Log in instead.';
+  if (/password should be at least|weak password/i.test(m)) return 'Choose a password with at least 8 characters.';
+  if (/rate limit|too many/i.test(m)) return 'Too many attempts. Wait a few minutes and try again.';
+  if (/email not confirmed/i.test(m)) return 'Confirm your e-mail first: open the link we sent you.';
+  if (/invalid.*email|email.*invalid/i.test(m)) return 'That e-mail address does not look right.';
+  return m || 'Something went wrong. Try again.';
+}
+const back = () => location.origin + location.pathname;
+
 export async function createOnlineBackend(cfg) {
   const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm');
   const sb = createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
   let { data: { session } } = await sb.auth.getSession();
-  if (!session) { const r = await sb.auth.signInAnonymously(); if (r.error) throw r.error; session = r.data.session; }
-  const me = session.user.id, subs = new Set(), cityId = cfg.CITY_ID || 'aurex-bay';
-  let city = null;
+  const subs = new Set(), cityId = cfg.CITY_ID || 'aurex-bay';
+  let city = null, live = false, recovery = /type=recovery/.test(location.hash);
   const emit = () => subs.forEach((f) => f());
+  const uid = () => (session ? session.user.id : null);
+  const meta = () => (session && session.user.user_metadata) || {};
   async function call(action, args = {}) {
+    if (!session) return { ok: false, msg: 'Log in first.' };
     const { data, error } = await sb.functions.invoke('game', { body: { action, args, city: cityId } });
     if (error) return { ok: false, msg: 'The server did not answer. Try again in a moment.' };
     if (data && data.city) { city = data.city; emit(); }
     return (data && data.result) || { ok: true };
   }
-  await call('sync');
+  // Signed out you still see the living city behind the login screen (the row is public to read).
+  async function peek() { const { data } = await sb.from('cities').select('state').eq('id', cityId).maybeSingle(); if (data && data.state) city = data.state; }
+  async function goLive() { if (live) return; live = true; await call('sync'); setInterval(() => call('sync'), 90 * 1000); }
+  async function enter() { // after any sign-in: load the city and move in if this account has no tycoon yet
+    await goLive();
+    if (city && !city.players[uid()] && meta().first && meta().last) await call('join', { first: meta().first, last: meta().last });
+    return { ok: true };
+  }
+  sb.auth.onAuthStateChange((ev, s) => { session = s; if (ev === 'PASSWORD_RECOVERY') { recovery = true; emit(); } });
+  if (session) await goLive(); else await peek();
   sb.channel('city-' + cityId).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'cities', filter: `id=eq.${cityId}` }, (payload) => { if (payload.new && payload.new.state) { city = payload.new.state; emit(); } }).subscribe();
-  setInterval(() => call('sync'), 90 * 1000);
   return {
     mode: 'online', canSetSpeed: false,
-    get city() { return city; }, get me() { return city && city.players[me] ? me : null; },
-    join: (name) => call('join', { name }), act: (a, args) => call(a, args),
+    get city() { return city; }, get me() { return city && uid() && city.players[uid()] ? uid() : null; },
+    // who is signed in: null when signed out; anon = an old guest session that still needs e-mail + password
+    get account() { return session ? { email: session.user.email || '', anon: !!session.user.is_anonymous, first: meta().first || '', last: meta().last || '', needsPassword: !!meta().needs_password } : null; },
+    get recovery() { return recovery; },
+    async signUp({ email, password, first, last }) {
+      const av = E.BR.checkAvatarName(first, last); if (!av.ok) return av;
+      if (String(password || '').length < 8) return { ok: false, msg: 'Choose a password with at least 8 characters.' };
+      const r = await sb.auth.signUp({ email: String(email || '').trim(), password, options: { data: { first: av.first, last: av.last }, emailRedirectTo: back() } });
+      if (r.error) return { ok: false, msg: authMsg(r.error) };
+      if (!r.data.session) return { ok: true, confirm: true, msg: 'Check your inbox and open the link to finish your account.' };
+      session = r.data.session; return enter();
+    },
+    async signIn({ email, password }) {
+      const r = await sb.auth.signInWithPassword({ email: String(email || '').trim(), password });
+      if (r.error) return { ok: false, msg: authMsg(r.error) };
+      session = r.data.session; return enter();
+    },
+    // an old guest (anonymous) player keeps their tycoon and adds e-mail + password to the same account
+    async secure({ email, password }) {
+      if (String(password || '').length < 8) return { ok: false, msg: 'Choose a password with at least 8 characters.' };
+      const r1 = await sb.auth.updateUser({ email: String(email || '').trim(), data: { needs_password: true } }, { emailRedirectTo: back() });
+      if (r1.error) return { ok: false, msg: authMsg(r1.error) };
+      if (!r1.data.user.email) return { ok: true, confirm: true, msg: 'Check your inbox and open the link. Then choose your password.' };
+      const r2 = await sb.auth.updateUser({ password, data: { needs_password: false } });
+      if (r2.error) return { ok: false, msg: authMsg(r2.error) };
+      session = (await sb.auth.getSession()).data.session; return { ok: true };
+    },
+    async setPassword(password) {
+      if (String(password || '').length < 8) return { ok: false, msg: 'Choose a password with at least 8 characters.' };
+      const r = await sb.auth.updateUser({ password, data: { needs_password: false } });
+      if (r.error) return { ok: false, msg: authMsg(r.error) };
+      session = (await sb.auth.getSession()).data.session; recovery = false; history.replaceState(null, '', back() + location.search); return enter();
+    },
+    async resetPassword(email) {
+      const r = await sb.auth.resetPasswordForEmail(String(email || '').trim(), { redirectTo: back() });
+      return r.error ? { ok: false, msg: authMsg(r.error) } : { ok: true, msg: 'If the e-mail has an account, a reset link is on its way.' };
+    },
+    async signOut() { await sb.auth.signOut(); location.reload(); },
+    join: (o) => call('join', o), act: (a, args) => call(a, args),
     tick() { /* the server owns time; the client only interpolates live numbers */ },
     async setSpeed() { return { ok: false, msg: 'Speed is set on the server.' }; },
     async reset() { return { ok: false, msg: 'Seasons are reset on the server.' }; },

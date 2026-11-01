@@ -200,7 +200,7 @@ Kommandoerne kan køres i Claude Code.
    supabase link --project-ref <PROJECT-REF>
    supabase db push                    # opretter tabellerne fra supabase/migrations
    ```
-2. **Slå anonymt login til**, så spillere ikke skal oprette en konto: Dashboard → Authentication → Sign In / Providers → *Allow anonymous sign-ins*.
+2. **Login med e-mail og kode**: Dashboard → Authentication → Sign In / Providers → *Email* skal være slået til. Slå *Confirm email* fra, så nye spillere kommer ind med det samme (Supabases indbyggede mail sender kun 2 mails i timen). Sæt *URL Configuration → Site URL* til Vercel-adressen, så links til nulstilling af kode virker. *Allow anonymous sign-ins* kan blive slået til, så ældre gæstespillere kan logge ind og gemme deres by med e-mail og kode; nye spillere kan ikke flytte ind som gæster.
 3. **Deploy spilserveren**
    ```bash
    supabase secrets set CRON_SECRET=$(openssl rand -hex 24) GAME_SPEED=1
