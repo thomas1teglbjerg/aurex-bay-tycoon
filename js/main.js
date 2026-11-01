@@ -14,6 +14,7 @@ import { webHTML, parseUrl, HOME_URL } from './web.js';
 import { teamBoxHTML, talentModal, talentStep } from './team.js';
 import { lifeHTML, lifeModal, newDinner, startDinner, dinnerHTML, money, bidBase } from './life.js';
 import { logoMark, logoFull, symbolIcon } from './brand.js';
+import { initChat, openChat, unreadFrom } from './chat.js';
 import { authHTML, avatarHTML, passwordHTML, secureHTML, foundHTML, foundPreview, newFound } from './onboard.js';
 
 const ECON_COL = { Boom: '#23905a', Stable: '#2f6fb0', Recession: '#d08a1e', Crisis: '#c0392b' };
@@ -301,18 +302,24 @@ const initials = (p) => ((p.first || '')[0] || '') + ((p.last || '')[0] || '') |
 function renderWho() {
   const box = $('who'), c = city(), my = B.self || meId(), acting = meId(); if (!box || !c || !me()) return;
   const t = Date.now(), asAdmin = acting === E.ADMIN_ID;
-  const list = (B.online || []).map((o) => ({ ...o, p: c.players[o.id] })).filter((o) => o.p && !o.p.bot && !o.p.admin)
-    .map((o) => ({ ...o, idle: t - o.lastAct >= IDLE_MS }))
-    .sort((a, b) => (a.id === my) - (b.id === my) || a.idle - b.idle || b.lastAct - a.lastAct);
+  const un = unreadFrom(), on = B.online || [];
+  // players who sent you unread messages also show while offline, so you can open the chat
+  const off = Object.keys(un).filter((id) => !on.some((o) => o.id === id)).map((id) => ({ id, lastAct: 0, off: true }));
+  const list = on.concat(off).map((o) => ({ ...o, p: c.players[o.id], n: un[o.id] || 0 })).filter((o) => o.p && !o.p.bot && !o.p.admin)
+    .map((o) => ({ ...o, idle: o.off || t - o.lastAct >= IDLE_MS }))
+    .sort((a, b) => (a.id === my) - (b.id === my) || b.n - a.n || a.idle - b.idle || b.lastAct - a.lastAct);
   const ago = (ms) => { const m = Math.floor(ms / 60000); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`; };
   const chip = (o) => {
     const b = E.BR.brandOf(c, o.id), col = b ? E.BR.colorHex(b.color) : '#55657d';
-    const state = o.idle ? `inactive for ${ago(t - o.lastAct)}` : 'active now';
+    const state = o.off ? 'offline' : o.idle ? `inactive for ${ago(t - o.lastAct)}` : 'active now';
     const back = asAdmin && o.id === my;
-    const tip = `${o.p.name}${o.id === my ? ' (you)' : ''}${b ? ' · ' + b.name : ''} · ${state}${back ? ' · click to play as yourself again' : ''}`;
-    const cls = `who-c${o.idle ? ' idle' : ''}${o.id === acting ? ' me' : ''}${back ? ' go' : ''}`, inner = `${b ? symbolIcon(b.sym, 26, 'rgba(255,255,255,0.32)') : ''}<b>${esc(initials(o.p).toUpperCase())}</b><i></i>`;
-    return back ? `<button class="${cls}" style="--c:${col}" title="${esc(tip)}" aria-label="${esc(tip)}" data-a="playAs" data-id="">${inner}</button>`
-      : `<span class="${cls}" style="--c:${col}" title="${esc(tip)}" role="img" aria-label="${esc(tip)}">${inner}</span>`;
+    const unread = o.n ? ` · ${o.n} unread message${o.n > 1 ? 's' : ''}, click to read` : '';
+    const tip = `${o.p.name}${o.id === my ? ' (you)' : ''}${b ? ' · ' + b.name : ''} · ${state}${unread}${back ? ' · click to play as yourself again' : ''}${o.id === my ? '' : ' · right-click to chat'}`;
+    const cls = `who-c${o.idle ? ' idle' : ''}${o.off ? ' off' : ''}${o.id === acting ? ' me' : ''}${back || o.n ? ' go' : ''}`;
+    const inner = `${b ? symbolIcon(b.sym, 26, 'rgba(255,255,255,0.32)') : ''}<b>${esc(initials(o.p).toUpperCase())}</b>${o.off ? '' : '<i></i>'}${o.n ? `<u>${o.n > 9 ? '9+' : o.n}</u>` : ''}`;
+    return back ? `<button class="${cls}" style="--c:${col}" title="${esc(tip)}" aria-label="${esc(tip)}" data-a="playAs" data-id="" data-pid="${esc(o.id)}">${inner}</button>`
+      : o.n ? `<button class="${cls}" style="--c:${col}" title="${esc(tip)}" aria-label="${esc(tip)}" data-a="chat" data-id="${esc(o.id)}" data-pid="${esc(o.id)}">${inner}</button>`
+      : `<span class="${cls}" style="--c:${col}" title="${esc(tip)}" role="img" aria-label="${esc(tip)}" data-pid="${esc(o.id)}">${inner}</span>`;
   };
   // Admins only: the administrator tycoon sits at the far right. Click it to play as it, click your own icon to come back.
   const adminChip = () => {
@@ -324,7 +331,7 @@ function renderWho() {
   const act = list.filter((o) => !o.idle).length;
   const html = shown.map(chip).join('') + (more > 0 ? `<span class="who-more" title="${more} more online">+${more}</span>` : '') + (B.admin ? adminChip() : '');
   box.hidden = !list.length && !B.admin;
-  box.setAttribute('aria-label', `${list.length} online, ${act} active`);
+  box.setAttribute('aria-label', `${on.length} online, ${act} active`);
   if (box.dataset.h !== html) { box.dataset.h = html; box.innerHTML = html; }
 }
 function renderTop() {
@@ -707,6 +714,7 @@ async function onClick(e) {
       if (r && r.ok === false) { toast(r.msg, 'bad'); return; }
       closeModal(); setTab('map'); renderAll(); toast(d.id ? 'You are playing as the administrator. Click your own icon to go back.' : 'Back to your own tycoon.', 'good'); return;
     }
+    case 'chat': openChat(d.id); return;
     // ---- the in-game browser
     case 'web': openWeb(d.u || (UI.web && UI.web.url) || HOME_URL); return;
     case 'webGo': navWeb(d.u); return;
@@ -1013,6 +1021,7 @@ async function boot(hot) {
   setInterval(() => B.tick(), 1000);
   setInterval(liveUpdate, 150);
   if (B.onPresence) B.onPresence(() => { renderWho(); measureTop(); });
+  initChat({ B, toast, renderWho: () => { renderWho(); measureTop(); }, navBack, setTab, initials });
   setInterval(renderWho, 20 * 1000); // players turn inactive without any event
 }
 window.claude?.hot?.snapshot?.(() => ({ ...(B && B.snapshot ? B.snapshot() : {}), tab: UI.tab }));

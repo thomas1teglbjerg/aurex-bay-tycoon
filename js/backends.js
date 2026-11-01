@@ -32,6 +32,8 @@ export function createLocalBackend(opts = {}) {
     // who is online: in the demo only you are; bots are not players at a screen
     get online() { return me ? [{ id: me, lastAct }] : []; },
     onPresence() { /* nothing changes besides your own actions */ },
+    // chat: kept in this browser in the demo
+    ...localChat(() => me),
     get city() { return city; }, get me() { return acting(); },
     async playAs(who) {
       if (who === E.ADMIN_ID) { if (!adminDemo) return { ok: false, msg: 'Only an admin can play the administrator.' }; E.ensureAdmin(city, Date.now()); as = E.ADMIN_ID; } else as = null;
@@ -44,6 +46,32 @@ export function createLocalBackend(opts = {}) {
     async reset() { store.del(CITY_KEY); store.del(ME_KEY); city = E.createCity(Date.now(), { speed: city.clock.speed }); me = null; save(true); emit(); },
     subscribe(f) { subs.add(f); },
     snapshot() { return { city, me }; }
+  };
+}
+
+// Private chat between two players. Same surface in both backends:
+//   chatLoad(peer) → [{ id, from, to, body, at, read }] oldest first
+//   chatSend(peer, body), chatRead(peer), chatUnread() → { [from]: n }, onChat(f) (f gets each new incoming message)
+const CHAT_KEY = 'aurex-chat-v1', CHAT_MAX = 500;
+const cleanMsg = (b) => String(b || '').replace(/\s+/g, ' ').trim();
+function localChat(who) {
+  const subs = new Set();
+  const all = () => { try { return JSON.parse(store.get(CHAT_KEY) || '[]'); } catch (e) { return []; } };
+  const pair = (m, a, b) => (m.from === a && m.to === b) || (m.from === b && m.to === a);
+  return {
+    async chatLoad(peer) { const m = who(); return all().filter((x) => pair(x, m, peer)).slice(-100); },
+    async chatSend(peer, body) {
+      const m = who(), text = cleanMsg(body);
+      if (!m) return { ok: false, msg: 'Join the city first.' };
+      if (!text) return { ok: false, msg: 'Write a message first.' };
+      if (text.length > CHAT_MAX) return { ok: false, msg: `Keep it under ${CHAT_MAX} characters.` };
+      if (peer === m) return { ok: false, msg: 'You cannot chat with yourself.' };
+      const msg = { id: Date.now() + Math.random(), from: m, to: peer, body: text, at: Date.now(), read: false };
+      store.set(CHAT_KEY, JSON.stringify(all().concat(msg).slice(-1000))); return { ok: true, m: msg };
+    },
+    async chatRead(peer) { const m = who(); store.set(CHAT_KEY, JSON.stringify(all().map((x) => (x.to === m && x.from === peer ? { ...x, read: true } : x)))); },
+    async chatUnread() { const m = who(), n = {}; for (const x of all()) if (x.to === m && !x.read) n[x.from] = (n[x.from] || 0) + 1; return n; },
+    onChat(f) { subs.add(f); }
   };
 }
 
@@ -114,6 +142,16 @@ export async function createOnlineBackend(cfg) {
   }
   room.subscribe((st) => { if (st === 'SUBSCRIBED') { joined = true; track(true); } });
   subs.add(() => track());
+  // Chat: rows in public.chat_messages; row level security shows each conversation only to its two players.
+  const chatSubs = new Set(), UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const row = (r) => ({ id: r.id, from: r.from_id, to: r.to_id, body: r.body, at: Date.parse(r.created_at), read: !!r.read_at });
+  let chatOn = null;
+  function chatLive() { // incoming messages arrive live once signed in
+    const id = uid(); if (!id || chatOn === id) return; chatOn = id;
+    sb.channel('chat-' + id).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `to_id=eq.${id}` },
+      (p) => { if (p.new && p.new.city_id === cityId) chatSubs.forEach((f) => f(row(p.new))); }).subscribe();
+  }
+  subs.add(chatLive); chatLive();
   sb.channel('city-' + cityId).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'cities', filter: `id=eq.${cityId}` }, (payload) => { if (payload.new && payload.new.state) { city = payload.new.state; emit(); } }).subscribe();
   return {
     mode: 'online', get canSetSpeed() { return admin; }, get admin() { return admin; },
@@ -168,6 +206,28 @@ export async function createOnlineBackend(cfg) {
     act(a, args) { if (uid()) { lastAct = Date.now(); store.set(actKey(), String(lastAct)); track(); } return call(a, args); },
     get online() { return online; },
     onPresence(f) { presSubs.add(f); },
+    async chatLoad(peer) {
+      const m = uid(); if (!m || !UUID.test(peer)) return [];
+      const { data, error } = await sb.from('chat_messages').select('id,from_id,to_id,body,created_at,read_at').eq('city_id', cityId)
+        .or(`and(from_id.eq.${m},to_id.eq.${peer}),and(from_id.eq.${peer},to_id.eq.${m})`).order('created_at', { ascending: false }).limit(100);
+      return error || !data ? [] : data.reverse().map(row);
+    },
+    async chatSend(peer, body) {
+      const m = uid(), text = cleanMsg(body);
+      if (!m || !self()) return { ok: false, msg: 'Join the city first.' };
+      if (!text) return { ok: false, msg: 'Write a message first.' };
+      if (text.length > CHAT_MAX) return { ok: false, msg: `Keep it under ${CHAT_MAX} characters.` };
+      if (!UUID.test(peer) || peer === m) return { ok: false, msg: 'You can only chat with other players.' };
+      const { data, error } = await sb.from('chat_messages').insert({ city_id: cityId, to_id: peer, body: text }).select('id,from_id,to_id,body,created_at,read_at').single();
+      return error ? { ok: false, msg: 'The message was not sent. Try again in a moment.' } : { ok: true, m: row(data) };
+    },
+    async chatRead(peer) { const m = uid(); if (m && UUID.test(peer)) await sb.from('chat_messages').update({ read_at: new Date().toISOString() }).eq('city_id', cityId).eq('to_id', m).eq('from_id', peer).is('read_at', null); },
+    async chatUnread() {
+      const m = uid(); if (!m) return {};
+      const { data } = await sb.from('chat_messages').select('from_id').eq('city_id', cityId).eq('to_id', m).is('read_at', null).limit(500);
+      const n = {}; for (const r of data || []) n[r.from_id] = (n[r.from_id] || 0) + 1; return n;
+    },
+    onChat(f) { chatSubs.add(f); },
     tick() { /* the server owns time; the client only interpolates live numbers */ },
     async setSpeed(speed) { return admin ? call('adminSpeed', { speed }) : { ok: false, msg: 'Only an admin can change the game speed.' }; },
     async reset() { return { ok: false, msg: 'Seasons are reset on the server.' }; },
