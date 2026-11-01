@@ -13,7 +13,7 @@ import { WAREHOUSE_SITES, INTERACTIONS, HOMES, TAKEOVER as GC_T } from '../supab
 import { webHTML, parseUrl, HOME_URL } from './web.js';
 import { teamBoxHTML, talentModal, talentStep } from './team.js';
 import { lifeHTML, lifeModal, newDinner, startDinner, dinnerHTML, money, bidBase } from './life.js';
-import { logoMark, logoFull } from './brand.js';
+import { logoMark, logoFull, symbolIcon } from './brand.js';
 import { authHTML, avatarHTML, passwordHTML, secureHTML, foundHTML, foundPreview, newFound } from './onboard.js';
 
 const ECON_COL = { Boom: '#23905a', Stable: '#2f6fb0', Recession: '#d08a1e', Crisis: '#c0392b' };
@@ -272,8 +272,32 @@ function setupPanZoom() {
 function measureTop() { const t = $('top'); if (t.hidden) return; $('app').style.setProperty('--topH', t.getBoundingClientRect().bottom + 8 + 'px'); }
 
 // ---------------------------------------------------------------- top bar
+// Online tycoons: one chip per signed-in player (company logo + initials). Dimmed after 10 minutes without a game action.
+const IDLE_MS = 10 * 60 * 1000, WHO_MAX = 6;
+const initials = (p) => ((p.first || '')[0] || '') + ((p.last || '')[0] || '') || String(p.name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('');
+function renderWho() {
+  const box = $('who'), c = city(), my = meId(); if (!box || !c || !me()) return;
+  const t = Date.now();
+  const list = (B.online || []).map((o) => ({ ...o, p: c.players[o.id] })).filter((o) => o.p && !o.p.bot)
+    .map((o) => ({ ...o, idle: t - o.lastAct >= IDLE_MS }))
+    .sort((a, b) => (a.id === my) - (b.id === my) || a.idle - b.idle || b.lastAct - a.lastAct);
+  const ago = (ms) => { const m = Math.floor(ms / 60000); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`; };
+  const chip = (o) => {
+    const b = E.BR.brandOf(c, o.id), col = b ? E.BR.colorHex(b.color) : '#55657d';
+    const state = o.idle ? `inactive for ${ago(t - o.lastAct)}` : 'active now';
+    const tip = `${o.p.name}${o.id === my ? ' (you)' : ''}${b ? ' · ' + b.name : ''} · ${state}`;
+    return `<span class="who-c${o.idle ? ' idle' : ''}${o.id === my ? ' me' : ''}" style="--c:${col}" title="${esc(tip)}" role="img" aria-label="${esc(tip)}">${b ? symbolIcon(b.sym, 26, 'rgba(255,255,255,0.32)') : ''}<b>${esc(initials(o.p).toUpperCase())}</b><i></i></span>`;
+  };
+  const shown = list.slice(0, WHO_MAX), more = list.length - shown.length;
+  const act = list.filter((o) => !o.idle).length;
+  const html = shown.map(chip).join('') + (more > 0 ? `<span class="who-more" title="${more} more online">+${more}</span>` : '');
+  box.hidden = !list.length;
+  box.setAttribute('aria-label', `${list.length} online, ${act} active`);
+  if (box.dataset.h !== html) { box.dataset.h = html; box.innerHTML = html; }
+}
 function renderTop() {
   const c = city(), p = me(); if (!p) return;
+  renderWho();
   $('datelbl').textContent = c.over ? `Season ${c.season} is over` : `${dateLabel(c.m)} · W${((c.wk ?? c.m * 4) % 4) + 1}`;
   $('econ').innerHTML = `<i style="background:${ECON_COL[c.econ]}"></i>${c.econ}`;
   const brand = E.BR.brandOf(c, p.id), lg = $('mylogo'), key = brand ? [brand.name, brand.color, brand.font, brand.sym].join('|') : '';
@@ -950,6 +974,8 @@ async function boot(hot) {
   navInit();
   setInterval(() => B.tick(), 1000);
   setInterval(liveUpdate, 150);
+  if (B.onPresence) B.onPresence(() => { renderWho(); measureTop(); });
+  setInterval(renderWho, 20 * 1000); // players turn inactive without any event
 }
 window.claude?.hot?.snapshot?.(() => ({ ...(B && B.snapshot ? B.snapshot() : {}), tab: UI.tab }));
 window.claude?.hot?.ready ? window.claude.hot.ready(boot) : boot(window.claude?.hot?.data ?? null);
