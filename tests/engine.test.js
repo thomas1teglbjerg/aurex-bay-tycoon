@@ -89,4 +89,9 @@ const json = JSON.stringify(c2); console.log('city JSON size', Math.round(json.l
   assert(E.protection(c6, free[0]).safe, 'admin companies are protected');
   assert(E.ensureAdmin(c6, t) === c6.players[E.ADMIN_ID], 'ensureAdmin is idempotent');
   assert(E.apply(c6, 'z', 'buy', { lid: c6.listings.find((l) => !l.owner).id }, t).ok !== undefined, 'normal players unaffected'); }
+// the test player: an ordinary tycoon with normal start money and a parent company, ready to play
+{ const t = 1_700_000_000_000; const c7 = E.createCity(t, { speed: 2016 });
+  const tp = E.ensureAs(c7, E.TEST_ID, t); assert(tp.test && !tp.admin && tp.cash === 10 && E.BR.brandOf(c7, E.TEST_ID) && !E.BR.needsParent(c7, E.TEST_ID), 'test player ready with 10 M');
+  assert(E.ensureAs(c7, E.TEST_ID, t) === tp && E.standings(c7).some((x) => x.id === E.TEST_ID), 'test player is ordinary and created once');
+  const l = c7.listings.find((x) => !x.owner && E.listingPrice(x) > 10); assert(!E.apply(c7, E.TEST_ID, 'buy', { lid: l.id }, t).ok, 'test player cannot overspend'); }
 console.log('OK');

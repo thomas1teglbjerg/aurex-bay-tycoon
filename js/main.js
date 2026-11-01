@@ -301,18 +301,18 @@ const IDLE_MS = 10 * 60 * 1000, WHO_MAX = 6;
 const initials = (p) => ((p.first || '')[0] || '') + ((p.last || '')[0] || '') || String(p.name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('');
 function renderWho() {
   const box = $('who'), c = city(), my = B.self || meId(), acting = meId(); if (!box || !c || !me()) return;
-  const t = Date.now(), asAdmin = acting === E.ADMIN_ID;
+  const t = Date.now(), asAdmin = acting === E.ADMIN_ID, asTest = acting === E.TEST_ID, away = asAdmin || asTest;
   const un = unreadFrom(), on = B.online || [];
   // players who sent you unread messages also show while offline, so you can open the chat
   const off = Object.keys(un).filter((id) => !on.some((o) => o.id === id)).map((id) => ({ id, lastAct: 0, off: true }));
-  const list = on.concat(off).map((o) => ({ ...o, p: c.players[o.id], n: un[o.id] || 0 })).filter((o) => o.p && !o.p.bot && !o.p.admin)
+  const list = on.concat(off).map((o) => ({ ...o, p: c.players[o.id], n: un[o.id] || 0 })).filter((o) => o.p && !o.p.bot && !o.p.admin && o.id !== E.TEST_ID)
     .map((o) => ({ ...o, idle: o.off || t - o.lastAct >= IDLE_MS }))
     .sort((a, b) => (a.id === my) - (b.id === my) || b.n - a.n || a.idle - b.idle || b.lastAct - a.lastAct);
   const ago = (ms) => { const m = Math.floor(ms / 60000); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`; };
   const chip = (o) => {
     const b = E.BR.brandOf(c, o.id), col = b ? E.BR.colorHex(b.color) : '#55657d';
     const state = o.off ? 'offline' : o.idle ? `inactive for ${ago(t - o.lastAct)}` : 'active now';
-    const back = asAdmin && o.id === my;
+    const back = away && o.id === my;
     const unread = o.n ? ` · ${o.n} unread message${o.n > 1 ? 's' : ''}, click to read` : '';
     const tip = `${o.p.name}${o.id === my ? ' (you)' : ''}${b ? ' · ' + b.name : ''} · ${state}${unread}${back ? ' · click to play as yourself again' : ''}${o.id === my ? '' : ' · right-click to chat'}`;
     const cls = `who-c${o.idle ? ' idle' : ''}${o.off ? ' off' : ''}${o.id === acting ? ' me' : ''}${back || o.n ? ' go' : ''}`;
@@ -329,6 +329,12 @@ function renderWho() {
       : `Administrator (unlimited money) · click to play as it${n ? ` · ${n} unread message${n > 1 ? 's' : ''} from players` : ''}`;
     return `<button class="who-c adm${asAdmin ? ' me' : ' go'}" style="--c:${col}" title="${tip}" aria-label="${tip}" data-a="playAs" data-id="${asAdmin ? '' : E.ADMIN_ID}">${symbolIcon(b ? b.sym : 'key', 26, 'rgba(255,255,255,0.32)')}<b>A</b>${badge}</button>`;
   };
+  // Admins only: the test player, an ordinary tycoon with normal money, to try the game as a regular player
+  const testChip = () => {
+    const tp = c.players[E.TEST_ID], b = tp ? E.BR.brandOf(c, E.TEST_ID) : null, col = b ? E.BR.colorHex(b.color) : '#0f6e6e';
+    const tip = asTest ? 'Test player (normal money) · you are playing as it. Click your own icon to go back.' : 'Test player (normal money) · click to play as it';
+    return `<button class="who-c tst${asTest ? ' me' : ' go'}" style="--c:${col}" title="${tip}" aria-label="${tip}" data-a="playAs" data-id="${asTest ? '' : E.TEST_ID}">${symbolIcon(b ? b.sym : 'compass', 26, 'rgba(255,255,255,0.32)')}<b>TP</b></button>`;
+  };
   // Everyone else sees the administrator only when it has written to them: click to read
   const admMsgChip = () => {
     const n = un[E.ADMIN_ID] || 0; if (!n || B.admin) return '';
@@ -338,7 +344,7 @@ function renderWho() {
   };
   const shown = list.slice(0, WHO_MAX), more = list.length - shown.length;
   const act = list.filter((o) => !o.idle).length;
-  const html = shown.map(chip).join('') + (more > 0 ? `<span class="who-more" title="${more} more online">+${more}</span>` : '') + (B.admin ? adminChip() : admMsgChip());
+  const html = shown.map(chip).join('') + (more > 0 ? `<span class="who-more" title="${more} more online">+${more}</span>` : '') + (B.admin ? testChip() + adminChip() : admMsgChip());
   box.hidden = !list.length && !B.admin && !un[E.ADMIN_ID];
   box.setAttribute('aria-label', `${on.length} online, ${act} active`);
   if (box.dataset.h !== html) { box.dataset.h = html; box.innerHTML = html; }
@@ -721,7 +727,7 @@ async function onClick(e) {
     case 'playAs': {
       const r = await B.playAs(d.id || null);
       if (r && r.ok === false) { toast(r.msg, 'bad'); return; }
-      closeModal(); setTab('map'); renderAll(); toast(d.id ? 'You are playing as the administrator. Click your own icon to go back.' : 'Back to your own tycoon.', 'good'); return;
+      closeModal(); setTab('map'); renderAll(); toast(d.id ? `You are playing as the ${d.id === E.TEST_ID ? 'test player' : 'administrator'}. Click your own icon to go back.` : 'Back to your own tycoon.', 'good'); return;
     }
     case 'chat': openChat(d.id); return;
     // ---- the in-game browser
