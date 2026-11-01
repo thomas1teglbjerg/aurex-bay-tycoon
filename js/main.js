@@ -275,17 +275,25 @@ function measureTop() { const t = $('top'); if (t.hidden) return; $('app').style
 // Online tycoons: one chip per signed-in player (company logo + initials). Dimmed after 10 minutes without a game action.
 const IDLE_MS = 10 * 60 * 1000, WHO_MAX = 6;
 const initials = (p) => ((p.first || '')[0] || '') + ((p.last || '')[0] || '') || String(p.name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('');
+// Test: ?testonline=1 adds two made-up players to the bar, only in this browser and only for the admin (or the demo).
+const WHO_T0 = Date.now();
+const WHO_FAKE = [
+  { id: 'test-a', lastAct: WHO_T0, p: { name: 'Ida Holm', first: 'Ida', last: 'Holm' }, b: { name: 'Holm Maritime', color: 'teal', sym: 'anchor' } },
+  { id: 'test-b', lastAct: WHO_T0 - 14 * 60000, p: { name: 'Karl Vestergaard', first: 'Karl', last: 'Vestergaard' }, b: { name: 'Vestergaard & Co', color: 'forest', sym: 'tower' } }
+];
+const whoTest = () => /[?&]testonline=1\b/.test(location.search) && (B.mode === 'local' || B.admin);
 function renderWho() {
   const box = $('who'), c = city(), my = meId(); if (!box || !c || !me()) return;
   const t = Date.now();
   const list = (B.online || []).map((o) => ({ ...o, p: c.players[o.id] })).filter((o) => o.p && !o.p.bot)
+    .concat(whoTest() ? WHO_FAKE : [])
     .map((o) => ({ ...o, idle: t - o.lastAct >= IDLE_MS }))
     .sort((a, b) => (a.id === my) - (b.id === my) || a.idle - b.idle || b.lastAct - a.lastAct);
   const ago = (ms) => { const m = Math.floor(ms / 60000); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`; };
   const chip = (o) => {
-    const b = E.BR.brandOf(c, o.id), col = b ? E.BR.colorHex(b.color) : '#55657d';
+    const b = o.b || E.BR.brandOf(c, o.id), col = b ? E.BR.colorHex(b.color) : '#55657d';
     const state = o.idle ? `inactive for ${ago(t - o.lastAct)}` : 'active now';
-    const tip = `${o.p.name}${o.id === my ? ' (you)' : ''}${b ? ' · ' + b.name : ''} · ${state}`;
+    const tip = `${o.p.name}${o.id === my ? ' (you)' : ''}${o.b ? ' (test)' : ''}${b ? ' · ' + b.name : ''} · ${state}`;
     return `<span class="who-c${o.idle ? ' idle' : ''}${o.id === my ? ' me' : ''}" style="--c:${col}" title="${esc(tip)}" role="img" aria-label="${esc(tip)}">${b ? symbolIcon(b.sym, 26, 'rgba(255,255,255,0.32)') : ''}<b>${esc(initials(o.p).toUpperCase())}</b><i></i></span>`;
   };
   const shown = list.slice(0, WHO_MAX), more = list.length - shown.length;
