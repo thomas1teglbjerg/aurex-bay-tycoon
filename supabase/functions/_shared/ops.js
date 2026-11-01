@@ -44,11 +44,11 @@ export function newOps(l, managed) {
 }
 function ensureClientsFor(l, ops) { const t = l.ops; l.ops = ops; ensureClients(l); l.ops = t; }
 export function ensureOps(l, managed) { if (!l.ops) l.ops = newOps(l, managed); return l.ops; }
-export function takeOverOps(l) { // a human buys a running company from a bot
+export function takeOverOps(l) { // a human (or a human coop) takes over a running company
   const ops = ensureOps(l, true); ops.managed = false;
-  ['ops', 'procurement', 'sales'].forEach((k) => { if (!ops.depts[k]) ops.depts[k] = { w: needWorkers(l, k), set: { ...DEPT_DEFAULTS[k] }, head: null }; });
-  // the previous owner's staff leave with them: you start with an empty company and hire your own team
-  Object.values(ops.depts).forEach((d) => { d.head = null; d.w = 0; });
+  // the previous owner's staff and departments go with them: you start with only Operations, no workers,
+  // and open departments and hire your own team, exactly like a company bought from the market
+  ops.depts = { ops: { w: 0, set: { ...DEPT_DEFAULTS.ops }, head: null } };
   ensureClients(l);
 }
 
