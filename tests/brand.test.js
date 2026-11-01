@@ -59,8 +59,20 @@ r = E.apply(city, 'u2', 'buy', { lid: free.id, as: h2.id }, now);
 if (free.owner && free.owner.k === 'h') {
   assert(!free.ops.managed && E.canRun(city, 'u3', free) && E.canSeeCompany(city, 'u3', free), 'every co-owner can open and run the coop company');
   assert(!E.canRun(city, 'u1', free), 'outsiders cannot run it');
+  assert(Object.keys(free.ops.depts).join() === 'ops' && free.ops.depts.ops.w === 0, 'a new coop company starts empty');
   const t0 = h2.treasury, c3 = city.players.u3.cash;
   r = E.apply(city, 'u3', 'workers', { lid: free.id, dept: 'ops', delta: 1 }, now);
   assert(r.ok && h2.treasury < t0 && city.players.u3.cash === c3, 'hiring is paid from the coop treasury: ' + (r.msg || 'ok'));
 } else console.log('skip: coop purchase pending a vote', r.msg);
+
+// buying a running company from a bot: no staff, only Operations
+const botCo = city.listings.find((l) => l.owner && l.owner.k === 'p' && city.players[l.owner.id].bot && l.ops);
+if (botCo) {
+  E.addPlayer(city, 'u9', null, now, { first: 'Ane', last: 'Dahl' }); city.players.u9.cash = 500;
+  const bot = city.players[botCo.owner.id]; bot.lastAct = city.m;
+  E.apply(city, 'u9', 'offer', { lid: botCo.id, amt: Math.round(E.listingValue(botCo) * 3) }, now);
+  for (let i = 0; i < 6 && botCo.owner.id !== 'u9'; i++) { now += E.realMsPerMonth(city); E.advance(city, now); }
+  if (botCo.owner.id === 'u9') assert(Object.keys(botCo.ops.depts).join() === 'ops' && botCo.ops.depts.ops.w === 0 && !botCo.ops.managed, 'a company bought from a bot starts with no staff and only Operations');
+  else console.log('skip: bot did not sell');
+}
 console.log('ALL OK');

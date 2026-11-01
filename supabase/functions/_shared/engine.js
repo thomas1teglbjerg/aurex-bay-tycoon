@@ -44,10 +44,12 @@ const humanCoop = (city, h) => !!h && !h.bot && Object.keys(h.members).some((pid
 export function canRun(city, pid, l) { if (!l || !l.owner) return false; if (l.owner.k === 'p') return l.owner.id === pid; const h = city.holdings[l.owner.id]; return !!(h && h.members[pid] && humanCoop(city, h)); }
 export function canSeeCompany(city, pid, l) { return !!(l.owner && (l.owner.k === 'p' ? (l.owner.id === pid || coopPartners(city, pid, l.owner.id)) : canRun(city, pid, l))); }
 const isManaged = (city, l) => !l.owner || (l.owner.k === 'h' ? !humanCoop(city, city.holdings[l.owner.id]) : !!(city.players[l.owner.id] && city.players[l.owner.id].bot));
-// companies of human coops bought before owners could run them: hand them over with their staff intact
+// a coop company on autopilot whose coop now has human owners: the owners take over and build their own team
 function coopRunMode(city) {
+  // one-time: coop companies that switched over with the autopilot's workers (Nov 2026) start empty too
+  if (!city.coopReset1) { city.coopReset1 = true; city.listings.forEach((l) => { if (l.owner && l.owner.k === 'h' && l.ops && !l.ops.managed && !isManaged(city, l)) { OPS.takeOverOps(l); Object.values(city.players).forEach((p) => Object.keys(p.assign || {}).forEach((k) => { if (p.assign[k].lid === l.id) delete p.assign[k]; })); } }); }
   city.listings.forEach((l) => { if (l.owner && l.owner.k === 'h' && l.ops && l.ops.managed && !isManaged(city, l)) {
-    l.ops.managed = false; OPS.ensureClients(l); l.ops.pending = l.ops.pending || []; l.ops.fg = l.ops.fg || 0; l.ops.board = l.ops.board || []; } });
+    OPS.takeOverOps(l); l.ops.pending = l.ops.pending || []; l.ops.fg = l.ops.fg || 0; l.ops.board = l.ops.board || []; } });
 }
 // a specialist works for one company: humans assign them to a department, bots simply employ them
 export function hasHead(city, l, p, spec) { if (!p) return false; if (p.bot) return hasStaff(p, spec); const a = p.assign && p.assign[spec]; return !!(a && a.lid === l.id); }
