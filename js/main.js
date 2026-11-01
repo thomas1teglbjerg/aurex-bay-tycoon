@@ -275,13 +275,13 @@ function measureTop() { const t = $('top'); if (t.hidden) return; $('app').style
 // Online tycoons: one chip per signed-in player (company logo + initials). Dimmed after 10 minutes without a game action.
 const IDLE_MS = 10 * 60 * 1000, WHO_MAX = 6;
 const initials = (p) => ((p.first || '')[0] || '') + ((p.last || '')[0] || '') || String(p.name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('');
-// Test: ?testonline=1 adds two made-up players to the bar, only in this browser and only for the admin (or the demo).
+// Test: ?testonline=1 adds two made-up players to the bar, only in the browser that opened that link.
 const WHO_T0 = Date.now();
 const WHO_FAKE = [
   { id: 'test-a', lastAct: WHO_T0, p: { name: 'Ida Holm', first: 'Ida', last: 'Holm' }, b: { name: 'Holm Maritime', color: 'teal', sym: 'anchor' } },
   { id: 'test-b', lastAct: WHO_T0 - 14 * 60000, p: { name: 'Karl Vestergaard', first: 'Karl', last: 'Vestergaard' }, b: { name: 'Vestergaard & Co', color: 'forest', sym: 'tower' } }
 ];
-const whoTest = () => /[?&]testonline=1\b/.test(location.search) && (B.mode === 'local' || B.admin);
+const whoTest = () => /[?&]testonline=1\b/.test(location.search);
 function renderWho() {
   const box = $('who'), c = city(), my = meId(); if (!box || !c || !me()) return;
   const t = Date.now();
