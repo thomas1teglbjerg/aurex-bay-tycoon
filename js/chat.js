@@ -6,24 +6,30 @@ import { city, $, esc } from './util.js';
 import { symbolIcon } from './brand.js';
 
 let H = null; // hooks from main.js: { B, toast, renderWho, navBack, setTab, initials }
-const CH = { peer: null, msgs: [], unread: {}, poll: 0 };
+const CH = { peer: null, msgs: [], unread: {}, poll: 0, adm: 0 };
 export const unreadFrom = () => CH.unread;
+export const adminInbox = () => CH.adm; // admins: unread messages to the administrator while playing as yourself
+const chatMe = () => H.B.chatMe || H.B.self || H.B.me; // who you write as: yourself, or the administrator
+const ADMIN_NAME = 'Administrator';
 
 // ---------------------------------------------------------------- context menu
 let items = [];
 const native = (e) => e.shiftKey || !!(e.target.closest && e.target.closest('input, textarea, select, [contenteditable="true"]'));
 function menuFor(e) {
-  const c = city(), out = [], self = H.B.self || H.B.me;
+  const c = city(), out = [], self = H.B.self || H.B.me, as = chatMe();
   const chip = e.target.closest && e.target.closest('.who-c');
   if (chip && chip.dataset.pid && c && c.players[chip.dataset.pid]) {
     const id = chip.dataset.pid, p = c.players[id], b = E.BR.brandOf(c, id);
     out.push({ head: `${p.name}${b ? ' · ' + b.name : ''}` });
-    if (id === self) out.push({ label: 'This is you', off: true });
+    if (id === as) out.push({ label: 'This is you', off: true });
     else out.push({ label: 'Chat with player', icon: 'chat', run: () => openChat(id) });
     if (chip.dataset.a === 'playAs') out.push({ label: 'Play as yourself', icon: 'back', run: () => chip.click() });
   } else if (chip && chip.classList.contains('adm')) {
-    out.push({ head: 'Administrator' });
-    out.push({ label: chip.dataset.id ? 'Play as the administrator' : 'Play as yourself', icon: 'back', run: () => chip.click() });
+    out.push({ head: ADMIN_NAME });
+    if (chip.dataset.a === 'playAs') out.push({ label: chip.dataset.id ? `Play as the administrator${CH.adm ? ` (${CH.adm} unread)` : ''}` : 'Play as yourself', icon: 'back', run: () => chip.click() });
+    else out.push({ label: 'Chat with administrator', icon: 'chat', run: () => openChat(E.ADMIN_ID) });
+  } else if (!H.B.admin && as && as !== E.ADMIN_ID) {
+    out.push({ label: 'Chat with administrator', icon: 'chat', run: () => openChat(E.ADMIN_ID) }); // any player can reach the administrator
   }
   const sel = String(window.getSelection ? window.getSelection() : '').trim();
   if (sel) out.push({ label: 'Copy', icon: 'copy', run: () => navigator.clipboard && navigator.clipboard.writeText(sel).then(() => H.toast('Copied.', 'good'), () => {}) });
@@ -72,16 +78,17 @@ function ctxKeys(e) {
 // ---------------------------------------------------------------- chat window
 const hm = (t) => { const d = new Date(t), now = new Date(), tm = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); return d.toDateString() === now.toDateString() ? tm : d.toLocaleDateString([], { day: 'numeric', month: 'short' }) + ' ' + tm; };
 function headHTML() {
-  const c = city(), id = CH.peer, p = c && c.players[id]; if (!p) return '';
-  const b = E.BR.brandOf(c, id), col = b ? E.BR.colorHex(b.color) : '#55657d';
-  const on = (H.B.online || []).find((o) => o.id === id), state = !on ? 'offline' : Date.now() - on.lastAct < 10 * 60 * 1000 ? 'active now' : 'online, inactive';
-  return `<span class="who-c${on ? '' : ' idle'}" style="--c:${col}" aria-hidden="true">${b ? symbolIcon(b.sym, 22, 'rgba(255,255,255,0.32)') : ''}<b>${esc(H.initials(p).toUpperCase())}</b></span>
-    <div><b>${esc(p.name)}</b><small>${b ? esc(b.name) + ' · ' : ''}${state}</small></div>
+  const c = city(), id = CH.peer, adm = id === E.ADMIN_ID, p = c && (c.players[id] || (adm ? { name: ADMIN_NAME } : null)); if (!p) return '';
+  const b = c.players[id] ? E.BR.brandOf(c, id) : null, col = b ? E.BR.colorHex(b.color) : adm ? '#33383f' : '#55657d';
+  const on = (H.B.online || []).find((o) => o.id === id), state = adm ? 'answers when an admin is on' : !on ? 'offline' : Date.now() - on.lastAct < 10 * 60 * 1000 ? 'active now' : 'online, inactive';
+  const mine = chatMe() === E.ADMIN_ID ? ' · you answer as the administrator' : '';
+  return `<span class="who-c${on || adm ? '' : ' idle'}${adm ? ' adm' : ''}" style="--c:${col}" aria-hidden="true">${b || adm ? symbolIcon(b ? b.sym : 'key', 22, 'rgba(255,255,255,0.32)') : ''}<b>${adm ? 'A' : esc(H.initials(p).toUpperCase())}</b></span>
+    <div><b>${esc(p.name)}</b><small>${b && !adm ? esc(b.name) + ' · ' : ''}${state}${mine}</small></div>
     <button type="button" class="chat-x" data-chat="close" aria-label="Close chat" title="Close">×</button>`;
 }
 function logHTML() {
   if (!CH.msgs.length) return `<p class="chat-empty">No messages yet. Say hello.${H.B.mode === 'local' ? ' In the offline demo, messages stay in this browser.' : ''}</p>`;
-  const me = H.B.self || H.B.me;
+  const me = chatMe();
   return CH.msgs.map((m) => `<div class="cm ${m.from === me ? 'mine' : 'theirs'}"><p>${esc(m.body)}</p><time>${hm(m.at)}</time></div>`).join('');
 }
 function renderChat(scroll) {
@@ -92,7 +99,7 @@ function renderChat(scroll) {
   if (scroll || atEnd) log.scrollTop = log.scrollHeight;
 }
 export async function openChat(peer) {
-  const c = city(); if (!c || !c.players[peer]) return;
+  const c = city(); if (!c || (!c.players[peer] && peer !== E.ADMIN_ID)) return;
   hideCtx();
   const box = $('chat');
   if (CH.peer !== peer) { CH.peer = peer; CH.msgs = []; }
@@ -130,7 +137,7 @@ function incoming(m) {
   CH.unread[m.from] = (CH.unread[m.from] || 0) + 1; H.renderWho();
   const p = city() && city().players[m.from];
   if ($('chat').hidden) openChat(m.from); // nobody else is open: show the new conversation right away
-  else H.toast(`New message from ${p ? p.name : 'a player'}. Click their icon to read it.`, 'good');
+  else H.toast(`New message from ${m.from === E.ADMIN_ID ? ADMIN_NAME : p ? p.name : 'a player'}. Click their icon to read it.`, 'good');
 }
 
 // ---------------------------------------------------------------- setup
@@ -155,11 +162,15 @@ export function initChat(hooks) {
   box.addEventListener('submit', (e) => { e.preventDefault(); e.stopPropagation(); send(e.target); });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) markRead(); });
   if (H.B.onChat) H.B.onChat(incoming);
-  let who = H.B.self; loadUnread();
-  H.B.subscribe(() => { if (H.B.self !== who) { who = H.B.self; closeChat(); loadUnread(); } }); // signed in (or out) after the page opened
+  let who = chatMe(); loadUnread();
+  H.B.subscribe(() => { if (chatMe() !== who) { who = chatMe(); closeChat(); loadUnread(); } }); // signed in, or switched to/from the administrator
+  setInterval(() => { if (!document.hidden) loadUnread(); }, 45 * 1000); // the administrator's inbox has no live feed
 }
 // unread messages waiting since the last visit: their senders show in the top bar with a badge
 export async function loadUnread() {
   if (!H.B.chatUnread) return;
-  const n = await H.B.chatUnread(); CH.unread = { ...n }; H.renderWho();
+  const n = await H.B.chatUnread(); CH.unread = { ...n };
+  if (CH.peer && CH.unread[CH.peer] && !$('chat').hidden) refresh();
+  CH.adm = H.B.chatAdminInbox ? await H.B.chatAdminInbox() : 0;
+  H.renderWho();
 }

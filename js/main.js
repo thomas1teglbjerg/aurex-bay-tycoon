@@ -14,7 +14,7 @@ import { webHTML, parseUrl, HOME_URL } from './web.js';
 import { teamBoxHTML, talentModal, talentStep } from './team.js';
 import { lifeHTML, lifeModal, newDinner, startDinner, dinnerHTML, money, bidBase } from './life.js';
 import { logoMark, logoFull, symbolIcon } from './brand.js';
-import { initChat, openChat, unreadFrom } from './chat.js';
+import { initChat, openChat, unreadFrom, adminInbox } from './chat.js';
 import { authHTML, avatarHTML, passwordHTML, secureHTML, foundHTML, foundPreview, newFound } from './onboard.js';
 
 const ECON_COL = { Boom: '#23905a', Stable: '#2f6fb0', Recession: '#d08a1e', Crisis: '#c0392b' };
@@ -324,13 +324,22 @@ function renderWho() {
   // Admins only: the administrator tycoon sits at the far right. Click it to play as it, click your own icon to come back.
   const adminChip = () => {
     const b = c.players[E.ADMIN_ID] ? E.BR.brandOf(c, E.ADMIN_ID) : null, col = b ? E.BR.colorHex(b.color) : '#33383f';
-    const tip = asAdmin ? 'Administrator (unlimited money) · you are playing as it. Click your own icon to go back.' : 'Administrator (unlimited money) · click to play as it';
-    return `<button class="who-c adm${asAdmin ? ' me' : ' go'}" style="--c:${col}" title="${tip}" aria-label="${tip}" data-a="playAs" data-id="${asAdmin ? '' : E.ADMIN_ID}">${symbolIcon(b ? b.sym : 'key', 26, 'rgba(255,255,255,0.32)')}<b>A</b></button>`;
+    const n = asAdmin ? 0 : adminInbox(), badge = n ? `<u>${n > 9 ? '9+' : n}</u>` : '';
+    const tip = asAdmin ? 'Administrator (unlimited money) · you are playing as it and answer its chats. Click your own icon to go back.'
+      : `Administrator (unlimited money) · click to play as it${n ? ` · ${n} unread message${n > 1 ? 's' : ''} from players` : ''}`;
+    return `<button class="who-c adm${asAdmin ? ' me' : ' go'}" style="--c:${col}" title="${tip}" aria-label="${tip}" data-a="playAs" data-id="${asAdmin ? '' : E.ADMIN_ID}">${symbolIcon(b ? b.sym : 'key', 26, 'rgba(255,255,255,0.32)')}<b>A</b>${badge}</button>`;
+  };
+  // Everyone else sees the administrator only when it has written to them: click to read
+  const admMsgChip = () => {
+    const n = un[E.ADMIN_ID] || 0; if (!n || B.admin) return '';
+    const b = c.players[E.ADMIN_ID] ? E.BR.brandOf(c, E.ADMIN_ID) : null, col = b ? E.BR.colorHex(b.color) : '#33383f';
+    const tip = `Administrator · ${n} unread message${n > 1 ? 's' : ''}, click to read`;
+    return `<button class="who-c adm go" style="--c:${col}" title="${tip}" aria-label="${tip}" data-a="chat" data-id="${E.ADMIN_ID}">${symbolIcon(b ? b.sym : 'key', 26, 'rgba(255,255,255,0.32)')}<b>A</b><u>${n > 9 ? '9+' : n}</u></button>`;
   };
   const shown = list.slice(0, WHO_MAX), more = list.length - shown.length;
   const act = list.filter((o) => !o.idle).length;
-  const html = shown.map(chip).join('') + (more > 0 ? `<span class="who-more" title="${more} more online">+${more}</span>` : '') + (B.admin ? adminChip() : '');
-  box.hidden = !list.length && !B.admin;
+  const html = shown.map(chip).join('') + (more > 0 ? `<span class="who-more" title="${more} more online">+${more}</span>` : '') + (B.admin ? adminChip() : admMsgChip());
+  box.hidden = !list.length && !B.admin && !un[E.ADMIN_ID];
   box.setAttribute('aria-label', `${on.length} online, ${act} active`);
   if (box.dataset.h !== html) { box.dataset.h = html; box.innerHTML = html; }
 }

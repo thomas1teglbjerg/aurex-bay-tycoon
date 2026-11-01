@@ -110,6 +110,8 @@ export function addPlayer(city, id, name, now, o = {}) {
 // One shared test tycoon for admins: unlimited money, never in the standings, never taken over,
 // and kept out of the city news. Who may play it is checked by the game server (admin e-mails), not here.
 export const ADMIN_ID = 'admin', ADMIN_NAME = 'Administrator', ADMIN_CASH = 1e9;
+// chat: the administrator's inbox in public.chat_messages (a fixed id, since 'admin' is not a user id)
+export const ADMIN_CHAT = '00000000-0000-0000-0000-000000000ad1';
 export const isAdminPlayer = (p) => !!p && !!p.admin;
 function refillAdmin(city) {
   const p = city.players[ADMIN_ID]; if (!p || !p.admin) return;
