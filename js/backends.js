@@ -4,7 +4,7 @@
 //                    Players sign in with e-mail + password, so their city follows them to any device.
 import * as E from '../supabase/functions/_shared/engine.js';
 
-const CITY_KEY = 'aurex-city-v2', ME_KEY = 'aurex-me-v2';
+const CITY_KEY = 'aurex-city-v2', ME_KEY = 'aurex-me-v2', ACT_KEY = 'aurex-lastact-';
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* storage blocked: demo still runs for this visit */ } },
@@ -21,11 +21,15 @@ export function createLocalBackend(opts = {}) {
   let dirty = true, lastSave = 0;
   const save = (force) => { const t = Date.now(); if (force || t - lastSave > 4000) { store.set(CITY_KEY, JSON.stringify(city)); lastSave = t; } };
   const emit = () => subs.forEach((f) => f());
+  let lastAct = Number(store.get(ACT_KEY + me)) || Date.now();
   return {
     mode: 'local', canSetSpeed: true,
+    // who is online: in the demo only you are; bots are not players at a screen
+    get online() { return me ? [{ id: me, lastAct }] : []; },
+    onPresence() { /* nothing changes besides your own actions */ },
     get city() { return city; }, get me() { return me; },
-    async join({ first, last } = {}) { const av = E.BR.checkAvatarName(first, last); if (!av.ok) return av; me = 'local-' + Math.random().toString(36).slice(2, 9); store.set(ME_KEY, me); E.addPlayer(city, me, av.name, Date.now(), av); save(true); emit(); return { ok: true }; },
-    async act(action, args) { const r = E.apply(city, me, action, args, Date.now()); save(true); emit(); return r; },
+    async join({ first, last } = {}) { const av = E.BR.checkAvatarName(first, last); if (!av.ok) return av; me = 'local-' + Math.random().toString(36).slice(2, 9); store.set(ME_KEY, me); lastAct = Date.now(); E.addPlayer(city, me, av.name, Date.now(), av); save(true); emit(); return { ok: true }; },
+    async act(action, args) { lastAct = Date.now(); store.set(ACT_KEY + me, String(lastAct)); const r = E.apply(city, me, action, args, Date.now()); save(true); emit(); return r; },
     tick() { const w = city.wk, over = city.over; E.advance(city, Date.now()); save(); if (city.wk !== w || city.over !== over) emit(); },
     async setSpeed(s) { E.setSpeed(city, s, Date.now()); save(true); emit(); },
     async reset() { store.del(CITY_KEY); store.del(ME_KEY); city = E.createCity(Date.now(), { speed: city.clock.speed }); me = null; save(true); emit(); },
@@ -74,6 +78,26 @@ export async function createOnlineBackend(cfg) {
   }
   sb.auth.onAuthStateChange((ev, s) => { session = s; if (ev === 'PASSWORD_RECOVERY') { recovery = true; emit(); } });
   if (session) await goLive(); else await peek();
+  // Who is online: Realtime Presence. Each signed-in tycoon tracks { id, lastAct } (ms of their last game action);
+  // the top bar dims players whose last action is older than 10 minutes.
+  const presSubs = new Set(); let online = [], tracked = '';
+  const room = sb.channel('online-' + cityId);
+  room.on('presence', { event: 'sync' }, () => {
+    const by = {};
+    for (const metas of Object.values(room.presenceState())) for (const x of metas) if (x && x.id && (!by[x.id] || x.lastAct > by[x.id].lastAct)) by[x.id] = { id: x.id, lastAct: Number(x.lastAct) || 0 };
+    online = Object.values(by); presSubs.forEach((f) => f());
+  });
+  let joined = false, lastAct = 0;
+  const actKey = () => ACT_KEY + uid();
+  async function track(force) {
+    const id = city && uid() && city.players[uid()] ? uid() : null;
+    if (!id || !joined) return;
+    if (!lastAct) lastAct = Number(store.get(actKey())) || Date.now();
+    const k = id + ':' + lastAct; if (!force && k === tracked) return;
+    tracked = k; await room.track({ id, lastAct });
+  }
+  room.subscribe((st) => { if (st === 'SUBSCRIBED') { joined = true; track(true); } });
+  subs.add(() => track());
   sb.channel('city-' + cityId).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'cities', filter: `id=eq.${cityId}` }, (payload) => { if (payload.new && payload.new.state) { city = payload.new.state; emit(); } }).subscribe();
   return {
     mode: 'online', get canSetSpeed() { return admin; }, get admin() { return admin; },
@@ -115,7 +139,10 @@ export async function createOnlineBackend(cfg) {
       return r.error ? { ok: false, msg: authMsg(r.error) } : { ok: true, msg: 'If the e-mail has an account, a reset link is on its way.' };
     },
     async signOut() { await sb.auth.signOut(); location.reload(); },
-    join: (o) => call('join', o), act: (a, args) => call(a, args),
+    join: (o) => call('join', o),
+    act(a, args) { if (uid()) { lastAct = Date.now(); store.set(actKey(), String(lastAct)); track(); } return call(a, args); },
+    get online() { return online; },
+    onPresence(f) { presSubs.add(f); },
     tick() { /* the server owns time; the client only interpolates live numbers */ },
     async setSpeed(speed) { return admin ? call('adminSpeed', { speed }) : { ok: false, msg: 'Only an admin can change the game speed.' }; },
     async reset() { return { ok: false, msg: 'Seasons are reset on the server.' }; },
