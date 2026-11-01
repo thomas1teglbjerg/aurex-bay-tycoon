@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#12334a">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Playfair+Display:ital,wght@0,600;0,800;1,600&family=Source+Sans+3:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Montserrat:wght@600;700;800&family=Oswald:wght@600&family=Playfair+Display:ital,wght@0,600;0,700;0,800;1,600&family=Raleway:wght@700&family=Roboto+Slab:wght@700&family=Source+Sans+3:wght@400;600;700&display=swap">
 <style>
 /* Layout: the satellite map fills the screen; a glass top bar carries the live balance, date and economy; a floating tab bar opens light panels (Empire, Market, Network, Coop); cards and decisions open as modals. */
 :root {
@@ -760,6 +760,57 @@ em.s { color: #b07a10; font-style: normal; font-weight: 700; } em.m { color: var
 .is-ask { display: flex; flex-direction: column; gap: 8px; } .is-ask > b { font-size: 14.5px; }
 .is-opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; }
 .is-done { display: flex; gap: 10px; align-items: center; justify-content: space-between; } .is-done b { font-size: 14px; font-weight: 600; }
+/* parent company logos and onboarding (js/brand.js, js/onboard.js) */
+.lgm { display: inline-grid; place-items: center; flex: none; border-radius: 22%; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18), 0 1px 2px rgba(0,0,0,0.25); vertical-align: middle; }
+.lgf { display: inline-flex; align-items: center; gap: 0.55em; min-width: 0; max-width: 100%; }
+.lgn { line-height: 1.05; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lgline { display: inline-flex !important; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; color: var(--ink-2); }
+.mylogo { display: flex; align-items: center; padding: 6px 12px; max-width: 280px; min-width: 0; }
+.mylogo .lgn { font-size: 15px !important; }
+@media (max-width: 720px) { .mylogo { padding: 6px 8px; } .mylogo .lgn { display: none; } }
+.parentbox { border-top: 4px solid var(--brand); }
+.parentbox .in { gap: 8px; }
+.pb-logo { padding: 4px 0 2px; } .pb-logo .lgn { font-size: clamp(18px, 5vw, 26px) !important; }
+.pb-sub { margin: 0; font-size: 13.5px; color: var(--ink-2); }
+.pb-acc { font-size: 13px; color: var(--ink-2); align-self: center; overflow-wrap: anywhere; }
+.coopcard > header { align-items: center; gap: 10px; }
+.dz-own .lgm { margin-right: 6px; }
+.linkbtn { background: none; border: 0; padding: 4px 0; color: var(--info); font-weight: 700; font-size: 14px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; align-self: flex-start; }
+.ob { gap: 14px; }
+.ob p { margin: 0; }
+.ob-form { display: flex; flex-direction: column; gap: 12px; }
+.ob-seg { align-self: flex-start; }
+.ob-seg button { padding: 7px 14px; font-size: 14px; }
+.ob-two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 400px) { .ob-two { grid-template-columns: 1fr; } }
+.ob-hint { font-size: 13px; color: var(--ink-2); }
+.ob-hint a { color: var(--info); font-weight: 700; }
+.ob-err { color: var(--bad); font-weight: 700; font-size: 14px; background: #fbecea; border-radius: 8px; padding: 8px 10px; }
+.ob-note { color: var(--good); font-weight: 700; font-size: 14px; background: #e8f5ee; border-radius: 8px; padding: 8px 10px; }
+.ob-go { min-height: 48px; font-size: 16px; }
+.ob-modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.ob-modes button { text-align: left; border: 1.5px solid var(--line); border-radius: 12px; padding: 10px 12px; background: #fff; display: flex; flex-direction: column; gap: 3px; }
+.ob-modes button b { font-family: var(--head); font-size: 14.5px; }
+.ob-modes button span { font-size: 12.5px; color: var(--ink-2); line-height: 1.3; }
+.ob-modes button[aria-checked="true"] { border-color: var(--band); box-shadow: 0 0 0 2px var(--band) inset; background: var(--panel-2); }
+.ob-preview { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 18px 14px; display: grid; place-items: center; min-height: 86px; overflow: hidden; }
+.ob-preview .lgn { font-size: clamp(18px, 5.4vw, 26px) !important; }
+.ob-name { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.ob-name select { width: auto; }
+.ob-row { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.ob-colors { display: grid; grid-template-columns: repeat(auto-fill, minmax(38px, 1fr)); gap: 8px; }
+.ob-colors button { aspect-ratio: 1; border-radius: 10px; border: 0; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.15); }
+.ob-colors button[aria-checked="true"] { box-shadow: 0 0 0 3px #fff, 0 0 0 5px var(--ink); }
+.ob-fonts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.ob-fonts button { border: 1.5px solid var(--line); border-radius: 10px; background: #fff; padding: 8px 10px; text-align: left; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ob-fonts button span { font-size: 16px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ob-fonts button small { font-size: 11.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); }
+.ob-fonts button[aria-checked="true"], .ob-syms button[aria-checked="true"] { border-color: var(--band); box-shadow: 0 0 0 2px var(--band) inset; background: var(--panel-2); }
+.ob-syms { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.ob-syms button { aspect-ratio: 1; border: 1.5px solid var(--line); border-radius: 10px; background: #fff; display: grid; place-items: center; color: var(--ink); }
+.ob-check { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; }
+.ob-check input { margin-top: 3px; }
+.ob-par .lgm { margin-right: 2px; }
 </style>
 </head>
 <body>
@@ -769,6 +820,7 @@ em.s { color: #b07a10; font-style: normal; font-weight: 700; } em.m { color: var
 
   <header class="top" id="top" hidden>
     <div class="brand glass"><div><h1>Aurex Bay</h1><small id="datelbl">Year 1 · January</small></div><span class="econ" id="econ"><i></i>Stable</span><span class="demotag" id="demotag" hidden title="This city runs only in your browser">Offline demo</span></div>
+    <button class="mylogo glass" id="mylogo" data-a="tab" data-v="empire" aria-label="Your parent company" hidden></button>
     <div class="speed glass" id="speed" role="group" aria-label="Game speed"></div>
     <button class="webbtn glass" data-a="web" aria-label="Open the web browser" title="Browse the web"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.6 3.9 5.6 3.9 9s-1.3 6.4-3.9 9c-2.6-2.6-3.9-5.6-3.9-9S9.4 5.6 12 3Z"/></svg></button>
     <div class="money glass">
