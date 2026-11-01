@@ -72,6 +72,7 @@ function mountLayer(level) {
   Object.assign(view, { W: L.W, H: L.H, crop: L.crop, level });
   w.style.width = L.W + 'px'; w.style.height = L.H + 'px';
   w.innerHTML = `<img src="${L.img}" alt="${level ? esc(DISTRICT[level].name) : 'Satellite map of Aurex Bay'}" id="mapimg" draggable="false" style="${L.crop ? `position:absolute;left:${-L.crop.x}px;top:${-L.crop.y}px;width:${MAP.w}px;height:${MAP.h}px;max-width:none` : `width:${L.W}px;height:${L.H}px`}"><div id="mapmarks"></div>`;
+  const pic = mapImgs[L.img]; if (pic && pic.img.complete && pic.img.naturalWidth) { const im = pic.img, cur = w.firstChild; im.id = 'mapimg'; im.alt = cur.alt; im.draggable = false; im.style.cssText = cur.style.cssText; w.replaceChild(im, cur); } // already decoded: no flash
   w.classList.toggle('indist', !!level);
   view.s = 0; fitMap();
   return L;
@@ -90,43 +91,63 @@ function setLevel(level, instant, pt) {
   };
   if (instant) swap(); else { w.classList.add('fade'); setTimeout(swap, 220); }
 }
+// Map pictures, fetched and decoded once. District pictures (about 1 MB each) load in the background
+// and on hover, so going into a district never waits for the network.
+const mapImgs = {};
+function mapImg(src) {
+  if (!mapImgs[src]) { const img = new Image(); img.decoding = 'async'; img.src = src; mapImgs[src] = { img, ready: false }; img.decode().catch(() => {}).then(() => { mapImgs[src].ready = true; }); }
+  return mapImgs[src];
+}
+function preloadDistricts() {
+  const c = navigator.connection; if (c && (c.saveData || /2g/.test(c.effectiveType || ''))) return;
+  const list = DISTRICTS.filter((d) => d.img).map((d) => d.img);
+  const next = () => { const src = list.shift(); if (!src) return; const m = mapImg(src); m.img.decode().catch(() => {}).then(() => setTimeout(next, 150)); };
+  setTimeout(() => (window.requestIdleCallback || setTimeout)(next), 2500);
+}
 // City map <-> district: the old picture stays on top as a ghost, locked to the district's box on the city map,
 // and fades out while both zoom together. Going in, the point under the click stays under the pointer.
+// The zoom starts at once; if the new picture is still loading, the ghost stays until it is ready.
+let ghost = null, ghostAnim = 0;
 function morphLevel(level, pt) {
   const id = level || view.level, d = DISTRICT[id], box = d.box, L = layerFor(id), k = box.w / L.W; // district px -> city px
-  flying = true; cancelAnimationFrame(anim);
-  const img = new Image(); img.src = level ? L.img : MAP.img;
-  Promise.race([img.decode().catch(() => {}), new Promise((r) => setTimeout(r, 900))]).then(() => {
-    const vp = $('viewport'), w = $('world'), cw = vp.clientWidth, ch = vp.clientHeight;
-    const g = w.cloneNode(true); g.removeAttribute('id'); g.querySelectorAll('[id]').forEach((x) => x.removeAttribute('id')); g.querySelectorAll('.zone, .mp').forEach((x) => x.remove());
-    g.className = 'mapghost' + (view.level ? ' indist' : ''); vp.appendChild(g);
-    const old = { s: view.s, x: view.x, y: view.y };
-    let from, to, ax, ay, place;
-    if (level) { // into the district: start where its box sits on the city map
-      ax = pt ? pt.x : old.x + d.x * old.s; ay = pt ? pt.y : old.y + d.y * old.s;
-      mountLayer(level);
-      from = { s: old.s * k, x: old.x + box.x * old.s, y: old.y + box.y * old.s };
-      const s1 = homeView(level).s, px = Math.min(L.W, Math.max(0, (ax - from.x) / from.s)), py = Math.min(L.H, Math.max(0, (ay - from.y) / from.s)), b = panLimits(s1);
-      to = { s: s1, x: Math.min(b.x1, Math.max(b.x0, ax - px * s1)), y: Math.min(b.y1, Math.max(b.y0, ay - py * s1)) };
-      place = () => { const gs = view.s / k; return [view.x - box.x * gs, view.y - box.y * gs, gs]; };
-    } else { // back to the city: start with the district's box filling the view as it does now
-      ax = cw / 2; ay = ch / 2;
-      mountLayer(null);
-      from = { s: old.s / k, x: old.x - box.x * old.s / k, y: old.y - box.y * old.s / k }; to = homeView(null);
-      place = () => [view.x + box.x * view.s, view.y + box.y * view.s, view.s * k];
-    }
-    const p0 = { x: (ax - from.x) / from.s, y: (ay - from.y) / from.s }, p1 = { x: (ax - to.x) / to.s, y: (ay - to.y) / to.s }, t0 = performance.now(), T = 750;
-    const frame = (e) => {
+  flying = true; cancelAnimationFrame(anim); cancelAnimationFrame(ghostAnim); if (ghost) ghost.remove();
+  const pic = mapImg(level ? L.img : MAP.img);
+  const vp = $('viewport'), w = $('world'), cw = vp.clientWidth, ch = vp.clientHeight;
+  const g = ghost = w.cloneNode(true); g.removeAttribute('id'); g.querySelectorAll('[id]').forEach((x) => x.removeAttribute('id')); g.querySelectorAll('.zone, .mp').forEach((x) => x.remove());
+  g.className = 'mapghost' + (view.level ? ' indist' : ''); vp.appendChild(g);
+  const old = { s: view.s, x: view.x, y: view.y };
+  let from, to, ax, ay, place;
+  if (level) { // into the district: start where its box sits on the city map
+    ax = pt ? pt.x : old.x + d.x * old.s; ay = pt ? pt.y : old.y + d.y * old.s;
+    mountLayer(level);
+    from = { s: old.s * k, x: old.x + box.x * old.s, y: old.y + box.y * old.s };
+    const s1 = homeView(level).s, px = Math.min(L.W, Math.max(0, (ax - from.x) / from.s)), py = Math.min(L.H, Math.max(0, (ay - from.y) / from.s)), b = panLimits(s1);
+    to = { s: s1, x: Math.min(b.x1, Math.max(b.x0, ax - px * s1)), y: Math.min(b.y1, Math.max(b.y0, ay - py * s1)) };
+    place = () => { const gs = view.s / k; return [view.x - box.x * gs, view.y - box.y * gs, gs]; };
+  } else { // back to the city: start with the district's box filling the view as it does now
+    ax = cw / 2; ay = ch / 2;
+    mountLayer(null);
+    from = { s: old.s / k, x: old.x - box.x * old.s / k, y: old.y - box.y * old.s / k }; to = homeView(null);
+    place = () => [view.x + box.x * view.s, view.y + box.y * view.s, view.s * k];
+  }
+  const p0 = { x: (ax - from.x) / from.s, y: (ay - from.y) / from.s }, p1 = { x: (ax - to.x) / to.s, y: (ay - to.y) / to.s }, t0 = performance.now(), T = 750;
+  let readyAt = pic.ready ? t0 : 0, zooming = true;
+  const fade = (t) => { // ghost opacity: starts 10% in, or when the new picture is ready
+    if (!readyAt && pic.ready) readyAt = t;
+    if (!readyAt) return 1;
+    const late = readyAt > t0 + 0.1 * T, f0 = Math.max(t0 + 0.1 * T, readyAt);
+    return 1 - Math.min(1, Math.max(0, (t - f0) / ((late ? 0.4 : 0.6) * T)));
+  };
+  const frame = (t) => {
+    if (zooming) { const q = Math.min(1, (t - t0) / T), e = q < 0.5 ? 4 * q * q * q : 1 - Math.pow(-2 * q + 2, 3) / 2;
       view.s = from.s * Math.pow(to.s / from.s, e); view.x = ax - (p0.x + (p1.x - p0.x) * e) * view.s; view.y = ay - (p0.y + (p1.y - p0.y) * e) * view.s; applyView(true);
-      const [gx, gy, gs] = place(); g.style.transform = `translate(${gx}px, ${gy}px) scale(${gs})`;
-      g.style.opacity = String(1 - Math.min(1, Math.max(0, (e - 0.1) / 0.6)));
-    };
-    frame(0);
-    const step = (t) => { const q = Math.min(1, (t - t0) / T), e = q < 0.5 ? 4 * q * q * q : 1 - Math.pow(-2 * q + 2, 3) / 2; frame(e);
-      if (q < 1) { anim = requestAnimationFrame(step); return; }
-      g.remove(); Object.assign(view, to); applyView(); renderMarks(); renderMapNav(); flying = false; hideMapCard(); };
-    anim = requestAnimationFrame(step);
-  });
+      if (q >= 1) { zooming = false; Object.assign(view, to); applyView(); renderMarks(); renderMapNav(); flying = false; hideMapCard(); } }
+    const [gx, gy, gs] = place(), o = fade(t); g.style.transform = `translate(${gx}px, ${gy}px) scale(${gs})`; g.style.opacity = String(o);
+    if (zooming) { anim = ghostAnim = requestAnimationFrame(frame); return; }
+    if (o > 0) { ghostAnim = requestAnimationFrame(frame); return; }
+    g.remove(); if (ghost === g) ghost = null;
+  };
+  frame(t0);
 }
 function districtStats(c, d) {
   const ls = c.listings.filter((l) => l.d === d.id), mine = ls.filter((l) => ownerLabel(c, l).mine).length;
@@ -188,8 +209,10 @@ function openMark(key) {
 }
 function setupMapEvents() {
   const w = $('world');
-  w.addEventListener('pointerdown', (e) => { lastPointer = e.pointerType || 'mouse'; }, true);
+  const warm = (e) => { const z = e.target.closest && e.target.closest('.zone'), d = z && DISTRICT[z.dataset.zone]; if (d && d.img) mapImg(d.img); }; // fetch a district's picture before the click
+  w.addEventListener('pointerdown', (e) => { lastPointer = e.pointerType || 'mouse'; warm(e); }, true);
   w.addEventListener('mouseover', (e) => {
+    warm(e);
     if (lastPointer === 'touch' || flying) return;
     const z = e.target.closest('.zlabel') && e.target.closest('.zone'), m = e.target.closest('.mp'), t = z || m; if (!t) return; // district info only over its title box
     const key = z ? 'z:' + z.dataset.zone : m.dataset.mk; if (key === cardKey) return;
@@ -936,7 +959,7 @@ async function boot(hot) {
   S.B = B;
   $('demotag').hidden = B.mode !== 'local';
   $('boot').remove();
-  buildMap(); setupPanZoom(); setupMapEvents();
+  buildMap(); setupPanZoom(); setupMapEvents(); mapImg(MAP.img); preloadDistricts();
   document.addEventListener('click', onClick);
   document.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('#panel .box > h2')) { e.preventDefault(); toggleBox(e.target); } });
   document.addEventListener('change', async (e) => {
