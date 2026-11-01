@@ -165,10 +165,17 @@ function enterDistrict(id) {
   flying = true; flyTo(d.x, d.y, ts); setTimeout(() => setLevel(id), 400);
 }
 function updatePins() { renderMarks(); }
-function applyView() {
-  const vp = $('viewport'), W = view.W * view.s, H = view.H * view.s;
-  view.x = Math.min(0, Math.max(vp.clientWidth - W, view.x)); view.y = Math.min(0, Math.max(vp.clientHeight - H, view.y));
-  if (W < vp.clientWidth) view.x = (vp.clientWidth - W) / 2; if (H < vp.clientHeight) view.y = (vp.clientHeight - H) / 2;
+// pan limits: map edge aligned with the viewport edge, or centred when the map is smaller
+function panLimits() {
+  const vp = $('viewport'), W = view.W * view.s, H = view.H * view.s, cw = vp.clientWidth, ch = vp.clientHeight;
+  const ax = (dim, size) => size < dim ? [(dim - size) / 2, (dim - size) / 2] : [dim - size, 0];
+  const [x0, x1] = ax(cw, W), [y0, y1] = ax(ch, H);
+  return { x0, x1, y0, y1, cw, ch };
+}
+// rubber band: the further past the edge, the less the map follows the pointer
+const rubber = (v, lo, hi, dim) => { const f = (d) => dim * (1 - 1 / (d * 0.55 / dim + 1)); return v > hi ? hi + f(v - hi) : v < lo ? lo - f(lo - v) : v; };
+function applyView(free) {
+  if (!free) { const b = panLimits(); view.x = Math.min(b.x1, Math.max(b.x0, view.x)); view.y = Math.min(b.y1, Math.max(b.y0, view.y)); }
   $('world').style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.s})`;
   $('world').style.setProperty('--inv', String(1 / view.s));
 }
@@ -181,17 +188,26 @@ function flyTo(x, y, s) {
   const step = (t) => { const k = Math.min(1, (t - t0) / 600), e = 1 - Math.pow(1 - k, 3); view.s = from.s + (to.s - from.s) * e; view.x = from.x + (to.x - from.x) * e; view.y = from.y + (to.y - from.y) * e; applyView(); if (k < 1) anim = requestAnimationFrame(step); };
   anim = requestAnimationFrame(step);
 }
+function snapBack() {
+  const b = panLimits(), fx = view.x, fy = view.y, tx = Math.min(b.x1, Math.max(b.x0, fx)), ty = Math.min(b.y1, Math.max(b.y0, fy)), t0 = performance.now();
+  if (fx === tx && fy === ty) return;
+  cancelAnimationFrame(anim);
+  const step = (t) => { const k = Math.min(1, (t - t0) / 380), e = 1 - Math.pow(1 - k, 3); view.x = fx + (tx - fx) * e; view.y = fy + (ty - fy) * e; applyView(k < 1); if (k < 1) anim = requestAnimationFrame(step); };
+  anim = requestAnimationFrame(step);
+}
 function setupPanZoom() {
-  const vp = $('viewport'), pts = new Map(); let last = null, moved = 0;
+  const vp = $('viewport'), pts = new Map(); let last = null, moved = 0, raw = null; // raw: unbounded pan position under the finger
+  const unrub = (v, lo, hi, dim) => { const g = (d) => (1 / (1 - Math.min(d, dim * 0.99) / dim) - 1) * dim / 0.55; return v > hi ? hi + g(v - hi) : v < lo ? lo - g(lo - v) : v; };
+  const grab = () => { const b = panLimits(); raw = { x: unrub(view.x, b.x0, b.x1, b.cw), y: unrub(view.y, b.y0, b.y1, b.ch) }; }; // catching the map mid snap-back keeps it under the finger
   const pair = () => { const [a, b] = [...pts.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
-  vp.addEventListener('pointerdown', (e) => { cancelAnimationFrame(anim); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (pts.size === 1) moved = 0; last = pts.size === 2 ? pair() : null; vp.classList.add('drag'); });
+  vp.addEventListener('pointerdown', (e) => { cancelAnimationFrame(anim); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (pts.size === 1) { moved = 0; grab(); } last = pts.size === 2 ? pair() : null; vp.classList.add('drag'); });
   window.addEventListener('pointermove', (e) => {
     const p = pts.get(e.pointerId); if (!p) return;
     const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY; moved += Math.abs(dx) + Math.abs(dy);
-    if (pts.size === 1) { view.x += dx; view.y += dy; applyView(); }
-    else if (pts.size === 2 && last) { const c = pair(), r = vp.getBoundingClientRect(); zoomAt(c.x - r.left, c.y - r.top, c.d / Math.max(1, last.d)); view.x += c.x - last.x; view.y += c.y - last.y; applyView(); last = c; }
+    if (pts.size === 1) { if (!raw) grab(); raw.x += dx; raw.y += dy; const b = panLimits(); view.x = rubber(raw.x, b.x0, b.x1, b.cw); view.y = rubber(raw.y, b.y0, b.y1, b.ch); applyView(true); }
+    else if (pts.size === 2 && last) { const c = pair(), r = vp.getBoundingClientRect(); zoomAt(c.x - r.left, c.y - r.top, c.d / Math.max(1, last.d)); view.x += c.x - last.x; view.y += c.y - last.y; applyView(); last = c; raw = null; }
   });
-  const up = (e) => { pts.delete(e.pointerId); last = pts.size === 2 ? pair() : null; if (!pts.size) vp.classList.remove('drag'); };
+  const up = (e) => { if (!pts.delete(e.pointerId)) return; last = pts.size === 2 ? pair() : null; raw = null; if (!pts.size) { vp.classList.remove('drag'); snapBack(); } };
   window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
   vp.addEventListener('click', (e) => { if (moved > 8) { e.stopPropagation(); e.preventDefault(); } }, true);
   vp.addEventListener('wheel', (e) => { e.preventDefault(); const r = vp.getBoundingClientRect(); zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.0015)); }, { passive: false });
