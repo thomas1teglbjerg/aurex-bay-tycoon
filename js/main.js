@@ -1021,6 +1021,9 @@ async function boot(hot) {
   setInterval(() => B.tick(), 1000);
   setInterval(liveUpdate, 150);
   if (B.onPresence) B.onPresence(() => { renderWho(); measureTop(); });
+  // any click or key press in the game counts as activity for the online bar (game actions do too, in B.act)
+  const touch = () => { if (B.touch && me()) B.touch(); };
+  document.addEventListener('pointerdown', touch, true); document.addEventListener('keydown', touch, true);
   initChat({ B, toast, renderWho: () => { renderWho(); measureTop(); }, navBack, setTab, initials });
   setInterval(renderWho, 20 * 1000); // players turn inactive without any event
 }
