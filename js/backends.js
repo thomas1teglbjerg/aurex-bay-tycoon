@@ -38,7 +38,8 @@ export function createLocalBackend(opts = {}) {
     // chat: kept in this browser in the demo; as the administrator you answer the administrator's inbox
     ...localChat(acting),
     get chatMe() { return acting(); },
-    async chatAdminInbox() { if (!adminDemo || acting() === E.ADMIN_ID) return 0; return Object.values(await localChat(() => E.ADMIN_ID).chatUnread()).reduce((a, b) => a + b, 0); },
+    // admins: unread messages waiting for the administrator and the test player, { admin: n, tester: n }
+    async chatInboxes() { const n = {}; if (!adminDemo) return n; for (const id of E.AS_IDS) n[id] = Object.values(await localChat(() => id).chatUnread()).reduce((a, b) => a + b, 0); return n; },
     get city() { return city; }, get me() { return acting(); },
     async playAs(who) {
       if (E.AS_IDS.includes(who)) { if (!adminDemo) return { ok: false, msg: 'Only an admin can switch to that player.' }; E.ensureAs(city, who, Date.now()); as = who; } else as = null;
@@ -163,11 +164,12 @@ export async function createOnlineBackend(cfg) {
   // Chat: rows in public.chat_messages; row level security shows each conversation only to its two players.
   const chatSubs = new Set(), UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   // the administrator's inbox has a fixed id in the table; in the game it is the player 'admin'
-  const toDb = (id) => (id === E.ADMIN_ID ? E.ADMIN_CHAT : id), fromDb = (id) => (id === E.ADMIN_CHAT ? E.ADMIN_ID : id);
+  const DB_AS = Object.fromEntries(Object.entries(E.AS_CHAT).map(([k, v]) => [v, k]));
+  const toDb = (id) => E.AS_CHAT[id] || id, fromDb = (id) => DB_AS[id] || id;
   const row = (r) => ({ id: r.id, from: fromDb(r.from_id), to: fromDb(r.to_id), body: r.body, at: Date.parse(r.created_at), read: !!r.read_at });
-  const asAdm = () => acting() === E.ADMIN_ID; // answering as the administrator goes through the game function, which checks the account
+  const asAdm = () => E.AS_IDS.includes(acting()); // writing as the administrator or the test player goes through the game function, which checks the account
   async function admChat(op, more = {}) {
-    const { data, error } = await sb.functions.invoke('game', { body: { action: 'adminChat', args: { op, ...more }, city: cityId } });
+    const { data, error } = await sb.functions.invoke('game', { body: { action: 'adminChat', args: { op, as: acting(), ...more }, city: cityId } });
     if (error) return { ok: false, msg: 'The server did not answer. Try again in a moment.' };
     return (data && data.result) || { ok: false, msg: 'The server did not answer.' };
   }
@@ -233,10 +235,10 @@ export async function createOnlineBackend(cfg) {
     touch,
     get online() { return online; },
     onPresence(f) { presSubs.add(f); },
-    get chatMe() { return asAdm() ? E.ADMIN_ID : self(); },
-    async chatAdminInbox() {
-      if (!admin || asAdm()) return 0;
-      const r = await admChat('unread'); return r.ok ? Object.values(r.unread || {}).reduce((a, b) => a + b, 0) : 0;
+    get chatMe() { return asAdm() ? acting() : self(); },
+    async chatInboxes() {
+      if (!admin) return {};
+      const r = await admChat('inboxes'), n = {}; if (r.ok) for (const [k, v] of Object.entries(r.unread || {})) n[fromDb(k)] = v; return n;
     },
     async chatLoad(peer) {
       if (asAdm()) { const r = await admChat('load', { peer }); return r.ok ? r.rows.map(row) : []; }
@@ -258,7 +260,7 @@ export async function createOnlineBackend(cfg) {
     },
     async chatRead(peer) { if (asAdm()) { await admChat('read', { peer }); return; } const m = uid(); peer = toDb(peer); if (m && UUID.test(peer)) await sb.from('chat_messages').update({ read_at: new Date().toISOString() }).eq('city_id', cityId).eq('to_id', m).eq('from_id', peer).is('read_at', null); },
     async chatUnread() {
-      if (asAdm()) { const r = await admChat('unread'); return r.ok ? r.unread || {} : {}; }
+      if (asAdm()) { const r = await admChat('unread'), n = {}; if (r.ok) for (const [k, v] of Object.entries(r.unread || {})) n[fromDb(k)] = v; return n; }
       const m = uid(); if (!m) return {};
       const { data } = await sb.from('chat_messages').select('from_id').eq('city_id', cityId).eq('to_id', m).is('read_at', null).limit(500);
       const n = {}; for (const r of data || []) { const f = fromDb(r.from_id); n[f] = (n[f] || 0) + 1; } return n;
