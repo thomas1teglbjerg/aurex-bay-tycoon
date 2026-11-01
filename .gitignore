@@ -3,3 +3,5 @@ node_modules/
 .supabase/
 .env*
 test.html
+.vercel
+supabase/.temp/
