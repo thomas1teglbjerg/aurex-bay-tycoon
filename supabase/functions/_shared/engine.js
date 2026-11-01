@@ -94,13 +94,13 @@ function newPlayer(id, name, m, o = {}) {
 export function addPlayer(city, id, name, now, o = {}) {
   advance(city, now);
   if (city.players[id]) return city.players[id];
-  const g = city.g, bonus = Math.min(40, Math.round(g * 8));
+  const g = city.g; // every new tycoon starts with the same cash, however late they arrive
   const av = o.first || o.last ? BR.checkAvatarName(o.first, o.last) : null;
-  const p = newPlayer(id, (av && av.ok ? av.name : name || 'New tycoon').slice(0, 34), Math.floor(g * 12), { cash: CONFIG.START_CASH + bonus, color: '#1b2b44', avatar: 'img/a-you.jpg' });
+  const p = newPlayer(id, (av && av.ok ? av.name : name || 'New tycoon').slice(0, 34), Math.floor(g * 12), { cash: CONFIG.PLAYER_START_CASH, color: '#1b2b44', avatar: 'img/a-you.jpg' });
   if (av && av.ok) { p.first = av.first; p.last = av.last; }
   p.co = null; // the parent company is founded right after joining (coFound / coJoin)
   p.settledG = g; p.lastAct = city.m; p.team = {}; city.players[id] = p; LIFE.ensurePlayer(city, p);
-  feed(p, city.m, 'Welcome to Aurex Bay', `You start with ${CONFIG.START_CASH + bonus} M${bonus ? ` (including a ${bonus} M late-arrival grant)` : ''} and an office at Harbor Row. Your companies earn money around the clock, also while you are away.`, 'info');
+  feed(p, city.m, 'Welcome to Aurex Bay', `You start with ${CONFIG.PLAYER_START_CASH} M and an office at Harbor Row. Your companies earn money around the clock, also while you are away.`, 'info');
   news(city, city.m, `${p.name} arrives in Aurex Bay`, 'A new tycoon has opened an office at Harbor Row.', 'info');
   return p;
 }
