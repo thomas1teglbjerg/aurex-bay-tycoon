@@ -465,6 +465,40 @@ button.who-c { border: 0; padding: 0; font: inherit; cursor: pointer; }
 .who-c.go:hover { transform: translateY(-1px); box-shadow: 0 0 0 2px #fff, 0 2px 6px rgba(0,0,0,0.3); }
 .who-c.adm { background: repeating-linear-gradient(135deg, var(--c) 0 6px, #22262c 6px 12px); }
 .who-c.adm:not(.me) { outline: 1.5px dashed var(--gold-2); outline-offset: 1px; }
+.who-c > u { position: absolute; top: -5px; right: -5px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--bad); color: #fff; font-size: 10.5px; font-weight: 800; text-decoration: none; display: grid; place-items: center; border: 2px solid #fff; line-height: 1; }
+.who-c.off { opacity: 0.6; }
+/* the game's own right-click menu */
+.ctx { position: absolute; z-index: 50; min-width: 200px; max-width: 280px; padding: 5px; background: rgba(255,255,255,0.97); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px rgba(5,20,35,0.32); font-size: 13.5px; }
+.ctx-h { padding: 6px 10px 5px; font-size: 11.5px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ctx button { display: flex; align-items: center; gap: 9px; width: 100%; padding: 8px 10px; border: 0; border-radius: 8px; background: none; font: inherit; font-weight: 600; color: var(--ink); text-align: left; cursor: pointer; }
+.ctx button svg { flex: none; color: var(--ink-2); }
+.ctx button:hover:not([disabled]), .ctx button:focus-visible { background: var(--band); color: #fff; outline: none; }
+.ctx button:hover:not([disabled]) svg, .ctx button:focus-visible svg { color: #fff; }
+.ctx button[disabled] { color: var(--ink-2); cursor: default; font-weight: 500; }
+.ctx hr { border: 0; border-top: 1px solid var(--line); margin: 4px 6px; }
+/* chat between players */
+.chat { position: absolute; z-index: 35; right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(92px + env(safe-area-inset-bottom, 0px)); width: 330px; height: min(440px, calc(100% - var(--topH, 80px) - 104px)); min-height: 240px; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 16px 44px rgba(5,20,35,0.35); overflow: hidden; }
+.chat-hd { display: flex; align-items: center; gap: 10px; padding: 9px 10px 9px 12px; background: var(--band); color: #fff; }
+.chat-hd .who-c { width: 32px; height: 32px; }
+.chat-hd .who-c > b { font-size: 12.5px; }
+.chat-hd > div { flex: 1; min-width: 0; line-height: 1.2; }
+.chat-hd b { display: block; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-hd small { display: block; font-size: 11.5px; opacity: 0.75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-x { width: 30px; height: 30px; border: 0; border-radius: 8px; background: rgba(255,255,255,0.12); color: #fff; font-size: 20px; line-height: 1; cursor: pointer; }
+.chat-x:hover { background: rgba(255,255,255,0.25); }
+.chat-log { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 6px; background: var(--panel-2); }
+.chat-empty { margin: auto; color: var(--ink-2); font-size: 13px; text-align: center; padding: 0 12px; }
+.cm { max-width: 80%; display: flex; flex-direction: column; }
+.cm p { margin: 0; padding: 7px 11px; border-radius: 14px; font-size: 13.5px; line-height: 1.35; overflow-wrap: anywhere; white-space: pre-wrap; }
+.cm time { font-size: 10.5px; color: var(--ink-2); margin: 2px 6px 0; }
+.cm.theirs { align-self: flex-start; } .cm.theirs p { background: #fff; border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+.cm.mine { align-self: flex-end; align-items: flex-end; } .cm.mine p { background: var(--band); color: #fff; border-bottom-right-radius: 4px; }
+.chat-f { display: flex; gap: 6px; padding: 8px; border-top: 1px solid var(--line); background: var(--panel); }
+.chat-f input { flex: 1; min-width: 0; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; font: inherit; font-size: 14px; }
+.chat-f input:focus { outline: 2px solid var(--gold-2); outline-offset: -1px; }
+.chat-f button { padding: 0 14px; border: 0; border-radius: 10px; background: var(--gold); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+.chat-f button:disabled { opacity: 0.5; }
+@media (max-width: 720px) { .chat { left: 8px; right: 8px; width: auto; bottom: calc(80px + env(safe-area-inset-bottom, 0px)); } }
 .who-more { font-size: 12px; font-weight: 800; color: var(--ink-2); padding: 0 2px; white-space: nowrap; }
 @media (min-width: 721px) { .money { min-width: max-content; } }
 @media (max-width: 720px) { .who { order: 4; padding: 4px 6px; gap: 5px; } .who-c { width: 30px; height: 30px; } .who-c > svg { width: 22px; height: 22px; } .who-c > b { font-size: 12px; } }
