@@ -755,6 +755,77 @@ function renderWeb(top) {
   const pg = $('wpage'), sc = pg ? pg.scrollTop : 0;
   el.innerHTML = webHTML(UI.web); if (!top) $('wpage').scrollTop = sc;
 }
+// ---------------------------------------------------------------- back / forward (mouse buttons, browser, phone)
+// Every view change (tab, company, map district, Life room, in-game web page, card) becomes a browser history entry,
+// so the back button steps back inside the game instead of leaving the site. The mouse back button never leaves the site.
+const NAV = { stack: [], i: 0, wait: false, hold: 0 };
+const REOPEN = { listing: openListing, wh: openWarehouse, stock: openStock, staff: (id) => openStaff(id) };
+const navLocked = () => !!(UI.modal && (UI.modal.t === 'ob' || UI.modal.t === 'season'));
+function navState() {
+  const m = UI.modal && !navLocked() ? `${UI.modal.t}:${UI.modal.id ?? UI.modal.lid ?? UI.modal.hid ?? UI.modal.uid ?? ''}` : null;
+  return JSON.stringify({ tab: UI.tab, co: UI.company || null, lv: view.level || null, life: UI.tab === 'life' ? [UI.life.view, UI.life.room || null] : null, w: UI.web ? UI.web.url : null, m });
+}
+function navInit() {
+  const st = history.state;
+  NAV.i = st && Number.isInteger(st.ab) ? st.ab : 0; NAV.stack[NAV.i] = navState();
+  history.replaceState({ ...(st || {}), ab: NAV.i }, '');
+  window.addEventListener('popstate', onPop);
+  // mouse buttons 4/5: handle them ourselves so "back" on the first view does not leave the game
+  let lastBtn = 0;
+  const mouseNav = (e) => {
+    if (e.button !== 3 && e.button !== 4) return;
+    e.preventDefault(); if (e.timeStamp - lastBtn < 300) return; lastBtn = e.timeStamp;
+    if (e.button === 3) navBack(); else history.forward();
+  };
+  window.addEventListener('pointerup', mouseNav, true); window.addEventListener('mouseup', mouseNav, true);
+  window.addEventListener('auxclick', (e) => { if (e.button === 3 || e.button === 4) e.preventDefault(); }, true);
+  document.addEventListener('click', () => setTimeout(navSync, 0));
+  setInterval(navSync, 250);
+}
+function navSync() {
+  if (NAV.wait || Date.now() < NAV.hold || navLocked() || !me()) return;
+  const s = navState(); if (s === NAV.stack[NAV.i]) return;
+  if (NAV.i > 0 && s === NAV.stack[NAV.i - 1]) { NAV.wait = true; history.back(); return; } // e.g. closed a card: step back instead of piling up entries
+  NAV.stack.length = NAV.i + 1; NAV.stack.push(s); NAV.i++;
+  history.pushState({ ab: NAV.i }, '');
+}
+function onPop(e) {
+  NAV.wait = false;
+  NAV.i = e.state && Number.isInteger(e.state.ab) ? e.state.ab : 0;
+  if (navLocked() || !me()) return;
+  const want = NAV.stack[NAV.i] || JSON.stringify({ tab: 'map', co: null, lv: null, life: null, w: null, m: null }); // entries from before a reload fall back to the city map
+  if (want !== navState()) navRestore(JSON.parse(want));
+  const i = NAV.i; setTimeout(() => { if (NAV.i === i) NAV.stack[i] = navState(); }, 400); // after the map fade; a card that cannot be reopened stays closed
+}
+function navRestore(t) {
+  NAV.hold = Date.now() + 700;
+  if (t.tab !== UI.tab) setTab(t.tab);
+  let panel = false;
+  if ((t.co || null) !== (UI.company || null)) { UI.company = t.co; panel = true; }
+  if (t.life && (t.life[0] !== UI.life.view || t.life[1] !== (UI.life.room || null))) { UI.life.view = t.life[0]; UI.life.room = t.life[1]; panel = true; }
+  if (panel && UI.tab !== 'map') { $('panel').scrollTop = 0; renderPanel(); }
+  if ((t.lv || null) !== (view.level || null)) setLevel(t.lv);
+  if (t.w !== (UI.web ? UI.web.url : null)) {
+    if (!t.w) closeWeb();
+    else if (!UI.web) openWeb(t.w);
+    else { const W = UI.web; if (W.back[W.back.length - 1] === t.w) { W.fwd.push(W.url); W.back.pop(); } else if (W.fwd[W.fwd.length - 1] === t.w) { W.back.push(W.url); W.fwd.pop(); } else W.back.push(W.url); W.url = t.w; W.amt = null; renderWeb(true); }
+  }
+  const cur = navState(), m = JSON.parse(cur).m;
+  if (t.m !== m) { if (UI.modal) closeModal(); if (t.m) { const [k, id] = t.m.split(':'); if (REOPEN[k] && id) REOPEN[k](id); } }
+}
+// one step up when there is no game history left (fresh page): never leave the site
+function navBack() {
+  if (navLocked()) return;
+  if (NAV.i > 0) { history.back(); return; }
+  if (UI.modal) closeModal();
+  else if (UI.web) closeWeb();
+  else if (UI.tab === 'life' && UI.life.room) { UI.life.room = null; renderPanel(); }
+  else if (UI.company) { UI.company = null; renderPanel(); }
+  else if (UI.tab !== 'map') setTab('map');
+  else if (view.level) setLevel(null);
+  NAV.hold = Date.now() + 700; setTimeout(() => { NAV.stack[NAV.i] = navState(); }, 400);
+}
+
 let shownSeasonEnd = false;
 function startGame() {
   ['top', 'tabs'].forEach((id) => ($(id).hidden = false));
@@ -805,6 +876,7 @@ async function boot(hot) {
   updatePins();
   gate();
   if (hot && hot.tab && me()) setTab(hot.tab);
+  navInit();
   setInterval(() => B.tick(), 1000);
   setInterval(liveUpdate, 150);
 }
