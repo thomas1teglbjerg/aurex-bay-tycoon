@@ -104,6 +104,8 @@ export function addPlayer(city, id, name, now, o = {}) {
   news(city, city.m, `${p.name} arrives in Aurex Bay`, 'A new tycoon has opened an office at Harbor Row.', 'info');
   return p;
 }
+// Speeds an admin may pick online (the live city): from a quarter of live speed up to demo speed.
+export function validSpeed(s) { return typeof s === 'number' && Number.isFinite(s) && s >= 0.25 && s <= 2016; }
 export function setSpeed(city, speed, now) { advance(city, now); city.clock = { g: gameNow(city, now), at: now, speed }; }
 
 // ---------------------------------------------------------------- lookups

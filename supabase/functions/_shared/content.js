@@ -148,6 +148,7 @@ export const BOTS = [
 
 export const SPEEDS = [
   { id: 1, label: 'Live', note: '1 year per week' },
+  { id: 7, label: 'Day', note: '1 year per day' },
   { id: 168, label: 'Fast', note: '1 year per hour' },
   { id: 2016, label: 'Demo', note: '1 year per 5 minutes' }
 ];

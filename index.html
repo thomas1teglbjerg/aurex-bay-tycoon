@@ -66,6 +66,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .speed { display: flex; align-items: center; padding: 4px; gap: 2px; }
 .speed button { padding: 6px 10px; border-radius: 10px; font-size: 12px; font-weight: 700; color: var(--ink-2); white-space: nowrap; }
 .speed button[aria-pressed="true"] { background: var(--band); color: #fff; }
+.speed.admin::before { content: "Admin"; font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); padding: 0 6px 0 4px; }
 
 /* tabs */
 #tabs { position: absolute; z-index: 10; left: 50%; transform: translateX(-50%); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); display: flex; padding: 5px; gap: 2px; width: min(620px, calc(100% - 16px)); }

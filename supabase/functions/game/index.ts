@@ -16,6 +16,8 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
 const CRON_SECRET = Deno.env.get('CRON_SECRET') ?? '';
 const SPEED = Number(Deno.env.get('GAME_SPEED') ?? '1'); // 1 = one game year per real week
+// Accounts that may change the city's time speed for everyone (comma-separated e-mails).
+const ADMINS = (Deno.env.get('ADMIN_EMAILS') ?? 'thomas@teglbjerg.com').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -29,7 +31,7 @@ Deno.serve(async (req) => {
 
   // Who is calling? Cron uses a shared secret; players use their Supabase session (e-mail + password; older anonymous players keep playing).
   let userId: string | null = null;
-  let user: { id: string; is_anonymous?: boolean; user_metadata?: Record<string, unknown> } | null = null;
+  let user: { id: string; email?: string; is_anonymous?: boolean; user_metadata?: Record<string, unknown> } | null = null;
   if (action === 'tick') {
     if (!CRON_SECRET || req.headers.get('x-cron-secret') !== CRON_SECRET) return json({ error: 'Forbidden' }, 403);
   } else {
@@ -38,6 +40,9 @@ Deno.serve(async (req) => {
     if (error || !data.user) return json({ error: 'Sign in first' }, 401);
     userId = data.user.id; user = data.user;
   }
+  const isAdmin = !!user && !user.is_anonymous && ADMINS.includes(String(user.email ?? '').toLowerCase());
+  if (action === 'adminSpeed' && !isAdmin) return json({ result: { ok: false, msg: 'Only an admin can change the game speed.' } });
+  const out = (body: Record<string, unknown>) => json({ ...body, admin: isAdmin });
 
   for (let attempt = 0; attempt < 6; attempt++) {
     const now = Date.now();
@@ -60,27 +65,35 @@ Deno.serve(async (req) => {
     if (action === 'join') {
       if (!city.players[userId!]) {
         // New tycoons sign up with e-mail and password; the avatar name (first + last) comes with the account.
-        if (user?.is_anonymous) return json({ result: { ok: false, msg: 'Create an account with e-mail and password first.' }, city });
+        if (user?.is_anonymous) return out({ result: { ok: false, msg: 'Create an account with e-mail and password first.' }, city });
         const meta = user?.user_metadata ?? {};
         const av = Engine.BR.checkAvatarName(String(args.first ?? meta.first ?? ''), String(args.last ?? meta.last ?? ''));
-        if (!av.ok) return json({ result: av, city });
+        if (!av.ok) return out({ result: av, city });
         Engine.addPlayer(city, userId!, av.name, now, { first: av.first, last: av.last });
         await admin.from('city_players').upsert({ city_id: cityId, user_id: userId, name: av.name });
         changed = true;
       }
+    } else if (action === 'adminSpeed') {
+      // The whole city changes pace: time so far is kept, only the rate from now on changes.
+      const speed = Number(args.speed);
+      if (!Engine.validSpeed(speed)) return out({ result: { ok: false, msg: 'Pick a speed between 0.25 and 2016.' }, city });
+      if (speed === city.clock.speed) return out({ result: { ok: true }, city });
+      Engine.setSpeed(city, speed, now);
+      console.log(JSON.stringify({ city: cityId, admin: user?.email, speed }));
+      changed = true;
     } else if (action !== 'sync' && action !== 'tick') {
       result = Engine.apply(city, userId!, action, args, now);
       changed = true;
     }
 
-    if (!changed) return json({ result, city });
+    if (!changed) return out({ result, city });
     // Realtime sends the whole row to every browser; keep an eye on its size (limit is ~1 MB per message).
     const bytes = JSON.stringify(city).length;
     console.log(JSON.stringify({ city: cityId, action, wk: city.wk, bytes, ms: Date.now() - now }));
     if (bytes > 600_000) console.warn(`city ${cityId} state is ${Math.round(bytes / 1024)} KB: switch Realtime to a {id, version} broadcast + sync`);
     const { data: saved, error: saveErr } = await admin.rpc('save_city', { p_id: cityId, p_state: city, p_version: row.version });
     if (saveErr) return json({ error: saveErr.message }, 500);
-    if (saved !== null) return json({ result, city });
+    if (saved !== null) return out({ result, city });
     // someone else saved in between: loop and apply the action again on fresh state
   }
   return json({ result: { ok: false, msg: 'The city is busy. Try again.' } }, 409);

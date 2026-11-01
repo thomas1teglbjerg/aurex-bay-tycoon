@@ -213,6 +213,7 @@ function renderTop() {
   $('t-rank').textContent = `#${st.findIndex((x) => x.id === p.id) + 1} of ${st.length}`;
   const sp = $('speed');
   sp.hidden = !B.canSetSpeed;
+  sp.classList.toggle('admin', B.mode === 'online'); sp.setAttribute('aria-label', B.mode === 'online' ? 'Admin: game speed for everyone' : 'Game speed');
   if (B.canSetSpeed) {
     if (innerWidth <= 720) { const i = SPEEDS.findIndex((s) => s.id === c.clock.speed), cur = SPEEDS[i] || SPEEDS[2], nxt = SPEEDS[(i + 1) % SPEEDS.length]; sp.innerHTML = `<button data-speed="${nxt.id}" aria-pressed="true" title="Switch to ${nxt.label}: ${nxt.note}">${cur.label} ⟳</button>`; }
     else sp.innerHTML = SPEEDS.map((s) => `<button data-speed="${s.id}" aria-pressed="${c.clock.speed === s.id}" title="${s.note}">${s.label}</button>`).join('');
@@ -791,7 +792,13 @@ async function boot(hot) {
     inp.value = ''; inp.blur(); await act('post', { lid: f.dataset.lid, text }, 'Posted to the company board.');
   });
 
-  $('speed').addEventListener('click', async (e) => { const b = e.target.closest('[data-speed]'); if (b) { await B.setSpeed(Number(b.dataset.speed)); renderAll(); toast(SPEEDS.find((s) => s.id === Number(b.dataset.speed)).note, 'good'); } });
+  $('speed').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-speed]'); if (!b) return;
+    const sp = SPEEDS.find((s) => s.id === Number(b.dataset.speed));
+    if (B.mode === 'online' && !confirm(`Change the game speed for every player to ${sp.label} (${sp.note})?`)) return;
+    const r = await B.setSpeed(sp.id); renderAll();
+    if (r && r.ok === false) toast(r.msg, 'bad'); else toast(B.mode === 'online' ? `Admin: everyone now plays at ${sp.note}` : sp.note, 'good');
+  });
   document.querySelectorAll('#tabs button').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); setTab(b.dataset.tab); }));
   $('modal').addEventListener('click', (e) => { if (e.target.id === 'modal' && UI.modal && UI.modal.t !== 'ob') closeModal(); });
   B.subscribe(() => { renderAll(); if (UI.modal && ['listing', 'wh', 'deliv', 'home', 'lot'].includes(UI.modal.t)) refreshModal(); if (city().over && me() && !shownSeasonEnd) { shownSeasonEnd = true; showSeasonEnd(); } });
