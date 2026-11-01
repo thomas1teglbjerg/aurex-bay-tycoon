@@ -191,12 +191,12 @@ function setupMapEvents() {
   w.addEventListener('pointerdown', (e) => { lastPointer = e.pointerType || 'mouse'; }, true);
   w.addEventListener('mouseover', (e) => {
     if (lastPointer === 'touch' || flying) return;
-    const z = e.target.closest('.zone'), m = e.target.closest('.mp'), t = z || m; if (!t) return;
+    const z = e.target.closest('.zlabel') && e.target.closest('.zone'), m = e.target.closest('.mp'), t = z || m; if (!t) return; // district info only over its title box
     const key = z ? 'z:' + z.dataset.zone : m.dataset.mk; if (key === cardKey) return;
     document.querySelectorAll('.zone.on').forEach((x) => x.classList.remove('on')); if (z) z.classList.add('on');
     showMapCard(key, z ? z.querySelector('.zlabel') : m);
   });
-  w.addEventListener('mouseout', (e) => { if (lastPointer === 'touch') return; const t = e.target.closest('.zone, .mp'); if (t && !t.contains(e.relatedTarget)) hideMapCard(false); });
+  w.addEventListener('mouseout', (e) => { if (lastPointer === 'touch') return; const t = e.target.closest('.zlabel, .mp'); if (t && !t.contains(e.relatedTarget)) hideMapCard(false); });
   w.addEventListener('click', (e) => {
     const z = e.target.closest('.zone'), m = e.target.closest('.mp');
     if (z) { hideMapCard(); enterDistrict(z.dataset.zone, e); return; }
