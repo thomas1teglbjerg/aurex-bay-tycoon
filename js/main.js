@@ -299,7 +299,7 @@ function staffCard(s) {
   const p = me(), hired = E.hasStaff(p, s.id), cost = E.staffCost(p, s.id);
   return `<article class="sc">
     <div class="sc-head">${esc(s.role)}</div>
-    <div class="sc-art" style="background-image:url(img/s-${s.id}.jpg)" role="img" aria-label="${esc(s.name)}"></div>
+    <div class="sc-art" style="background-image:url(img/s-${s.id}.jpg?v=2)" role="img" aria-label="${esc(s.name)}"></div>
     <div class="sc-name"><span>${esc(s.name)}</span><small>${hired ? 'HIRED' : 'JUNIOR'}</small></div>
     <div class="sc-cost"><div>Recruit <b class="num">${M(cost)}</b></div><div>Upkeep <b class="num">${M(s.upkeep)}</b>/yr</div></div>
     <div class="sc-band">Passive ability</div><div class="sc-txt"><b>${esc(s.passive[0])}</b>${esc(s.passive[1])}</div>
@@ -354,7 +354,7 @@ function empireHTML() {
   const allTasks = mine.flatMap((l) => E.OPS.tasks(c, l).map((t) => ({ ...t, l })));
   const orderValue = mine.reduce((a, l) => a + (l.ops ? l.ops.pending.reduce((x, o) => x + o.value, 0) : 0), 0);
   const specs = STAFF.map((s) => { const hired = E.hasStaff(p, s.id), a = p.assign && p.assign[s.id], al = a ? E.listing(c, a.lid) : null;
-    return `<button class="row" style="width:100%;text-align:left" data-a="staff" data-id="${s.id}"><span class="thumb" style="background-image:url(img/s-${s.id}.jpg);background-position:center 20%"></span><div class="grow"><b>${esc(s.name)}</b><span>${esc(s.role)} · leads ${esc(E.OPS.DEPT[deptOfSpec(s.id)].name)}</span>${hired ? `<span class="${al ? 'up' : 'down'}">${al ? `Heads ${esc(E.OPS.DEPT[a.dept].name)} at ${esc(TYPES[al.type].name)}, ${esc(al.district)}` : 'Hired, not assigned: open a company and make them head of a department'}</span>` : ''}</div>${hired ? '<span class="chip good">Hired</span>' : `<span class="chip num">${M(E.staffCost(p, s.id))}</span>`}</button>`; }).join('');
+    return `<button class="row" style="width:100%;text-align:left" data-a="staff" data-id="${s.id}"><span class="thumb" style="background-image:url(img/s-${s.id}.jpg?v=2);background-position:center 20%"></span><div class="grow"><b>${esc(s.name)}</b><span>${esc(s.role)} · leads ${esc(E.OPS.DEPT[deptOfSpec(s.id)].name)}</span>${hired ? `<span class="${al ? 'up' : 'down'}">${al ? `Heads ${esc(E.OPS.DEPT[a.dept].name)} at ${esc(TYPES[al.type].name)}, ${esc(al.district)}` : 'Hired, not assigned: open a company and make them head of a department'}</span>` : ''}</div>${hired ? '<span class="chip good">Hired</span>' : `<span class="chip num">${M(E.staffCost(p, s.id))}</span>`}</button>`; }).join('');
   return `<div class="grid"><div class="col">
       ${parentBox(c, p)}
       <div class="box"><h2>${esc(p.name)}'s empire<small>LIVE</small></h2><div class="in">

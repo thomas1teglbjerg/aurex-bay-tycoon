@@ -8,7 +8,7 @@ const KIND_COL = { marco: '#8a6a3a', michael: '#2f6fb0', anika: '#16a085', sofia
 export const stars = (n) => '★'.repeat(n) + '<i>' + '★'.repeat(5 - n) + '</i>';
 export function portrait(tid, cls = '') {
   const t = T.PERSON[tid], ini = t.name.split(' ').map((w) => w[0]).join('').slice(0, 2);
-  return t.img ? `<span class="tp ${cls}" style="background-image:url(img/s-${tid}.jpg)"></span>` : `<span class="tp ${cls} ini" style="--kc:${KIND_COL[t.kind]}">${esc(ini)}</span>`;
+  return t.img ? `<span class="tp ${cls}" style="background-image:url(img/s-${tid}.jpg?v=2)"></span>` : `<span class="tp ${cls} ini" style="--kc:${KIND_COL[t.kind]}">${esc(ini)}</span>`;
 }
 const yrs = (months) => (months >= 12 ? `${Math.floor(months / 12)} yr${months % 12 ? ` ${months % 12} mo` : ''}` : `${Math.max(0, months)} mo`);
 function meter(label, v, bad) { const lvl = bad ? (v > 75 ? 'bad' : v > 55 ? 'warn' : 'ok') : (v < 35 ? 'bad' : v < 55 ? 'warn' : 'ok'); return `<div class="tm ${lvl}"><span>${label}</span><div class="bar"><i style="width:${Math.round(v)}%"></i></div><b>${Math.round(v)}</b></div>`; }
@@ -38,7 +38,7 @@ export function talentModal(st) {
   const role = T.ROLE[t.kind], mine = s.owner === p.id, owner = s.owner ? c.players[s.owner] : null, seen = T.scouted(c, p, tid), ask = T.ask(c, tid);
   const sal = st.salary ?? (mine ? s.salary : Math.round(ask * (owner ? 1.15 : 1) * 100) / 100), years = st.years ?? 2, fee = st.fee ?? Math.round(T.value(c, tid) * 100) / 100;
   const ovr = 40 + 9 * s.rating + Math.min(9, Math.floor(s.xp / 6)), known = seen || !owner || mine;
-  const head = `<div class="dz-hero tall ${t.img ? '' : 'noimg'}" ${t.img ? `style="background-image:url(img/s-${tid}.jpg)"` : `style="--kc:${KIND_COL[t.kind]}"`} role="img" aria-label="${esc(t.name)}">${t.img ? '' : `<span class="dz-ini">${esc(t.name.split(' ').map((w) => w[0]).join('').slice(0, 2))}</span>`}<span class="dz-ovr" title="Overall rating">${ovr}</span>${s.listed != null ? `<span class="dz-coord">Transfer listed · ${M(s.listed)}</span>` : ''}</div>
+  const head = `<div class="dz-hero tall ${t.img ? '' : 'noimg'}" ${t.img ? `style="background-image:url(img/s-${tid}.jpg?v=2)"` : `style="--kc:${KIND_COL[t.kind]}"`} role="img" aria-label="${esc(t.name)}">${t.img ? '' : `<span class="dz-ini">${esc(t.name.split(' ').map((w) => w[0]).join('').slice(0, 2))}</span>`}<span class="dz-ovr" title="Overall rating">${ovr}</span>${s.listed != null ? `<span class="dz-coord">Transfer listed · ${M(s.listed)}</span>` : ''}</div>
     <div class="dz-body"><div class="dz-title"><div><span class="dz-k">${esc(T.title(c, tid))}</span><h2>${esc(t.name)}</h2><span class="dz-sub">${owner ? (mine ? 'On your team' : `Works for ${esc(owner.name)}`) : 'Free agent'}${s.owner ? ` · ${yrs(s.until - c.m)} left` : ''} · <em class="stars">${stars(s.rating)}</em></span></div>
       <div class="dz-price"><span>${s.owner ? 'Salary' : 'Asks'}</span><b>${s.owner ? (known ? M(s.salary) : '?') : M(ask)}<small>/yr</small></b></div></div>
     ${t.bio ? `<p class="dz-bio">${esc(t.bio)}</p>` : ''}<p class="dz-pass"><b>${esc((t.passive || role.passive)[0])}.</b> ${esc((t.passive || role.passive)[1])}</p>${t.passive ? `<p class="dz-pass dim">Role: ${esc(role.passive[1])}</p>` : ''}`;
