@@ -101,7 +101,7 @@ function accountsBox(l, ui, y) {
 export function companyHTML(lid, ui = {}) {
   const c = city(), p = me(), l = E.listing(c, lid);
   if (!l || !E.canSeeCompany(c, p.id, l) || !l.ops) return `<button class="btn" data-a="back">‹ Back</button><p class="empty">You can no longer see this company.</p>`;
-  const ro = l.owner.id !== p.id, owner = c.players[l.owner.id];
+  const ro = !E.canRun(c, p.id, l), coop = l.owner.k === 'h' ? c.holdings[l.owner.id] : null, owner = coop || c.players[l.owner.id];
   const o = l.ops, def = TYPES[l.type], rec = RECIPES[l.type], y = E.listingYield(c, l, l.owner), st = statusOf(l), rc = O.runningCosts(l);
   const h = o.hist[o.hist.length - 1] || { b2c: 0, goods: 0, sup: 0, run: rc.total / 12 }, last = o.last || { cap: O.capacity(l), dem: O.demand(c, l), units: 0, price: O.unitPrice(l, Math.max(0, y.trade)) };
   const monthProfit = o.hist.length ? acctMonth(l, h, y).profit : 0;
@@ -125,7 +125,7 @@ export function companyHTML(lid, ui = {}) {
   const depts = DEPTS.map((d) => ro ? deptCardRO(l, d) : deptCard(l, d)).join('');
   const ready = ords.filter((x) => x.status === 'accepted').length;
 
-  return `<div class="crumbs"><button class="btn sm" data-a="back">‹ ${ro ? 'Coop' : 'Empire'}</button><span class="muted">${ro ? `${esc(owner.name)}'s company` : 'Company dashboard'}</span></div>
+  return `<div class="crumbs"><button class="btn sm" data-a="back">‹ ${ro ? 'Coop' : 'Empire'}</button><span class="muted">${coop ? `${esc(coop.name)} · co-owned · costs come out of the coop treasury` : ro ? `${esc(owner.name)}'s company` : 'Company dashboard'}</span></div>
   <section class="chero" style="background-image:linear-gradient(180deg, rgba(10,20,35,0.05) 30%, rgba(10,20,35,0.88)), url(img/c-${l.type}.jpg)">
     <div class="chero-in"><span class="chip ${st.cls}">${esc(st.label)}</span><h2>${esc(lname(l))}</h2><p>${l.title ? esc(def.name) + ' · ' : ''}${esc(l.district)} · ${SIZES[l.size].label} · Level ${l.level}${l.upgrade ? ` (upgrading to ${l.upgrade.to})` : ''} · Tech ${o.tech} · ${kind === 'b2b' ? 'B2B' : 'B2C'}</p></div>
     <div class="chero-act"><button class="btn sm" data-a="open" data-lid="${l.id}">Company card</button></div>
@@ -168,8 +168,8 @@ export function companyHTML(lid, ui = {}) {
     <div class="col">
       <div class="box"><h2>Departments<small>${Object.keys(o.depts).length} OF ${DEPTS.length}</small></h2><div class="in"><div class="depts">${depts}</div></div></div>
       ${ro ? '' : `<div class="box"><h2>Company</h2><div class="in"><div class="btns">
-        ${l.upgrade ? `<span class="chip">Upgrading to level ${l.upgrade.to}</span>` : l.level < 5 ? `<button class="btn navy" data-a="upgrade" data-lid="${l.id}" ${p.cash < E.upgradeCost(l) ? 'disabled' : ''}>Upgrade to level ${l.level + 1} · ${M(E.upgradeCost(l))}</button>` : ''}
-        <button class="btn danger" data-a="sell" data-lid="${l.id}">Sell for ${M(E.listingValue(l) * 0.8)}</button></div>
+        ${l.upgrade ? `<span class="chip">Upgrading to level ${l.upgrade.to}</span>` : l.level < 5 ? `<button class="btn ${coop ? 'coop' : 'navy'}" data-a="upgrade" data-lid="${l.id}" ${!coop && p.cash < E.upgradeCost(l) ? 'disabled' : ''}>${coop ? 'Propose upgrade' : 'Upgrade'} to level ${l.level + 1} · ${M(E.upgradeCost(l))}</button>` : ''}
+        ${coop ? '' : `<button class="btn danger" data-a="sell" data-lid="${l.id}">Sell for ${M(E.listingValue(l) * 0.8)}</button>`}</div>${coop ? `<p class="empty" style="font-size:13px">Treasury ${M(coop.treasury)}. Upgrades and sales are decided by a vote of the co-owners.</p>` : ''}
         <p class="empty" style="font-size:13px">Upgrading raises capacity, steady income and the number of workers each department needs.</p></div></div>`}
     </div>
   </div>`;
