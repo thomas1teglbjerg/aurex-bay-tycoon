@@ -50,4 +50,17 @@ E.apply(city, 'u2', 'holdingInvite', { hid: h.id, pid: 'u4' }, now);
 assert(E.apply(city, 'u4', 'coJoin', { hid: h.id, amt: 9 }, now).ok, 'invited players can always be added with a buy-in');
 r = E.apply(city, 'u4', 'holdingLeave', { hid: h.id }, now);
 assert(r.ok && BR.needsParent(city, 'u4'), 'leaving the parent means founding or joining a new one: ' + r.msg);
+
+// co-owners run their coop's companies themselves, paid from the treasury
+const h2 = Object.values(city.holdings).find((x) => x.name === 'Northgate Capital');
+h2.treasury += 30;
+const free = city.listings.filter((l) => !l.owner).sort((a, b) => E.listingPrice(a) - E.listingPrice(b))[0];
+r = E.apply(city, 'u2', 'buy', { lid: free.id, as: h2.id }, now);
+if (free.owner && free.owner.k === 'h') {
+  assert(!free.ops.managed && E.canRun(city, 'u3', free) && E.canSeeCompany(city, 'u3', free), 'every co-owner can open and run the coop company');
+  assert(!E.canRun(city, 'u1', free), 'outsiders cannot run it');
+  const t0 = h2.treasury, c3 = city.players.u3.cash;
+  r = E.apply(city, 'u3', 'workers', { lid: free.id, dept: 'ops', delta: 1 }, now);
+  assert(r.ok && h2.treasury < t0 && city.players.u3.cash === c3, 'hiring is paid from the coop treasury: ' + (r.msg || 'ok'));
+} else console.log('skip: coop purchase pending a vote', r.msg);
 console.log('ALL OK');

@@ -38,8 +38,17 @@ export function inactive(city, p) { return !!p && !p.bot && city.m - (p.lastAct 
 const TCTX = { feed: (p, m, t, x, k) => feed(p, m, t, x, k), news: (city, m, t, x, k) => news(city, m, t, x, k), unassign: (city, p, k) => unassign(city, p, k),
   listing: (city, id) => listing(city, id), automationWithout: (l, dept) => { const d = l.ops && l.ops.depts[dept]; return d ? d.w / OPS.needWorkers(l, dept) : 0; } };
 const coopPartners = (city, a, b) => Object.values(city.holdings || {}).some((h) => h.members[a] && h.members[b]);
-export function canSeeCompany(city, pid, l) { return !!(l.owner && l.owner.k === 'p' && (l.owner.id === pid || coopPartners(city, pid, l.owner.id))); }
-const isManaged = (city, l) => !l.owner || l.owner.k === 'h' || !!(city.players[l.owner.id] && city.players[l.owner.id].bot);
+// a coop with at least one human owner is run by its owners like a player's own company; bot coops stay on autopilot
+const humanCoop = (city, h) => !!h && !h.bot && Object.keys(h.members).some((pid) => city.players[pid] && !city.players[pid].bot);
+// who may run a company's departments, orders and supplies: its owner, or any owner of the coop that holds it
+export function canRun(city, pid, l) { if (!l || !l.owner) return false; if (l.owner.k === 'p') return l.owner.id === pid; const h = city.holdings[l.owner.id]; return !!(h && h.members[pid] && humanCoop(city, h)); }
+export function canSeeCompany(city, pid, l) { return !!(l.owner && (l.owner.k === 'p' ? (l.owner.id === pid || coopPartners(city, pid, l.owner.id)) : canRun(city, pid, l))); }
+const isManaged = (city, l) => !l.owner || (l.owner.k === 'h' ? !humanCoop(city, city.holdings[l.owner.id]) : !!(city.players[l.owner.id] && city.players[l.owner.id].bot));
+// companies of human coops bought before owners could run them: hand them over with their staff intact
+function coopRunMode(city) {
+  city.listings.forEach((l) => { if (l.owner && l.owner.k === 'h' && l.ops && l.ops.managed && !isManaged(city, l)) {
+    l.ops.managed = false; OPS.ensureClients(l); l.ops.pending = l.ops.pending || []; l.ops.fg = l.ops.fg || 0; l.ops.board = l.ops.board || []; } });
+}
 // a specialist works for one company: humans assign them to a department, bots simply employ them
 export function hasHead(city, l, p, spec) { if (!p) return false; if (p.bot) return hasStaff(p, spec); const a = p.assign && p.assign[spec]; return !!(a && a.lid === l.id); }
 function assignOwner(city, l, owner, m) {
@@ -260,7 +269,7 @@ function migrateMap(city) {
 }
 function migrateLife(city) { migrateMap(city); if (city.over) city.over = false; if (!city.talent) TAL.ensure(city); if (city.wk == null) city.wk = city.m * 4; if (city.migratedLife === 1) return; LIFE.ensure(city); city.migratedLife = 1; }
 export function advance(city, now) {
-  migrate(city); migrateLife(city);
+  migrate(city); migrateLife(city); coopRunMode(city);
   if (city.over) return;
   const target = gameTime(city, now);
   let loops = 0;
@@ -707,15 +716,18 @@ export function apply(city, pid, action, a = {}, now = Date.now()) {
     case 'fire': { p.staff = p.staff.filter((s) => s !== a.id); unassign(city, p, a.id); return ok(); }
     // ---------------- company management (human-owned companies)
     case 'deptOpen': case 'deptClose': case 'workers': case 'deptSet': case 'task': case 'listGoods': case 'exportGoods': case 'assignHead': case 'order': case 'buySupply': {
-      const l = listing(city, a.lid); if (!l || !ownerIs(l, 'p', pid)) return err('You do not run this company.');
+      const l = listing(city, a.lid); if (!l || !canRun(city, pid, l)) return err('You do not run this company.');
       if (!l.ops) l.ops = OPS.newOps(l, false);
+      // a coop's company is paid for from the coop treasury, not the pocket of the owner pressing the button
+      const hq = l.owner.k === 'h' ? city.holdings[l.owner.id] : null;
+      const payer = hq ? { get cash() { return hq.treasury; }, set cash(v) { hq.treasury = v; } } : p;
       const o = l.ops, d = a.dept ? OPS.DEPT[a.dept] : null;
-      if (action === 'deptOpen') { if (!d) return err('Unknown department.'); if (o.depts[a.dept]) return err('Already open.'); const c = OPS.deptOpenCost(l, a.dept); if (p.cash < c) return err(`Opening costs ${c} M.`); p.cash -= c; o.depts[a.dept] = { w: 0, set: { ...DEPT_DEFAULTS[a.dept] }, head: null }; return ok(`${d.name} is open. Hire workers to automate it, or run it yourself.`); }
-      if (action === 'deptClose') { if (!d || a.dept === 'ops' || !o.depts[a.dept]) return err('Cannot close this department.'); const dd = o.depts[a.dept]; if (dd.head) unassign(city, p, dd.head); p.cash -= dd.w * WORKER.salary * 0.25; delete o.depts[a.dept]; return ok(`${d.name} closed.`); }
+      if (action === 'deptOpen') { if (!d) return err('Unknown department.'); if (o.depts[a.dept]) return err('Already open.'); const c = OPS.deptOpenCost(l, a.dept); if (payer.cash < c) return err(`Opening costs ${c} M.`); payer.cash -= c; o.depts[a.dept] = { w: 0, set: { ...DEPT_DEFAULTS[a.dept] }, head: null }; return ok(`${d.name} is open. Hire workers to automate it, or run it yourself.`); }
+      if (action === 'deptClose') { if (!d || a.dept === 'ops' || !o.depts[a.dept]) return err('Cannot close this department.'); const dd = o.depts[a.dept]; if (dd.head) unassign(city, p, dd.head); payer.cash -= dd.w * WORKER.salary * 0.25; delete o.depts[a.dept]; return ok(`${d.name} closed.`); }
       if (action === 'workers') {
         const dd = o.depts[a.dept]; if (!dd) return err('Open the department first.'); const n = Math.trunc(Number(a.delta)) || 0, max = OPS.needWorkers(l, a.dept) * 3;
-        if (n > 0) { if (dd.w + n > max) return err(`This department has room for ${max} workers.`); const fee = n * WORKER.hireFee * (o.depts.hr && o.depts.hr.head === 'emily' ? 0.5 : 1); if (p.cash < fee) return err('Not enough cash.'); p.cash -= fee; dd.w += n; return ok(); }
-        if (n < 0) { const q = Math.min(-n, dd.w); dd.w -= q; p.cash -= q * WORKER.salary * 0.25; o.morale = Math.max(0, o.morale - 2 * q); return ok(); }
+        if (n > 0) { if (dd.w + n > max) return err(`This department has room for ${max} workers.`); const fee = n * WORKER.hireFee * (o.depts.hr && o.depts.hr.head === 'emily' ? 0.5 : 1); if (payer.cash < fee) return err('Not enough cash.'); payer.cash -= fee; dd.w += n; return ok(); }
+        if (n < 0) { const q = Math.min(-n, dd.w); dd.w -= q; payer.cash -= q * WORKER.salary * 0.25; o.morale = Math.max(0, o.morale - 2 * q); return ok(); }
         return ok();
       }
       if (action === 'deptSet') { const dd = o.depts[a.dept]; if (!dd) return err('Open the department first.'); const st = d.settings.find((x) => x.k === a.k); if (!st || !st.opts.some(([v]) => String(v) === String(a.v))) return err('Unknown setting.'); dd.set[a.k] = st.opts.find(([v]) => String(v) === String(a.v))[0]; return ok(); }

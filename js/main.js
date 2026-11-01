@@ -279,6 +279,7 @@ function listingActions(l) {
     out.push(`<button class="btn danger" data-a="sell" data-lid="${l.id}">Sell to the market for ${M(E.listingValue(l) * 0.8)}</button>`);
   } else if (o.coop) {
     if (o.mine) {
+      if (E.canRun(c, p.id, l)) out.push(`<button class="btn gold" data-a="company" data-lid="${l.id}">Open company dashboard</button>`);
       if (l.upgrade) out.push(`<div class="cap">Upgrading · ready in <span data-live="until:${l.upgrade.doneM}">…</span></div>`);
       else if (l.level < 5) out.push(`<button class="btn coop" data-a="upgrade" data-lid="${l.id}">Propose upgrade to level ${l.level + 1} · ${M(E.upgradeCost(l))}</button>`);
     } else out.push('<p class="empty">Owned by a coop. Coop companies can only change hands by a vote of their owners.</p>');

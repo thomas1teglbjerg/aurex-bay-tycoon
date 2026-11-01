@@ -60,9 +60,9 @@ export function arrivals(city, g, notify) {
   city.shipments.forEach((s) => {
     if (s.arriveG > g) { keep.push(s); return; }
     const got = s.qty * (1 - (s.dmg || 0)); s.got = got;
-    if (s.to.k === 'export') { const p = city.players[s.owner]; if (p) p.cash += (s.pay || 0) * (1 - (s.dmg || 0)); }
+    if (s.to.k === 'export') { const v = (s.pay || 0) * (1 - (s.dmg || 0)), p = city.players[s.owner], h = !p && city.holdings && city.holdings[s.owner]; if (p) p.cash += v; else if (h) { h.treasury += v; h.accrued += v; } } // a coop's export pays its treasury
     else if (s.to.k === 'w') { const w = warehouse(city, s.to.id); if (w && w.owner === s.owner) w.stock[s.g] = (w.stock[s.g] || 0) + got; }
-    else { const l = city.listings.find((x) => x.id === s.to.id); if (l && l.ops && l.owner && l.owner.k === 'p' && l.owner.id === s.owner) l.ops.inv[s.g] = (l.ops.inv[s.g] || 0) + got; }
+    else { const l = city.listings.find((x) => x.id === s.to.id); if (l && l.ops && l.owner && l.owner.id === s.owner) l.ops.inv[s.g] = (l.ops.inv[s.g] || 0) + got; }
     if (notify && s.qty >= 1) notify(s);
   });
   city.shipments = keep;
