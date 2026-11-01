@@ -52,7 +52,7 @@ export async function createOnlineBackend(cfg) {
   const sb = createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
   let { data: { session } } = await sb.auth.getSession();
   const subs = new Set(), cityId = cfg.CITY_ID || 'aurex-bay';
-  let city = null, live = false, recovery = /type=recovery/.test(location.hash);
+  let city = null, live = false, admin = false, recovery = /type=recovery/.test(location.hash);
   const emit = () => subs.forEach((f) => f());
   const uid = () => (session ? session.user.id : null);
   const meta = () => (session && session.user.user_metadata) || {};
@@ -60,6 +60,7 @@ export async function createOnlineBackend(cfg) {
     if (!session) return { ok: false, msg: 'Log in first.' };
     const { data, error } = await sb.functions.invoke('game', { body: { action, args, city: cityId } });
     if (error) return { ok: false, msg: 'The server did not answer. Try again in a moment.' };
+    if (data && 'admin' in data) admin = !!data.admin; // the server decides who is admin; this only shows the controls
     if (data && data.city) { city = data.city; emit(); }
     return (data && data.result) || { ok: true };
   }
@@ -75,7 +76,7 @@ export async function createOnlineBackend(cfg) {
   if (session) await goLive(); else await peek();
   sb.channel('city-' + cityId).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'cities', filter: `id=eq.${cityId}` }, (payload) => { if (payload.new && payload.new.state) { city = payload.new.state; emit(); } }).subscribe();
   return {
-    mode: 'online', canSetSpeed: false,
+    mode: 'online', get canSetSpeed() { return admin; }, get admin() { return admin; },
     get city() { return city; }, get me() { return city && uid() && city.players[uid()] ? uid() : null; },
     // who is signed in: null when signed out; anon = an old guest session that still needs e-mail + password
     get account() { return session ? { email: session.user.email || '', anon: !!session.user.is_anonymous, first: meta().first || '', last: meta().last || '', needsPassword: !!meta().needs_password } : null; },
@@ -116,7 +117,7 @@ export async function createOnlineBackend(cfg) {
     async signOut() { await sb.auth.signOut(); location.reload(); },
     join: (o) => call('join', o), act: (a, args) => call(a, args),
     tick() { /* the server owns time; the client only interpolates live numbers */ },
-    async setSpeed() { return { ok: false, msg: 'Speed is set on the server.' }; },
+    async setSpeed(speed) { return admin ? call('adminSpeed', { speed }) : { ok: false, msg: 'Only an admin can change the game speed.' }; },
     async reset() { return { ok: false, msg: 'Seasons are reset on the server.' }; },
     subscribe(f) { subs.add(f); }, snapshot() { return null; }
   };
