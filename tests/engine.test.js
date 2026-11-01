@@ -61,4 +61,17 @@ let now = 1_700_000_000_000; const c2 = E.createCity(now, { speed: 1 }); E.addPl
 const before = c2.players.x.cash; now += 3 * 24 * 3600e3; E.advance(c2, now);
 console.log('offline 3 days: months passed', c2.m - CONFIG.HISTORY_MONTHS, 'cash', before.toFixed(1), '->', c2.players.x.cash.toFixed(1));
 const json = JSON.stringify(c2); console.log('city JSON size', Math.round(json.length / 1024), 'KB');
+// admin speed change: game time so far is kept, only the rate from now on changes
+{ let t = 1_700_000_000_000; const c3 = E.createCity(t, { speed: 1 }); t += 24 * 3600e3; const g0 = E.gameNow(c3, t);
+  assert(!E.validSpeed(0) && !E.validSpeed(-1) && !E.validSpeed(5000) && !E.validSpeed(NaN) && E.validSpeed(1) && E.validSpeed(168), 'speed bounds');
+  E.setSpeed(c3, 168, t); assert(Math.abs(E.gameNow(c3, t) - g0) < 1e-9, 'speed change keeps the clock');
+  t += 3600e3; assert(Math.abs(E.gameNow(c3, t) - g0 - 1) < 1e-9, 'one game year per hour at 168');
+  E.advance(c3, t); assert(c3.wk >= Math.floor((g0 + 1) * 48) - 1, 'weeks caught up after speed-up'); }
+// a replaced business: the owner of the old Fashion House on L1 is bought out at full value, Eastbridge opens for sale
+{ let t = 1_700_000_000_000; const c4 = E.createCity(t, { speed: 1 }); E.addPlayer(c4, 'y', 'Y', t);
+  const l1 = c4.listings.find((l) => l.id === 'L1'); assert(l1.type === 'clothing' && l1.title === 'Eastbridge Supply Co.', 'Eastbridge on L1');
+  Object.assign(l1, { type: 'fashion', size: 'M', level: 2 }); delete l1.title; c4.players.y.cash = 0; l1.owner = { k: 'p', id: 'y' }; l1.ops = {};
+  const v = E.listingValue(l1); t += 3600e3; E.advance(c4, t);
+  const n = c4.listings.find((l) => l.id === 'L1'); assert(n.type === 'clothing' && !n.owner && n.title === 'Eastbridge Supply Co.', 'Eastbridge replaces the old listing');
+  assert(Math.abs(c4.players.y.cash - v) < 0.5, 'owner bought out at full value'); }
 console.log('OK');

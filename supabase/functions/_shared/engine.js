@@ -104,6 +104,8 @@ export function addPlayer(city, id, name, now, o = {}) {
   news(city, city.m, `${p.name} arrives in Aurex Bay`, 'A new tycoon has opened an office at Harbor Row.', 'info');
   return p;
 }
+// Speeds an admin may pick online (the live city): from a quarter of live speed up to demo speed.
+export function validSpeed(s) { return typeof s === 'number' && Number.isFinite(s) && s >= 0.25 && s <= 2016; }
 export function setSpeed(city, speed, now) { advance(city, now); city.clock = { g: gameNow(city, now), at: now, speed }; }
 
 // ---------------------------------------------------------------- lookups
@@ -170,6 +172,8 @@ export function listingYield(city, l, owner) {
   let ypi = def.ypi * lv * s, trade = def.trade * lv * s * mult;
   if (l.type === 'bank' && econ === 'Recession') { ypi -= 0.5 * s; notes.push(`Bad loans −${r2(0.5 * s)}`); }
   if (l.type === 'dealer' && econ === 'Recession') { trade = 0; notes.push('Credit squeeze: no Trade'); }
+  if (l.type === 'clothing' && econ === 'Boom') { ypi += 0.3 * s; notes.push(`Boom +${r2(0.3 * s)}`); }
+  if (l.type === 'clothing' && econ === 'Recession') { ypi -= 0.3 * s; notes.push(`Recession −${r2(0.3 * s)}`); }
   if (l.type === 'restaurant' && econ === 'Recession') { ypi -= 0.3 * s; notes.push(`Recession −${r2(0.3 * s)}`); }
   if (l.type === 'car' && city.fx && city.fx.id === 'energy') { trade = 0; notes.push('Energy shortage: no Trade'); }
   const types = owner ? portfolioTypes(city, owner) : new Set(), partners = contractPartnerTypes(city, l);
@@ -256,6 +260,14 @@ function migrate(city) {
 // the 2026 map: districts and new positions for every place and client
 function migrateMap(city) {
   const known = Object.fromEntries(LISTINGS.map((n) => [n.id, n.type]));
+  // a listing replaced by a new business: the owner is bought out at full value before the old one closes
+  city.listings.filter((l) => known[l.id] !== l.type && l.owner).forEach((l) => {
+    const v = r2(listingValue(l) + (l.upgrade ? upgradeCost(l) : 0)), old = TYPES[l.type] ? TYPES[l.type].name : 'company';
+    const n = LISTINGS.find((x) => x.id === l.id), next = n ? `${n.title || TYPES[n.type].name} takes over the site and is for sale now.` : 'The site has closed.';
+    if (l.owner.k === 'p' && !city.players[l.owner.id] || l.owner.k === 'h' && !city.holdings[l.owner.id]) return;
+    payOwner(city, l, v); notifyOwner(city, l, `Your ${old} in ${l.district} was bought out`, `The city paid ${v} M, its full value. ${next}`, 'good');
+    releaseListing(city, l);
+  });
   city.listings = city.listings.filter((l) => known[l.id] === l.type);
   LISTINGS.forEach((n) => { if (!city.listings.some((l) => l.id === n.id)) city.listings.push({ ...n, level: 1, owner: null, boughtM: null, upgrade: null, contracts: 0 }); });
   if (city.mapV === 4) return;
@@ -363,7 +375,7 @@ function worldCard(city, m) {
     else { const fine = r2(2 * SIZES[l.size].mult); debit(city, l.owner, fine); notifyOwner(city, l, `Auditors fined your ${TYPES[l.type].name} ${fine} M`, 'Strict compliance, a reviewed contract file or Robert Hayes as head of Legal would have prevented it.', 'bad'); }
   });
   const bonus = { viral: 'fashion', tourism: 'hotel', ai: 'data' }[card.fx];
-  if (bonus) city.listings.filter((l) => l.type === bonus && l.owner).forEach((l) => { const v = r2(2 * SIZES[l.size].mult); payOwner(city, l, v); notifyOwner(city, l, `${card.title}: +${v} M`, `Your ${TYPES[l.type].name} in ${l.district} cashed in.`, 'good'); });
+  if (bonus) city.listings.filter((l) => l.owner && (l.type === bonus || (bonus === 'fashion' && l.type === 'clothing'))).forEach((l) => { const v = r2((l.type === 'clothing' ? 1 : 2) * SIZES[l.size].mult); payOwner(city, l, v); notifyOwner(city, l, `${card.title}: +${v} M`, `Your ${TYPES[l.type].name} in ${l.district} cashed in.`, 'good'); });
   city.lastCard = { id: card.id, m, prev };
   news(city, m, card.title, card.text + (city.econ !== prev ? ` The economy moves from ${prev.toLowerCase()} to ${city.econ.toLowerCase()}.` : ''), card.econ === 'Crisis' || card.econ === 'Recession' ? 'bad' : card.econ === 'Boom' ? 'good' : 'info', { world: card.id, at: card.at });
 }
