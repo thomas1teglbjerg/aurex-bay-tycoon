@@ -46,6 +46,8 @@ export function canSeeCompany(city, pid, l) { return !!(l.owner && (l.owner.k ==
 const isManaged = (city, l) => !l.owner || (l.owner.k === 'h' ? !humanCoop(city, city.holdings[l.owner.id]) : !!(city.players[l.owner.id] && city.players[l.owner.id].bot));
 // a coop company on autopilot whose coop now has human owners: the owners take over and build their own team
 function coopRunMode(city) {
+  // one-time: coop companies that switched over with the autopilot's workers (Nov 2026) start empty too
+  if (!city.coopReset1) { city.coopReset1 = true; city.listings.forEach((l) => { if (l.owner && l.owner.k === 'h' && l.ops && !l.ops.managed && !isManaged(city, l)) { OPS.takeOverOps(l); Object.values(city.players).forEach((p) => Object.keys(p.assign || {}).forEach((k) => { if (p.assign[k].lid === l.id) delete p.assign[k]; })); } }); }
   city.listings.forEach((l) => { if (l.owner && l.owner.k === 'h' && l.ops && l.ops.managed && !isManaged(city, l)) {
     OPS.takeOverOps(l); l.ops.pending = l.ops.pending || []; l.ops.fg = l.ops.fg || 0; l.ops.board = l.ops.board || []; } });
 }
