@@ -140,6 +140,8 @@ export function ensureTester(city, now) {
   p.test = true; p.co = { name: 'Test Player Holding', color: 'teal', font: 'clean', sym: 'compass', hid: null, m: city.m };
   return p;
 }
+// chat: the administrator and the test player are not user accounts, so their inboxes in public.chat_messages have fixed ids
+export const TEST_CHAT = '00000000-0000-0000-0000-000000000ad2', AS_CHAT = { [ADMIN_ID]: ADMIN_CHAT, [TEST_ID]: TEST_CHAT };
 export const ensureAs = (city, id, now) => (id === ADMIN_ID ? ensureAdmin(city, now) : id === TEST_ID ? ensureTester(city, now) : null);
 // Speeds an admin may pick online (the live city): from a quarter of live speed up to demo speed.
 export function validSpeed(s) { return typeof s === 'number' && Number.isFinite(s) && s >= 0.25 && s <= 2016; }

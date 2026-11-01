@@ -112,18 +112,22 @@ Deno.serve(async (req) => {
   return json({ result: { ok: false, msg: 'The city is busy. Try again.' } }, 409);
 });
 
-// The administrator's chat inbox (ADMIN_CHAT in public.chat_messages). Players write to it directly
-// under row level security; only admin accounts read and answer it, through here.
+// The shared chat inboxes of the administrator and the test player (AS_CHAT in engine.js). Players write to
+// them directly under row level security; only admin accounts read and answer them, through here.
+// args.as is who the admin writes as; peers are user ids or the other shared player.
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const COLS = 'id,from_id,to_id,body,created_at,read_at';
+const chatId = (id: string) => (Engine.AS_CHAT as Record<string, string>)[id] ?? id;
 async function adminChat(cityId: string, args: Record<string, unknown>, isAdmin: boolean) {
-  if (!isAdmin) return { ok: false, msg: 'Only an admin can answer as the administrator.' };
-  const A = Engine.ADMIN_CHAT, op = String(args.op ?? ''), peer = String(args.peer ?? '');
+  if (!isAdmin) return { ok: false, msg: 'Only an admin can answer as that player.' };
+  const asId = Engine.AS_IDS.includes(String(args.as)) ? String(args.as) : Engine.ADMIN_ID;
+  const A = chatId(asId), op = String(args.op ?? ''), peer = chatId(String(args.peer ?? ''));
   const db = admin.from('chat_messages');
-  if (op === 'unread') {
-    const { data, error } = await db.select('from_id').eq('city_id', cityId).eq('to_id', A).is('read_at', null).limit(500);
+  if (op === 'unread' || op === 'inboxes') { // unread per sender for one inbox, or totals per shared player
+    const ids = op === 'unread' ? [A] : Object.values(Engine.AS_CHAT);
+    const { data, error } = await db.select('from_id,to_id').eq('city_id', cityId).in('to_id', ids).is('read_at', null).limit(1000);
     if (error) return { ok: false, msg: error.message };
-    const n: Record<string, number> = {}; for (const r of data ?? []) n[r.from_id] = (n[r.from_id] ?? 0) + 1;
+    const n: Record<string, number> = {}; for (const r of data ?? []) { const k = op === 'unread' ? r.from_id : r.to_id; n[k] = (n[k] ?? 0) + 1; }
     return { ok: true, unread: n };
   }
   if (!UUID.test(peer) || peer === A) return { ok: false, msg: 'Pick a player.' };
@@ -142,7 +146,8 @@ async function adminChat(cityId: string, args: Record<string, unknown>, isAdmin:
     if (text.length > 500) return { ok: false, msg: 'Keep it under 500 characters.' };
     const { data: row } = await admin.from('cities').select('state->players').eq('id', cityId).maybeSingle();
     const players = (row as { players?: Record<string, unknown> } | null)?.players ?? {};
-    if (!players[peer]) return { ok: false, msg: 'That player is not in this city.' };
+    const peerGame = Object.entries(Engine.AS_CHAT).find(([, v]) => v === peer)?.[0] ?? peer;
+    if (!players[peerGame]) return { ok: false, msg: 'That player is not in this city.' };
     const { data, error } = await db.insert({ city_id: cityId, from_id: A, to_id: peer, body: text }).select(COLS).single();
     return error ? { ok: false, msg: 'The message was not sent. Try again in a moment.' } : { ok: true, row: data };
   }

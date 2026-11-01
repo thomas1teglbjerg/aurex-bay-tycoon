@@ -14,7 +14,7 @@ import { webHTML, parseUrl, HOME_URL } from './web.js';
 import { teamBoxHTML, talentModal, talentStep } from './team.js';
 import { lifeHTML, lifeModal, newDinner, startDinner, dinnerHTML, money, bidBase } from './life.js';
 import { logoMark, logoFull, symbolIcon } from './brand.js';
-import { initChat, openChat, unreadFrom, adminInbox } from './chat.js';
+import { initChat, openChat, unreadFrom, inboxOf } from './chat.js';
 import { authHTML, avatarHTML, passwordHTML, secureHTML, foundHTML, foundPreview, newFound } from './onboard.js';
 
 const ECON_COL = { Boom: '#23905a', Stable: '#2f6fb0', Recession: '#d08a1e', Crisis: '#c0392b' };
@@ -324,28 +324,29 @@ function renderWho() {
   // Admins only: the administrator tycoon sits at the far right. Click it to play as it, click your own icon to come back.
   const adminChip = () => {
     const b = c.players[E.ADMIN_ID] ? E.BR.brandOf(c, E.ADMIN_ID) : null, col = b ? E.BR.colorHex(b.color) : '#33383f';
-    const n = asAdmin ? 0 : adminInbox(), badge = n ? `<u>${n > 9 ? '9+' : n}</u>` : '';
+    const n = inboxOf(E.ADMIN_ID) + (un[E.ADMIN_ID] || 0), badge = n ? `<u>${n > 9 ? '9+' : n}</u>` : '';
     const tip = asAdmin ? 'Administrator (unlimited money) · you are playing as it and answer its chats. Click your own icon to go back.'
       : `Administrator (unlimited money) · click to play as it${n ? ` · ${n} unread message${n > 1 ? 's' : ''} from players` : ''}`;
-    return `<button class="who-c adm${asAdmin ? ' me' : ' go'}" style="--c:${col}" title="${tip}" aria-label="${tip}" data-a="playAs" data-id="${asAdmin ? '' : E.ADMIN_ID}">${symbolIcon(b ? b.sym : 'key', 26, 'rgba(255,255,255,0.32)')}<b>A</b>${badge}</button>`;
+    return `<button class="who-c adm${asAdmin ? ' me' : ' go'}" style="--c:${col}" title="${tip}" aria-label="${tip}" data-a="playAs" data-id="${asAdmin ? '' : E.ADMIN_ID}" data-pid="${E.ADMIN_ID}">${symbolIcon(b ? b.sym : 'key', 26, 'rgba(255,255,255,0.32)')}<b>A</b>${badge}</button>`;
   };
   // Admins only: the test player, an ordinary tycoon with normal money, to try the game as a regular player
   const testChip = () => {
     const tp = c.players[E.TEST_ID], b = tp ? E.BR.brandOf(c, E.TEST_ID) : null, col = b ? E.BR.colorHex(b.color) : '#0f6e6e';
-    const tip = asTest ? 'Test player (normal money) · you are playing as it. Click your own icon to go back.' : 'Test player (normal money) · click to play as it';
-    return `<button class="who-c tst${asTest ? ' me' : ' go'}" style="--c:${col}" title="${tip}" aria-label="${tip}" data-a="playAs" data-id="${asTest ? '' : E.TEST_ID}">${symbolIcon(b ? b.sym : 'compass', 26, 'rgba(255,255,255,0.32)')}<b>TP</b></button>`;
+    const n = inboxOf(E.TEST_ID) + (un[E.TEST_ID] || 0), badge = n ? `<u>${n > 9 ? '9+' : n}</u>` : '';
+    const tip = asTest ? 'Test player (normal money) · you are playing as it. Click your own icon to go back.' : `Test player (normal money) · click to play as it${n ? ` · ${n} unread message${n > 1 ? 's' : ''} from players` : ''}`;
+    return `<button class="who-c tst${asTest ? ' me' : ' go'}" style="--c:${col}" title="${tip}" aria-label="${tip}" data-a="playAs" data-id="${asTest ? '' : E.TEST_ID}" data-pid="${E.TEST_ID}">${symbolIcon(b ? b.sym : 'compass', 26, 'rgba(255,255,255,0.32)')}<b>TP</b>${badge}</button>`;
   };
-  // Everyone else sees the administrator only when it has written to them: click to read
-  const admMsgChip = () => {
-    const n = un[E.ADMIN_ID] || 0; if (!n || B.admin) return '';
-    const b = c.players[E.ADMIN_ID] ? E.BR.brandOf(c, E.ADMIN_ID) : null, col = b ? E.BR.colorHex(b.color) : '#33383f';
-    const tip = `Administrator · ${n} unread message${n > 1 ? 's' : ''}, click to read`;
-    return `<button class="who-c adm go" style="--c:${col}" title="${tip}" aria-label="${tip}" data-a="chat" data-id="${E.ADMIN_ID}">${symbolIcon(b ? b.sym : 'key', 26, 'rgba(255,255,255,0.32)')}<b>A</b><u>${n > 9 ? '9+' : n}</u></button>`;
+  // Everyone else sees the administrator / the test player only when it has written to them: click to read
+  const sharedMsgChip = (id) => {
+    const n = un[id] || 0; if (!n) return '';
+    const adm = id === E.ADMIN_ID, b = c.players[id] ? E.BR.brandOf(c, id) : null, col = b ? E.BR.colorHex(b.color) : adm ? '#33383f' : '#0f6e6e';
+    const tip = `${adm ? 'Administrator' : 'Test player'} · ${n} unread message${n > 1 ? 's' : ''}, click to read`;
+    return `<button class="who-c ${adm ? 'adm' : 'tst'} go" style="--c:${col}" title="${tip}" aria-label="${tip}" data-a="chat" data-id="${id}" data-pid="${id}">${symbolIcon(b ? b.sym : adm ? 'key' : 'compass', 26, 'rgba(255,255,255,0.32)')}<b>${adm ? 'A' : 'TP'}</b><u>${n > 9 ? '9+' : n}</u></button>`;
   };
   const shown = list.slice(0, WHO_MAX), more = list.length - shown.length;
   const act = list.filter((o) => !o.idle).length;
-  const html = shown.map(chip).join('') + (more > 0 ? `<span class="who-more" title="${more} more online">+${more}</span>` : '') + (B.admin ? testChip() + adminChip() : admMsgChip());
-  box.hidden = !list.length && !B.admin && !un[E.ADMIN_ID];
+  const html = shown.map(chip).join('') + (more > 0 ? `<span class="who-more" title="${more} more online">+${more}</span>` : '') + (B.admin ? testChip() + adminChip() : sharedMsgChip(E.TEST_ID) + sharedMsgChip(E.ADMIN_ID));
+  box.hidden = !list.length && !B.admin && !un[E.ADMIN_ID] && !un[E.TEST_ID];
   box.setAttribute('aria-label', `${on.length} online, ${act} active`);
   if (box.dataset.h !== html) { box.dataset.h = html; box.innerHTML = html; }
 }

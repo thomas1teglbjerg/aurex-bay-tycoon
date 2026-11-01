@@ -6,10 +6,11 @@ import { city, $, esc } from './util.js';
 import { symbolIcon } from './brand.js';
 
 let H = null; // hooks from main.js: { B, toast, renderWho, navBack, setTab, initials }
-const CH = { peer: null, msgs: [], unread: {}, poll: 0, adm: 0 };
+const CH = { peer: null, msgs: [], unread: {}, poll: 0, inbox: {} };
 export const unreadFrom = () => CH.unread;
-export const adminInbox = () => CH.adm; // admins: unread messages to the administrator while playing as yourself
-const chatMe = () => H.B.chatMe || H.B.self || H.B.me; // who you write as: yourself, or the administrator
+// admins: unread messages waiting for the administrator / the test player while you play as someone else
+export const inboxOf = (id) => (chatMe() === id ? 0 : CH.inbox[id] || 0);
+const chatMe = () => !H ? null : H.B.chatMe || H.B.self || H.B.me; // who you write as: yourself, the administrator or the test player
 const ADMIN_NAME = 'Administrator';
 
 // ---------------------------------------------------------------- context menu
@@ -18,19 +19,18 @@ const native = (e) => e.shiftKey || !!(e.target.closest && e.target.closest('inp
 function menuFor(e) {
   const c = city(), out = [], self = H.B.self || H.B.me, as = chatMe();
   const chip = e.target.closest && e.target.closest('.who-c');
-  if (chip && chip.dataset.pid && c && c.players[chip.dataset.pid]) {
-    const id = chip.dataset.pid, p = c.players[id], b = E.BR.brandOf(c, id);
-    out.push({ head: `${p.name}${b ? ' · ' + b.name : ''}` });
+  const id = chip && chip.dataset.pid, p = id && c && (c.players[id] || (id === E.ADMIN_ID ? { name: ADMIN_NAME } : null));
+  if (p) {
+    const b = c.players[id] ? E.BR.brandOf(c, id) : null, adm = id === E.ADMIN_ID;
+    out.push({ head: `${p.name}${b && !adm ? ' · ' + b.name : ''}` });
     if (id === as) out.push({ label: 'This is you', off: true });
-    else out.push({ label: 'Chat with player', icon: 'chat', run: () => openChat(id) });
-    if (chip.dataset.a === 'playAs') out.push({ label: 'Play as yourself', icon: 'back', run: () => chip.click() });
-  } else if (chip && chip.classList.contains('adm')) {
-    out.push({ head: ADMIN_NAME });
-    if (chip.dataset.a === 'playAs') out.push({ label: chip.dataset.id ? `Play as the administrator${CH.adm ? ` (${CH.adm} unread)` : ''}` : 'Play as yourself', icon: 'back', run: () => chip.click() });
-    else out.push({ label: 'Chat with administrator', icon: 'chat', run: () => openChat(E.ADMIN_ID) });
-  } else if (!H.B.admin && as && as !== E.ADMIN_ID) {
-    out.push({ label: 'Chat with administrator', icon: 'chat', run: () => openChat(E.ADMIN_ID) }); // any player can reach the administrator
+    else out.push({ label: adm ? 'Chat with administrator' : 'Chat with player', icon: 'chat', run: () => openChat(id) });
+    if (chip.dataset.a === 'playAs') {
+      const n = inboxOf(id);
+      out.push({ label: chip.dataset.id ? `Play as ${adm ? 'the administrator' : 'the test player'}${n ? ` (${n} unread)` : ''}` : 'Play as yourself', icon: 'back', run: () => chip.click() });
+    }
   }
+  if (as && as !== E.ADMIN_ID && id !== E.ADMIN_ID) out.push({ label: 'Chat with administrator', icon: 'chat', run: () => openChat(E.ADMIN_ID) }); // anyone can reach the administrator
   const sel = String(window.getSelection ? window.getSelection() : '').trim();
   if (sel) out.push({ label: 'Copy', icon: 'copy', run: () => navigator.clipboard && navigator.clipboard.writeText(sel).then(() => H.toast('Copied.', 'good'), () => {}) });
   if (out.length) out.push({ sep: true });
@@ -80,9 +80,10 @@ const hm = (t) => { const d = new Date(t), now = new Date(), tm = d.toLocaleTime
 function headHTML() {
   const c = city(), id = CH.peer, adm = id === E.ADMIN_ID, p = c && (c.players[id] || (adm ? { name: ADMIN_NAME } : null)); if (!p) return '';
   const b = c.players[id] ? E.BR.brandOf(c, id) : null, col = b ? E.BR.colorHex(b.color) : adm ? '#33383f' : '#55657d';
-  const on = (H.B.online || []).find((o) => o.id === id), state = adm ? 'answers when an admin is on' : !on ? 'offline' : Date.now() - on.lastAct < 10 * 60 * 1000 ? 'active now' : 'online, inactive';
-  const mine = chatMe() === E.ADMIN_ID ? ' · you answer as the administrator' : '';
-  return `<span class="who-c${on || adm ? '' : ' idle'}${adm ? ' adm' : ''}" style="--c:${col}" aria-hidden="true">${b || adm ? symbolIcon(b ? b.sym : 'key', 22, 'rgba(255,255,255,0.32)') : ''}<b>${adm ? 'A' : esc(H.initials(p).toUpperCase())}</b></span>
+  const shared = E.AS_IDS.includes(id), on = (H.B.online || []).find((o) => o.id === id);
+  const state = shared ? 'answers when an admin is on' : !on ? 'offline' : Date.now() - on.lastAct < 10 * 60 * 1000 ? 'active now' : 'online, inactive';
+  const mine = chatMe() === E.ADMIN_ID ? ' · you write as the administrator' : chatMe() === E.TEST_ID ? ' · you write as the test player' : '';
+  return `<span class="who-c${on || shared ? '' : ' idle'}${adm ? ' adm' : ''}" style="--c:${col}" aria-hidden="true">${b || adm ? symbolIcon(b ? b.sym : 'key', 22, 'rgba(255,255,255,0.32)') : ''}<b>${adm ? 'A' : esc(H.initials(p).toUpperCase())}</b></span>
     <div><b>${esc(p.name)}</b><small>${b && !adm ? esc(b.name) + ' · ' : ''}${state}${mine}</small></div>
     <button type="button" class="chat-x" data-chat="close" aria-label="Close chat" title="Close">×</button>`;
 }
@@ -127,6 +128,7 @@ async function send(form) {
   if (!r || r.ok === false) { H.toast((r && r.msg) || 'The message was not sent.', 'bad'); return; }
   inp.value = '';
   if (CH.peer === peer && !CH.msgs.some((m) => m.id === r.m.id)) { CH.msgs.push(r.m); renderChat(true); }
+  if (E.AS_IDS.includes(peer)) loadUnread(); // admins see the shared player's badge at once
   inp.focus({ preventScroll: true });
 }
 function incoming(m) {
@@ -171,6 +173,6 @@ export async function loadUnread() {
   if (!H.B.chatUnread) return;
   const n = await H.B.chatUnread(); CH.unread = { ...n };
   if (CH.peer && CH.unread[CH.peer] && !$('chat').hidden) refresh();
-  CH.adm = H.B.chatAdminInbox ? await H.B.chatAdminInbox() : 0;
+  CH.inbox = H.B.chatInboxes ? await H.B.chatInboxes() : {};
   H.renderWho();
 }
