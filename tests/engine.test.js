@@ -74,4 +74,7 @@ const json = JSON.stringify(c2); console.log('city JSON size', Math.round(json.l
   const v = E.listingValue(l1); t += 3600e3; E.advance(c4, t);
   const n = c4.listings.find((l) => l.id === 'L1'); assert(n.type === 'clothing' && !n.owner && n.title === 'Eastbridge Supply Co.', 'Eastbridge replaces the old listing');
   assert(Math.abs(c4.players.y.cash - v) < 0.5, 'owner bought out at full value'); }
+// Watertower Sound (music) replaces the Ironport Film Production on L26
+{ const c5 = E.createCity(1_700_000_000_000, { speed: 1 }); const l = c5.listings.find((x) => x.id === 'L26');
+  assert(l.type === 'music' && l.title === 'Watertower Sound' && l.d === 'ironport' && E.listingPrice(l) === 12, 'Watertower Sound on L26'); }
 console.log('OK');

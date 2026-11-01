@@ -44,10 +44,12 @@ const humanCoop = (city, h) => !!h && !h.bot && Object.keys(h.members).some((pid
 export function canRun(city, pid, l) { if (!l || !l.owner) return false; if (l.owner.k === 'p') return l.owner.id === pid; const h = city.holdings[l.owner.id]; return !!(h && h.members[pid] && humanCoop(city, h)); }
 export function canSeeCompany(city, pid, l) { return !!(l.owner && (l.owner.k === 'p' ? (l.owner.id === pid || coopPartners(city, pid, l.owner.id)) : canRun(city, pid, l))); }
 const isManaged = (city, l) => !l.owner || (l.owner.k === 'h' ? !humanCoop(city, city.holdings[l.owner.id]) : !!(city.players[l.owner.id] && city.players[l.owner.id].bot));
-// companies of human coops bought before owners could run them: hand them over with their staff intact
+// a coop company on autopilot whose coop now has human owners: the owners take over and build their own team
 function coopRunMode(city) {
+  // one-time: coop companies that switched over with the autopilot's workers (Nov 2026) start empty too
+  if (!city.coopReset1) { city.coopReset1 = true; city.listings.forEach((l) => { if (l.owner && l.owner.k === 'h' && l.ops && !l.ops.managed && !isManaged(city, l)) { OPS.takeOverOps(l); Object.values(city.players).forEach((p) => Object.keys(p.assign || {}).forEach((k) => { if (p.assign[k].lid === l.id) delete p.assign[k]; })); } }); }
   city.listings.forEach((l) => { if (l.owner && l.owner.k === 'h' && l.ops && l.ops.managed && !isManaged(city, l)) {
-    l.ops.managed = false; OPS.ensureClients(l); l.ops.pending = l.ops.pending || []; l.ops.fg = l.ops.fg || 0; l.ops.board = l.ops.board || []; } });
+    OPS.takeOverOps(l); l.ops.pending = l.ops.pending || []; l.ops.fg = l.ops.fg || 0; l.ops.board = l.ops.board || []; } });
 }
 // a specialist works for one company: humans assign them to a department, bots simply employ them
 export function hasHead(city, l, p, spec) { if (!p) return false; if (p.bot) return hasStaff(p, spec); const a = p.assign && p.assign[spec]; return !!(a && a.lid === l.id); }
@@ -174,6 +176,7 @@ export function listingYield(city, l, owner) {
   if (l.type === 'dealer' && econ === 'Recession') { trade = 0; notes.push('Credit squeeze: no Trade'); }
   if (l.type === 'clothing' && econ === 'Boom') { ypi += 0.3 * s; notes.push(`Boom +${r2(0.3 * s)}`); }
   if (l.type === 'clothing' && econ === 'Recession') { ypi -= 0.3 * s; notes.push(`Recession −${r2(0.3 * s)}`); }
+  if (l.type === 'music' && econ === 'Recession') { ypi -= 0.4 * s; notes.push(`Fickle charts −${r2(0.4 * s)}`); }
   if (l.type === 'restaurant' && econ === 'Recession') { ypi -= 0.3 * s; notes.push(`Recession −${r2(0.3 * s)}`); }
   if (l.type === 'car' && city.fx && city.fx.id === 'energy') { trade = 0; notes.push('Energy shortage: no Trade'); }
   const types = owner ? portfolioTypes(city, owner) : new Set(), partners = contractPartnerTypes(city, l);
@@ -383,6 +386,7 @@ function yearly(city, m) {
   Object.values(city.players).forEach((p) => {
     let inf = 0; const owned = ownedBy(city, 'p', p.id);
     owned.filter((l) => l.type === 'film').forEach((l) => { inf += 1; if ((hasHead(city, l, p, 'sofia') || OPS.automation(l, 'social') > 0) && rand() < 2 / 6) { const v = r2(8 * SIZES[l.size].mult); p.cash += v; inf += 1; feed(p, m, 'Your new film is a blockbuster', `+${v} M and +1 Influence.`, 'good'); if (!p.bot) news(city, m, `${p.name} scores a blockbuster`, 'Lines around the block in Crown Hills.', 'info'); } });
+    owned.filter((l) => l.type === 'music').forEach((l) => { inf += 1; if ((hasHead(city, l, p, 'sofia') || OPS.automation(l, 'social') > 0) && rand() < 2 / 6) { const v = r2(3 * SIZES[l.size].mult); p.cash += v; inf += 1; feed(p, m, `${l.title || TYPES[l.type].name} has a hit single`, `+${v} M and +1 Influence.`, 'good'); if (!p.bot) news(city, m, `${p.name}'s studio has a hit`, `${l.title || TYPES[l.type].name} is on every playlist in Aurex Bay.`, 'good'); } });
     owned.filter((l) => (l.type === 'chip' || l.type === 'data') && !p.est[l.id] && l.boughtM !== null && m - l.boughtM >= 12).forEach((l) => { p.est[l.id] = true; inf += 2; feed(p, m, `${TYPES[l.type].name} is established`, '+2 Influence.', 'good'); });
     if (hasStaff(p, 'sofia')) inf += 2; if (hasStaff(p, 'carlos')) inf += 1;
     if (city.life) { const t = LIFE.tierOf(city, p); if (t) { inf += t; if (!p.bot) feed(p, m, `Prestige: +${t} Influence`, `Being ${LIFE.prestige(city, p).name} in Aurex Bay pays off.`, 'good'); } }
