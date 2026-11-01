@@ -27,6 +27,8 @@ export const TYPES = {
     perks: [{ t: 'AI Trend', d: '±1 M YPI following the AI stock' }, { t: 'Established', d: '+2 Influence after one year' }], neg: [{ t: 'Cyberattack Risk', d: 'Exposed to cyberattacks without an IT Systems Engineer' }] },
   pharma: { name: 'Pharma Industry', sector: 'Pharmaceuticals · Healthcare', price: 38, trade: 4, ypi: 5, group: 'health', tags: ['Pharma', 'Healthcare'],
     perks: [{ t: 'Crisis Immunity', d: 'Trade unaffected by recessions' }, { t: 'Emergency Profits', d: '+3 M YPI during a crisis' }], neg: [] },
+  music: { name: 'Music Studio', sector: 'Media & Entertainment · Music', price: 12, trade: 1.2, ypi: 1.8, group: 'media', tags: ['Media', 'Music'],
+    perks: [{ t: 'Hit Single', d: '+3 M & +1 Influence on a hit (2 in 6 per year) when Social Media runs or a PR & Media Officer leads it' }, { t: 'Studio Buzz', d: '+1 Influence per year' }], neg: [{ t: 'Fickle Charts', d: '−0.4 M YPI during a recession' }] },
   film: { name: 'Film Production', sector: 'Media & Entertainment', price: 38, trade: 2.5, ypi: 3.5, group: 'media', tags: ['Media', 'Influence'],
     perks: [{ t: 'Influence Boost', d: '+1 Influence per year' }, { t: 'Blockbuster Success', d: '+8 M & +1 Influence on a blockbuster (2 in 6 per year)' }], neg: [{ t: 'Influencer Staff Requirement', d: 'Blockbusters need a PR & Media Officer at HQ' }] }
 };
@@ -66,7 +68,7 @@ export const LISTINGS = [
   ['chip', 'nevus', 'L', 0.44, 0.25], ['chip', 'greenfield', 'M', 0.28, 0.17], ['chip', 'harbor', 'S', 0.47, 0.36],
   ['data', 'aurex', 'L', 0.24, 0.26], ['data', 'aurex', 'M', 0.9, 0.58], ['data', 'nevus', 'S', 0.62, 0.42],
   ['pharma', 'nevus', 'L', 0.78, 0.63], ['pharma', 'greenfield', 'M', 0.43, 0.3], ['pharma', 'crown', 'S', 0.86, 0.38],
-  ['film', 'crown', 'L', 0.11, 0.17], ['film', 'ironport', 'M', 0.75, 0.88], ['film', 'harbor', 'S', 0.58, 0.3],
+  ['film', 'crown', 'L', 0.11, 0.17], ['music', 'ironport', 'M', 0.75, 0.88, 'Watertower Sound'], ['film', 'harbor', 'S', 0.58, 0.3],
   ['autorepair', 'ironport', 'S', 0.3, 0.6, 'Kingside Auto Works'],
   ['restaurant', 'ironport', 'S', 0.62, 0.6, 'Ground Café']
 ].map(([type, d, size, px, py, title], i) => ({ id: 'L' + (i + 1), type, d, p: [px, py], district: DISTRICT[d].name, size, ...(title ? { title } : {}), ...placeOn(d, [px, py]) }));
@@ -128,6 +130,8 @@ export const DECISIONS = [
     options: [{ l: 'Pay the lobbyists', d: '−2 M now, 60% chance of +6 M', fx: { cash: -2, gamble: [0.6, 6, 0] } }, { l: 'Wait for normal approval', d: 'Nothing happens', safe: true, fx: {} }] },
   { id: 'star', needs: 'film', title: 'Your Lead Actor Wants More', text: 'The star of your next production demands double pay, or walks.',
     options: [{ l: 'Pay up', d: '−2 M, +1 Influence', fx: { cash: -2, inf: 1 } }, { l: 'Recast the role', d: '−1 Influence', safe: true, fx: { inf: -1 } }] },
+  { id: 'session', needs: 'music', title: 'A Rising Rapper Wants Studio Time on Credit', text: 'She has a million followers and no money. Her manager offers a cut of the album instead of the studio fee.',
+    options: [{ l: 'Take the cut', d: '−1 M in lost fees, 40% chance of +4 M', fx: { cash: -1, gamble: [0.4, 4, 0] } }, { l: 'Cash only', d: 'Nothing happens', safe: true, fx: {} }] },
   { id: 'expansion', needs: 'metal', title: 'Cheap Scrap Metal Offer', text: 'A broker offers a shipload of scrap at half price. The paperwork looks thin.',
     options: [{ l: 'Buy the shipment', d: '+3 M, 40% risk of a 4 M fine', fx: { cash: 3, gamble: [0.4, -4, 0] } }, { l: 'Pass', d: 'Nothing happens', safe: true, fx: {} }] },
   { id: 'profile', needs: null, title: 'Interview Request', text: 'The Aurex Bay Gazette wants an exclusive profile of you for its business section.',
@@ -183,6 +187,7 @@ export const RECIPES = {
   car: { cap: 10, unit: 'cars', in: { steel: 3, aluminum: 1.5, chips: 1, energy: 2 }, out: {} },
   data: { cap: 25, unit: 'subscriptions', in: { chips: 0.3, energy: 1 }, out: { software: 1 } },
   pharma: { cap: 15, unit: 'treatment batches', in: { chemicals: 2, chips: 0.5, software: 0.5 }, out: {} },
+  music: { cap: 20, unit: 'recording sessions', in: { software: 0.4, energy: 0.3 }, out: { media: 0.4 } },
   film: { cap: 12, unit: 'productions', in: { software: 1, energy: 1 }, out: { media: 1 } },
   clothing: { cap: 40, unit: 'garment drops', in: { textiles: 1, energy: 0.2 }, out: {} },
   fashion: { cap: 20, unit: 'collections', in: { textiles: 3, media: 0.3 }, out: {} },
@@ -232,7 +237,7 @@ export const WORKER = { salary: 0.08, hireFee: 0.02 };
 // ---------------------------------------------------------------- clients and orders
 // B2B companies have a few large corporate clients who negotiate hard but stay loyal.
 // B2C companies sell through many retail channels with smaller, faster, more impatient orders.
-export const MARKET_KIND = { bank: 'b2c', dealer: 'b2c', restaurant: 'b2c', autorepair: 'b2c', metal: 'b2b', chip: 'b2b', data: 'b2b', finance: 'b2b', pharma: 'b2b', car: 'b2c', clothing: 'b2c', fashion: 'b2c', hotel: 'b2c', film: 'b2c' };
+export const MARKET_KIND = { bank: 'b2c', dealer: 'b2c', restaurant: 'b2c', autorepair: 'b2c', metal: 'b2b', chip: 'b2b', data: 'b2b', finance: 'b2b', pharma: 'b2b', car: 'b2c', clothing: 'b2c', fashion: 'b2c', hotel: 'b2c', music: 'b2c', film: 'b2c' };
 export const CLIENT_RULES = {
   b2b: { start: 4, weight: [1, 2.5], orderChance: 0.55, expire: 3, renegotiate: 0.6, rejectHit: 18, label: 'Corporate client' },
   b2c: { start: 6, weight: [0.4, 1.2], orderChance: 0.7, expire: 2, renegotiate: 0.42, rejectHit: 10, label: 'Retail channel' }
@@ -251,6 +256,7 @@ export const CLIENT_NAMES = {
   clothing: ['Walk-in shoppers', 'Ironport skaters', 'Old Grid students', 'Harbor Row dock workers', 'Online drops', 'Sunset Surf & Style', 'Night market stall', 'Local sports clubs', 'Vintage collectors'],
   fashion: ['Boutique Lumen', 'Old Grid Department Store', 'Aurex Mall', 'Sunset Surf & Style', 'Crown Hills Atelier', 'Harbor Outlet', 'Midtown Sneaker Lab', 'Lagoon Resort Shops', 'Nevus Concept Store'],
   hotel: ['Northwind Travel', 'Cruise Terminal Desk', 'Aurex Business Travel', 'Wedding Planners Co', 'Conference Bureau', 'Sunset Tour Operators', 'Harbor Row Events', 'Crown Hills Golf Club', 'Airport Shuttle Partners'],
+  music: ['StreamBay', 'Aurex FM', 'Old Grid Jazz Club', 'Ironport warehouse nights', 'Indie artists', 'Midtown ad agencies', 'Sunset Open Air', 'Crown Hills Film Festival', 'Podcast networks'],
   film: ['Grand Cinema Midtown', 'Harbor Row Drive-in', 'StreamBay', 'Crown Hills Film Festival', 'Old Grid Arthouse', 'Nevus Media Network', 'Sunset Open Air', 'Aurex TV', 'Lagoon IMAX']
 };
 
@@ -308,8 +314,8 @@ export const HOMES = [
   { id: 'H1', name: 'Old Grid Loft', d: 'ironport', p: [0.36, 0.18], price: 4.8, units: 8, charges: 0.06, prestige: 25, growth: 0.05, img: 'h1',
     desc: 'A converted brick warehouse on a leafy corner. Tall arched windows, exposed beams and a view of the Aurex City skyline.',
     rooms: { art: { cap: 8 }, watch: { cap: 12 }, wine: { cap: 40, add: 0.35 }, car: null }, noCar: 'No garage in this building. Street parking only.' },
-  { id: 'H2', name: 'Midtown Studio Tower', d: 'aurex', p: [0.42, 0.62], price: 1.6, units: 20, charges: 0.03, prestige: 5, growth: 0.035, img: 'h2',
-    desc: 'A compact studio in a concrete block on East 14th, next to a building site. Small, honest and cheap: a smart first step on the property ladder.',
+  { id: 'H2', name: 'Midtown Studio Tower', d: 'ironport', p: [0.94, 0.63], price: 1.6, units: 20, charges: 0.03, prestige: 5, growth: 0.035, img: 'h2',
+    desc: 'A compact studio in a low white block in Ironport, by the elevated highway. Small, honest and cheap: a smart first step on the property ladder.',
     rooms: { art: { cap: 3, add: 0.04 }, watch: { cap: 6, add: 0.06 }, wine: { cap: 6, add: 0.03 }, car: null }, noCar: 'No parking. The street is full of taxis.',
     names: { art: ['Storage unit', 'Racks and padding in the basement storage unit'], wine: ['Kitchen wine rack', 'Wine rack under the kitchen counter'] } },
   { id: 'H3', name: 'Sunset Strand Beach House', d: 'sunset', p: [0.72, 0.38], price: 9.5, units: 3, charges: 0.09, prestige: 40, growth: 0.045, img: 'h3',

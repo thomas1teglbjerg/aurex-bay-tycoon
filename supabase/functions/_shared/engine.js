@@ -174,6 +174,7 @@ export function listingYield(city, l, owner) {
   if (l.type === 'dealer' && econ === 'Recession') { trade = 0; notes.push('Credit squeeze: no Trade'); }
   if (l.type === 'clothing' && econ === 'Boom') { ypi += 0.3 * s; notes.push(`Boom +${r2(0.3 * s)}`); }
   if (l.type === 'clothing' && econ === 'Recession') { ypi -= 0.3 * s; notes.push(`Recession −${r2(0.3 * s)}`); }
+  if (l.type === 'music' && econ === 'Recession') { ypi -= 0.4 * s; notes.push(`Fickle charts −${r2(0.4 * s)}`); }
   if (l.type === 'restaurant' && econ === 'Recession') { ypi -= 0.3 * s; notes.push(`Recession −${r2(0.3 * s)}`); }
   if (l.type === 'car' && city.fx && city.fx.id === 'energy') { trade = 0; notes.push('Energy shortage: no Trade'); }
   const types = owner ? portfolioTypes(city, owner) : new Set(), partners = contractPartnerTypes(city, l);
@@ -383,6 +384,7 @@ function yearly(city, m) {
   Object.values(city.players).forEach((p) => {
     let inf = 0; const owned = ownedBy(city, 'p', p.id);
     owned.filter((l) => l.type === 'film').forEach((l) => { inf += 1; if ((hasHead(city, l, p, 'sofia') || OPS.automation(l, 'social') > 0) && rand() < 2 / 6) { const v = r2(8 * SIZES[l.size].mult); p.cash += v; inf += 1; feed(p, m, 'Your new film is a blockbuster', `+${v} M and +1 Influence.`, 'good'); if (!p.bot) news(city, m, `${p.name} scores a blockbuster`, 'Lines around the block in Crown Hills.', 'info'); } });
+    owned.filter((l) => l.type === 'music').forEach((l) => { inf += 1; if ((hasHead(city, l, p, 'sofia') || OPS.automation(l, 'social') > 0) && rand() < 2 / 6) { const v = r2(3 * SIZES[l.size].mult); p.cash += v; inf += 1; feed(p, m, `${l.title || TYPES[l.type].name} has a hit single`, `+${v} M and +1 Influence.`, 'good'); if (!p.bot) news(city, m, `${p.name}'s studio has a hit`, `${l.title || TYPES[l.type].name} is on every playlist in Aurex Bay.`, 'good'); } });
     owned.filter((l) => (l.type === 'chip' || l.type === 'data') && !p.est[l.id] && l.boughtM !== null && m - l.boughtM >= 12).forEach((l) => { p.est[l.id] = true; inf += 2; feed(p, m, `${TYPES[l.type].name} is established`, '+2 Influence.', 'good'); });
     if (hasStaff(p, 'sofia')) inf += 2; if (hasStaff(p, 'carlos')) inf += 1;
     if (city.life) { const t = LIFE.tierOf(city, p); if (t) { inf += t; if (!p.bot) feed(p, m, `Prestige: +${t} Influence`, `Being ${LIFE.prestige(city, p).name} in Aurex Bay pays off.`, 'good'); } }
