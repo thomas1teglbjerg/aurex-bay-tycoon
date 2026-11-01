@@ -16,8 +16,9 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
 const CRON_SECRET = Deno.env.get('CRON_SECRET') ?? '';
 const SPEED = Number(Deno.env.get('GAME_SPEED') ?? '1'); // 1 = one game year per real week
-// Accounts that may change the city's time speed for everyone (comma-separated e-mails).
-const ADMINS = (Deno.env.get('ADMIN_EMAILS') ?? 'thomas@teglbjerg.com').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
+// Admin accounts (time speed for everyone, test tools). The ADMIN_EMAILS secret (comma-separated) overrides this list.
+const ADMIN_LIST = ['thomas@teglbjerg.com', 'mikkel@teglbjerg.com'];
+const ADMINS = (Deno.env.get('ADMIN_EMAILS') ?? ADMIN_LIST.join(',')).split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
