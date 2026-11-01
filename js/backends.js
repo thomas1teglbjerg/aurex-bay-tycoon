@@ -35,8 +35,10 @@ export function createLocalBackend(opts = {}) {
     onPresence(f) { localPres.add(f); },
     // any action (or click/key in the game) marks you active again
     touch() { if (!me) return; const t = Date.now(); if (t - lastAct < 1000) return; lastAct = t; store.set(ACT_KEY + me, String(t)); localPres.forEach((f) => f()); },
-    // chat: kept in this browser in the demo
-    ...localChat(() => me),
+    // chat: kept in this browser in the demo; as the administrator you answer the administrator's inbox
+    ...localChat(acting),
+    get chatMe() { return acting(); },
+    async chatAdminInbox() { if (!adminDemo || acting() === E.ADMIN_ID) return 0; return Object.values(await localChat(() => E.ADMIN_ID).chatUnread()).reduce((a, b) => a + b, 0); },
     get city() { return city; }, get me() { return acting(); },
     async playAs(who) {
       if (who === E.ADMIN_ID) { if (!adminDemo) return { ok: false, msg: 'Only an admin can play the administrator.' }; E.ensureAdmin(city, Date.now()); as = E.ADMIN_ID; } else as = null;
@@ -160,12 +162,20 @@ export async function createOnlineBackend(cfg) {
   subs.add(() => track());
   // Chat: rows in public.chat_messages; row level security shows each conversation only to its two players.
   const chatSubs = new Set(), UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  const row = (r) => ({ id: r.id, from: r.from_id, to: r.to_id, body: r.body, at: Date.parse(r.created_at), read: !!r.read_at });
+  // the administrator's inbox has a fixed id in the table; in the game it is the player 'admin'
+  const toDb = (id) => (id === E.ADMIN_ID ? E.ADMIN_CHAT : id), fromDb = (id) => (id === E.ADMIN_CHAT ? E.ADMIN_ID : id);
+  const row = (r) => ({ id: r.id, from: fromDb(r.from_id), to: fromDb(r.to_id), body: r.body, at: Date.parse(r.created_at), read: !!r.read_at });
+  const asAdm = () => acting() === E.ADMIN_ID; // answering as the administrator goes through the game function, which checks the account
+  async function admChat(op, more = {}) {
+    const { data, error } = await sb.functions.invoke('game', { body: { action: 'adminChat', args: { op, ...more }, city: cityId } });
+    if (error) return { ok: false, msg: 'The server did not answer. Try again in a moment.' };
+    return (data && data.result) || { ok: false, msg: 'The server did not answer.' };
+  }
   let chatOn = null;
   function chatLive() { // incoming messages arrive live once signed in
     const id = uid(); if (!id || chatOn === id) return; chatOn = id;
     sb.channel('chat-' + id).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `to_id=eq.${id}` },
-      (p) => { if (p.new && p.new.city_id === cityId) chatSubs.forEach((f) => f(row(p.new))); }).subscribe();
+      (p) => { if (p.new && p.new.city_id === cityId && !asAdm()) chatSubs.forEach((f) => f(row(p.new))); }).subscribe();
   }
   subs.add(chatLive); chatLive();
   sb.channel('city-' + cityId).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'cities', filter: `id=eq.${cityId}` }, (payload) => { if (payload.new && payload.new.state) { city = payload.new.state; emit(); } }).subscribe();
@@ -223,8 +233,14 @@ export async function createOnlineBackend(cfg) {
     touch,
     get online() { return online; },
     onPresence(f) { presSubs.add(f); },
+    get chatMe() { return asAdm() ? E.ADMIN_ID : self(); },
+    async chatAdminInbox() {
+      if (!admin || asAdm()) return 0;
+      const r = await admChat('unread'); return r.ok ? Object.values(r.unread || {}).reduce((a, b) => a + b, 0) : 0;
+    },
     async chatLoad(peer) {
-      const m = uid(); if (!m || !UUID.test(peer)) return [];
+      if (asAdm()) { const r = await admChat('load', { peer }); return r.ok ? r.rows.map(row) : []; }
+      const m = uid(); peer = toDb(peer); if (!m || !UUID.test(peer)) return [];
       const { data, error } = await sb.from('chat_messages').select('id,from_id,to_id,body,created_at,read_at').eq('city_id', cityId)
         .or(`and(from_id.eq.${m},to_id.eq.${peer}),and(from_id.eq.${peer},to_id.eq.${m})`).order('created_at', { ascending: false }).limit(100);
       return error || !data ? [] : data.reverse().map(row);
@@ -234,15 +250,18 @@ export async function createOnlineBackend(cfg) {
       if (!m || !self()) return { ok: false, msg: 'Join the city first.' };
       if (!text) return { ok: false, msg: 'Write a message first.' };
       if (text.length > CHAT_MAX) return { ok: false, msg: `Keep it under ${CHAT_MAX} characters.` };
+      if (asAdm()) { const r = await admChat('send', { peer, body: text }); return r.ok ? { ok: true, m: row(r.row) } : r; }
+      peer = toDb(peer);
       if (!UUID.test(peer) || peer === m) return { ok: false, msg: 'You can only chat with other players.' };
       const { data, error } = await sb.from('chat_messages').insert({ city_id: cityId, to_id: peer, body: text }).select('id,from_id,to_id,body,created_at,read_at').single();
       return error ? { ok: false, msg: 'The message was not sent. Try again in a moment.' } : { ok: true, m: row(data) };
     },
-    async chatRead(peer) { const m = uid(); if (m && UUID.test(peer)) await sb.from('chat_messages').update({ read_at: new Date().toISOString() }).eq('city_id', cityId).eq('to_id', m).eq('from_id', peer).is('read_at', null); },
+    async chatRead(peer) { if (asAdm()) { await admChat('read', { peer }); return; } const m = uid(); peer = toDb(peer); if (m && UUID.test(peer)) await sb.from('chat_messages').update({ read_at: new Date().toISOString() }).eq('city_id', cityId).eq('to_id', m).eq('from_id', peer).is('read_at', null); },
     async chatUnread() {
+      if (asAdm()) { const r = await admChat('unread'); return r.ok ? r.unread || {} : {}; }
       const m = uid(); if (!m) return {};
       const { data } = await sb.from('chat_messages').select('from_id').eq('city_id', cityId).eq('to_id', m).is('read_at', null).limit(500);
-      const n = {}; for (const r of data || []) n[r.from_id] = (n[r.from_id] || 0) + 1; return n;
+      const n = {}; for (const r of data || []) { const f = fromDb(r.from_id); n[f] = (n[f] || 0) + 1; } return n;
     },
     onChat(f) { chatSubs.add(f); },
     tick() { /* the server owns time; the client only interpolates live numbers */ },
