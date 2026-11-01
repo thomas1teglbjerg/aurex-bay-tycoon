@@ -36,7 +36,9 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 #viewport { position: absolute; inset: 0; overflow: hidden; touch-action: none; cursor: grab; }
 #viewport.drag { cursor: grabbing; }
 #world { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; transition: opacity .22s; }
-#world.fade { opacity: 0; } #world.indist { overflow: hidden; }
+#world.fade { opacity: 0; } #world.indist, .mapghost.indist { overflow: hidden; }
+.mapghost { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform, opacity; pointer-events: none; }
+.mapghost > img { display: block; max-width: none; }
 #world > img { display: block; max-width: none; user-select: none; -webkit-user-drag: none; pointer-events: none; }
 .district { position: absolute; transform: translate(-50%, -50%) scale(var(--inv)); font-family: var(--head); font-weight: 800; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.9), 0 0 10px rgba(0,0,0,0.5); white-space: nowrap; pointer-events: none; opacity: 0.9; }
 .pin { position: absolute; transform: translate(-50%, -100%) scale(var(--inv)); transform-origin: 50% 100%; display: flex; flex-direction: column; align-items: center; z-index: 2; }

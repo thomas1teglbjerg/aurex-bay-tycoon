@@ -65,21 +65,68 @@ function layerFor(level) {
   return { W: d.box.w, H: d.box.h, img: MAP.img, crop: d.box };
 }
 function buildMap() { setLevel(null, true); }
-function setLevel(level, instant) {
-  hideMapCard(); flying = true;
+// put a layer's image in #world and size the view for it (scale = min zoom, position not set)
+function mountLayer(level) {
   const w = $('world'), L = layerFor(level);
+  cancelAnimationFrame(anim);
+  Object.assign(view, { W: L.W, H: L.H, crop: L.crop, level });
+  w.style.width = L.W + 'px'; w.style.height = L.H + 'px';
+  w.innerHTML = `<img src="${L.img}" alt="${level ? esc(DISTRICT[level].name) : 'Satellite map of Aurex Bay'}" id="mapimg" draggable="false" style="${L.crop ? `position:absolute;left:${-L.crop.x}px;top:${-L.crop.y}px;width:${MAP.w}px;height:${MAP.h}px;max-width:none` : `width:${L.W}px;height:${L.H}px`}"><div id="mapmarks"></div>`;
+  w.classList.toggle('indist', !!level);
+  view.s = 0; fitMap();
+  return L;
+}
+// the view a layer opens with
+function homeView(level) { const vp = $('viewport'), s = view.min * (level ? 1.02 : 1.04); return { s, x: -(view.W * s - vp.clientWidth) / 2, y: -(view.H * s - vp.clientHeight) * (level ? 0.5 : 0.3) }; }
+function setLevel(level, instant, pt) {
+  hideMapCard();
+  if (!instant && !!level !== !!view.level) { morphLevel(level, pt); return; } // city <-> district: zoom and crossfade
+  flying = true;
+  const w = $('world');
   const swap = () => {
-    cancelAnimationFrame(anim);
-    Object.assign(view, { W: L.W, H: L.H, crop: L.crop, level });
-    w.style.width = L.W + 'px'; w.style.height = L.H + 'px';
-    w.innerHTML = `<img src="${L.img}" alt="${level ? esc(DISTRICT[level].name) : 'Satellite map of Aurex Bay'}" id="mapimg" draggable="false" style="${L.crop ? `position:absolute;left:${-L.crop.x}px;top:${-L.crop.y}px;width:${MAP.w}px;height:${MAP.h}px;max-width:none` : `width:${L.W}px;height:${L.H}px`}"><div id="mapmarks"></div>`;
-    w.classList.toggle('indist', !!level);
-    view.s = 0; fitMap(); const vp = $('viewport');
-    view.s = view.min * (level ? 1.02 : 1.04); view.x = -(L.W * view.s - vp.clientWidth) / 2; view.y = -(L.H * view.s - vp.clientHeight) * (level ? 0.5 : 0.3); applyView();
+    mountLayer(level); Object.assign(view, homeView(level)); applyView();
     renderMarks(); renderMapNav(); flying = false; hideMapCard();
     requestAnimationFrame(() => w.classList.remove('fade'));
   };
   if (instant) swap(); else { w.classList.add('fade'); setTimeout(swap, 220); }
+}
+// City map <-> district: the old picture stays on top as a ghost, locked to the district's box on the city map,
+// and fades out while both zoom together. Going in, the point under the click stays under the pointer.
+function morphLevel(level, pt) {
+  const id = level || view.level, d = DISTRICT[id], box = d.box, L = layerFor(id), k = box.w / L.W; // district px -> city px
+  flying = true; cancelAnimationFrame(anim);
+  const img = new Image(); img.src = level ? L.img : MAP.img;
+  Promise.race([img.decode().catch(() => {}), new Promise((r) => setTimeout(r, 900))]).then(() => {
+    const vp = $('viewport'), w = $('world'), cw = vp.clientWidth, ch = vp.clientHeight;
+    const g = w.cloneNode(true); g.removeAttribute('id'); g.querySelectorAll('[id]').forEach((x) => x.removeAttribute('id')); g.querySelectorAll('.zone, .mp').forEach((x) => x.remove());
+    g.className = 'mapghost' + (view.level ? ' indist' : ''); vp.appendChild(g);
+    const old = { s: view.s, x: view.x, y: view.y };
+    let from, to, ax, ay, place;
+    if (level) { // into the district: start where its box sits on the city map
+      ax = pt ? pt.x : old.x + d.x * old.s; ay = pt ? pt.y : old.y + d.y * old.s;
+      mountLayer(level);
+      from = { s: old.s * k, x: old.x + box.x * old.s, y: old.y + box.y * old.s };
+      const s1 = homeView(level).s, px = Math.min(L.W, Math.max(0, (ax - from.x) / from.s)), py = Math.min(L.H, Math.max(0, (ay - from.y) / from.s)), b = panLimits(s1);
+      to = { s: s1, x: Math.min(b.x1, Math.max(b.x0, ax - px * s1)), y: Math.min(b.y1, Math.max(b.y0, ay - py * s1)) };
+      place = () => { const gs = view.s / k; return [view.x - box.x * gs, view.y - box.y * gs, gs]; };
+    } else { // back to the city: start with the district's box filling the view as it does now
+      ax = cw / 2; ay = ch / 2;
+      mountLayer(null);
+      from = { s: old.s / k, x: old.x - box.x * old.s / k, y: old.y - box.y * old.s / k }; to = homeView(null);
+      place = () => [view.x + box.x * view.s, view.y + box.y * view.s, view.s * k];
+    }
+    const p0 = { x: (ax - from.x) / from.s, y: (ay - from.y) / from.s }, p1 = { x: (ax - to.x) / to.s, y: (ay - to.y) / to.s }, t0 = performance.now(), T = 750;
+    const frame = (e) => {
+      view.s = from.s * Math.pow(to.s / from.s, e); view.x = ax - (p0.x + (p1.x - p0.x) * e) * view.s; view.y = ay - (p0.y + (p1.y - p0.y) * e) * view.s; applyView(true);
+      const [gx, gy, gs] = place(); g.style.transform = `translate(${gx}px, ${gy}px) scale(${gs})`;
+      g.style.opacity = String(1 - Math.min(1, Math.max(0, (e - 0.1) / 0.6)));
+    };
+    frame(0);
+    const step = (t) => { const q = Math.min(1, (t - t0) / T), e = q < 0.5 ? 4 * q * q * q : 1 - Math.pow(-2 * q + 2, 3) / 2; frame(e);
+      if (q < 1) { anim = requestAnimationFrame(step); return; }
+      g.remove(); Object.assign(view, to); applyView(); renderMarks(); renderMapNav(); flying = false; hideMapCard(); };
+    anim = requestAnimationFrame(step);
+  });
 }
 function districtStats(c, d) {
   const ls = c.listings.filter((l) => l.d === d.id), mine = ls.filter((l) => ownerLabel(c, l).mine).length;
@@ -152,7 +199,7 @@ function setupMapEvents() {
   w.addEventListener('mouseout', (e) => { if (lastPointer === 'touch') return; const t = e.target.closest('.zone, .mp'); if (t && !t.contains(e.relatedTarget)) hideMapCard(false); });
   w.addEventListener('click', (e) => {
     const z = e.target.closest('.zone'), m = e.target.closest('.mp');
-    if (z) { hideMapCard(); enterDistrict(z.dataset.zone); return; }
+    if (z) { hideMapCard(); enterDistrict(z.dataset.zone, e); return; }
     if (m) { if (lastPointer === 'touch' && cardKey !== m.dataset.mk) { showMapCard(m.dataset.mk, m); return; } hideMapCard(); openMark(m.dataset.mk); return; }
     hideMapCard();
   });
@@ -160,9 +207,10 @@ function setupMapEvents() {
   $('mapcard').addEventListener('click', (e) => { if (cardKey && cardKey.startsWith('z:') && !e.target.closest('[data-a]')) { const id = cardKey.slice(2); hideMapCard(); enterDistrict(id); } });
   $('mapcard').addEventListener('mouseleave', () => hideMapCard(false));
 }
-function enterDistrict(id) {
-  const d = DISTRICT[id], vp = $('viewport'), ts = Math.min(view.max, Math.max(vp.clientWidth / d.box.w, vp.clientHeight / d.box.h) * 0.9);
-  flying = true; flyTo(d.x, d.y, ts); setTimeout(() => setLevel(id), 400);
+function enterDistrict(id, e) {
+  if (flying) return;
+  const r = $('viewport').getBoundingClientRect();
+  setLevel(id, false, e && e.clientX != null ? { x: e.clientX - r.left, y: e.clientY - r.top } : null);
 }
 function updatePins() { renderMarks(); }
 // pan limits: map edge aligned with the viewport edge, or centred when the map is smaller
@@ -185,12 +233,6 @@ function applyView(free) {
 }
 function fitMap() { const vp = $('viewport'); view.min = Math.max(vp.clientWidth / view.W, vp.clientHeight / view.H); view.max = Math.max(view.min * 3, view.level ? 2 : 2.2); view.s = Math.max(view.min, Math.min(view.s, view.max)); applyView(); }
 let anim = 0;
-function flyTo(x, y, s) {
-  const vp = $('viewport'), from = { ...view }, ts = Math.max(view.min, Math.min(view.max, s)), to = { s: ts, x: vp.clientWidth / 2 - x * ts, y: vp.clientHeight * 0.55 - y * ts }, t0 = performance.now();
-  cancelAnimationFrame(anim);
-  const step = (t) => { const k = Math.min(1, (t - t0) / 600), e = 1 - Math.pow(1 - k, 3); view.s = from.s + (to.s - from.s) * e; view.x = from.x + (to.x - from.x) * e; view.y = from.y + (to.y - from.y) * e; applyView(); if (k < 1) anim = requestAnimationFrame(step); };
-  anim = requestAnimationFrame(step);
-}
 function zoomFree(cx, cy, f) {
   cancelAnimationFrame(anim);
   const lo = Math.log(view.min), hi = Math.log(view.max);
@@ -213,7 +255,7 @@ function setupPanZoom() {
   const vp = $('viewport'), pts = new Map(); let last = null, moved = 0, raw = null, pinched = false, wheelT = 0; // raw: unbounded pan position under the finger
   const grab = () => { const b = panLimits(); raw = { x: unrub(view.x, b.x0, b.x1, b.cw), y: unrub(view.y, b.y0, b.y1, b.ch) }; }; // catching the map mid snap-back keeps it under the finger
   const pair = () => { const [a, b] = [...pts.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
-  vp.addEventListener('pointerdown', (e) => { cancelAnimationFrame(anim); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (pts.size === 1) { moved = 0; pinched = false; grab(); } last = pts.size === 2 ? pair() : null; vp.classList.add('drag'); });
+  vp.addEventListener('pointerdown', (e) => { if (flying) return; cancelAnimationFrame(anim); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (pts.size === 1) { moved = 0; pinched = false; grab(); } last = pts.size === 2 ? pair() : null; vp.classList.add('drag'); });
   window.addEventListener('pointermove', (e) => {
     const p = pts.get(e.pointerId); if (!p) return;
     const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY; moved += Math.abs(dx) + Math.abs(dy);
@@ -223,7 +265,7 @@ function setupPanZoom() {
   const up = (e) => { if (!pts.delete(e.pointerId)) return; last = pts.size === 2 ? pair() : null; raw = null; if (!pts.size) vp.classList.remove('drag'); if (pts.size < 2) snapBack(); }; // after a pinch the last finger waits for release
   window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
   vp.addEventListener('click', (e) => { if (moved > 8) { e.stopPropagation(); e.preventDefault(); } }, true);
-  vp.addEventListener('wheel', (e) => { e.preventDefault(); const r = vp.getBoundingClientRect(); zoomFree(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.0015)); clearTimeout(wheelT); wheelT = setTimeout(() => { if (!pts.size) snapBack(); }, 160); }, { passive: false });
+  vp.addEventListener('wheel', (e) => { e.preventDefault(); if (flying) return; const r = vp.getBoundingClientRect(); zoomFree(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.0015)); clearTimeout(wheelT); wheelT = setTimeout(() => { if (!pts.size) snapBack(); }, 160); }, { passive: false });
   window.addEventListener('resize', () => { fitMap(); measureTop(); hideMapCard(); });
   vp.addEventListener('pointerdown', () => hideMapCard());
 }
