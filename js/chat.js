@@ -6,7 +6,7 @@ import { city, $, esc } from './util.js';
 import { symbolIcon } from './brand.js';
 
 let H = null; // hooks from main.js: { B, toast, renderWho, navBack, setTab, initials }
-const CH = { peer: null, msgs: [], unread: {}, poll: 0, inbox: {} };
+const CH = { peer: null, msgs: [], unread: {}, poll: 0, inbox: {}, peers: [] };
 export const unreadFrom = () => CH.unread;
 // admins: unread messages waiting for the administrator / the test player while you play as someone else
 export const inboxOf = (id) => (chatMe() === id ? 0 : CH.inbox[id] || 0);
@@ -23,8 +23,8 @@ function menuFor(e) {
   if (p) {
     const b = c.players[id] ? E.BR.brandOf(c, id) : null, adm = id === E.ADMIN_ID;
     out.push({ head: `${p.name}${b && !adm ? ' · ' + b.name : ''}` });
-    if (id === as) out.push({ label: 'This is you', off: true });
-    else out.push({ label: adm ? 'Chat with administrator' : 'Chat with player', icon: 'chat', run: () => openChat(id) });
+    if (id === as || id === self) out.push({ label: 'Open chat', icon: 'chat', run: () => openChat() }); // your own icon: all your conversations
+    if (id !== as) out.push({ label: adm ? 'Chat with administrator' : 'Chat with player', icon: 'chat', run: () => openChat(id) });
     if (chip.dataset.a === 'playAs') {
       const n = inboxOf(id);
       out.push({ label: chip.dataset.id ? `Play as ${adm ? 'the administrator' : 'the test player'}${n ? ` (${n} unread)` : ''}` : 'Play as yourself', icon: 'back', run: () => chip.click() });
@@ -87,30 +87,58 @@ function headHTML() {
     <div><b>${esc(p.name)}</b><small>${b && !adm ? esc(b.name) + ' · ' : ''}${state}${mine}</small></div>
     <button type="button" class="chat-x" data-chat="close" aria-label="Close chat" title="Close">×</button>`;
 }
+// one tab per conversation, newest first
+const known = (id) => { const c = city(); return !!c && (!!c.players[id] || id === E.ADMIN_ID); };
+function tabsHTML() {
+  const c = city(), ids = CH.peers.filter(known);
+  if (!ids.length) return '';
+  return ids.map((id) => {
+    const p = c.players[id] || { name: ADMIN_NAME }, adm = id === E.ADMIN_ID, b = c.players[id] ? E.BR.brandOf(c, id) : null;
+    const col = b ? E.BR.colorHex(b.color) : adm ? '#33383f' : '#55657d', n = CH.unread[id] || 0;
+    const short = adm ? 'Admin' : id === E.TEST_ID ? 'Test player' : p.first || String(p.name).split(' ')[0];
+    return `<button type="button" role="tab" class="ct${id === CH.peer ? ' on' : ''}" data-tab-peer="${esc(id)}" aria-selected="${id === CH.peer}" title="${esc(p.name)}"><span style="--c:${col}">${adm ? 'A' : esc(H.initials(p).toUpperCase())}</span>${esc(short)}${n ? `<u>${n > 9 ? '9+' : n}</u>` : ''}</button>`;
+  }).join('');
+}
 function logHTML() {
   if (!CH.msgs.length) return `<p class="chat-empty">No messages yet. Say hello.${H.B.mode === 'local' ? ' In the offline demo, messages stay in this browser.' : ''}</p>`;
   const me = chatMe();
   return CH.msgs.map((m) => `<div class="cm ${m.from === me ? 'mine' : 'theirs'}"><p>${esc(m.body)}</p><time>${hm(m.at)}</time></div>`).join('');
 }
 function renderChat(scroll) {
-  const box = $('chat'); if (!box || !CH.peer) return;
+  const box = $('chat'); if (!box) return;
+  const tabs = box.querySelector('.chat-tabs'), th = tabsHTML(); tabs.hidden = !th; if (tabs.dataset.h !== th) { tabs.dataset.h = th; tabs.innerHTML = th; const on = tabs.querySelector('.on'); if (on) on.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
+  box.querySelector('.chat-f').hidden = !CH.peer;
+  if (!CH.peer) { // opened from your own icon with no conversations yet
+    box.querySelector('.chat-hd').innerHTML = `<div><b>Chat</b><small>${chatMe() === E.ADMIN_ID ? 'as the administrator' : chatMe() === E.TEST_ID ? 'as the test player' : 'your conversations'}</small></div><button type="button" class="chat-x" data-chat="close" aria-label="Close chat" title="Close">×</button>`;
+    box.querySelector('.chat-log').innerHTML = '<p class="chat-empty">No conversations yet. Right-click a player\'s icon and pick "Chat with player".</p>'; return;
+  }
   box.querySelector('.chat-hd').innerHTML = headHTML();
   const log = box.querySelector('.chat-log'), atEnd = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
   log.innerHTML = logHTML();
   if (scroll || atEnd) log.scrollTop = log.scrollHeight;
 }
+// openChat() with no player opens your conversations at the latest one
 export async function openChat(peer) {
-  const c = city(); if (!c || (!c.players[peer] && peer !== E.ADMIN_ID)) return;
   hideCtx();
-  const box = $('chat');
+  const box = $('chat'), me = chatMe();
+  if (!peer) {
+    if (!box.hidden && CH.peer) return;
+    CH.peers = (await H.B.chatPeers()).filter(known);
+    peer = CH.peers.find((id) => CH.unread[id]) || CH.peers[0];
+    if (!peer) { CH.peer = null; CH.msgs = []; box.hidden = false; renderChat(true); return; }
+  }
+  if (!known(peer) || chatMe() !== me) return;
+  if (!CH.peers.includes(peer)) CH.peers.unshift(peer);
   if (CH.peer !== peer) { CH.peer = peer; CH.msgs = []; }
   box.hidden = false; renderChat(true);
+  H.B.chatPeers().then((ps) => { if (chatMe() !== me) return; const keep = CH.peers.filter((id) => !ps.includes(id)); CH.peers = keep.concat(ps).filter(known); renderChat(); });
   const inp = box.querySelector('input'); inp.focus({ preventScroll: true });
   CH.msgs = await H.B.chatLoad(peer); if (CH.peer !== peer) return;
   renderChat(true); markRead();
   clearInterval(CH.poll); CH.poll = setInterval(refresh, 20 * 1000); // live updates come by Realtime; this is a safety net
 }
-function closeChat() { $('chat').hidden = true; CH.peer = null; CH.msgs = []; clearInterval(CH.poll); }
+function closeChat() { $('chat').hidden = true; CH.peer = null; CH.msgs = []; CH.peers = []; clearInterval(CH.poll); }
+const toFront = (id) => { CH.peers = [id].concat(CH.peers.filter((x) => x !== id)); };
 async function refresh() {
   const peer = CH.peer; if (!peer || $('chat').hidden) return;
   const list = await H.B.chatLoad(peer); if (CH.peer !== peer) return;
@@ -119,7 +147,7 @@ async function refresh() {
 }
 function markRead() {
   const peer = CH.peer; if (!peer || document.hidden || !CH.unread[peer]) return;
-  delete CH.unread[peer]; H.renderWho(); H.B.chatRead(peer);
+  delete CH.unread[peer]; H.renderWho(); renderChat(); H.B.chatRead(peer);
 }
 async function send(form) {
   const inp = form.querySelector('input'), text = inp.value.trim(), peer = CH.peer; if (!text || !peer) return;
@@ -127,7 +155,9 @@ async function send(form) {
   const r = await H.B.chatSend(peer, text); btn.disabled = false;
   if (!r || r.ok === false) { H.toast((r && r.msg) || 'The message was not sent.', 'bad'); return; }
   inp.value = '';
-  if (CH.peer === peer && !CH.msgs.some((m) => m.id === r.m.id)) { CH.msgs.push(r.m); renderChat(true); }
+  toFront(peer);
+  if (CH.peer === peer && !CH.msgs.some((m) => m.id === r.m.id)) CH.msgs.push(r.m);
+  renderChat(true);
   if (E.AS_IDS.includes(peer)) loadUnread(); // admins see the shared player's badge at once
   inp.focus({ preventScroll: true });
 }
@@ -138,8 +168,9 @@ function incoming(m) {
   }
   CH.unread[m.from] = (CH.unread[m.from] || 0) + 1; H.renderWho();
   const p = city() && city().players[m.from];
-  if ($('chat').hidden) openChat(m.from); // nobody else is open: show the new conversation right away
-  else H.toast(`New message from ${m.from === E.ADMIN_ID ? ADMIN_NAME : p ? p.name : 'a player'}. Click their icon to read it.`, 'good');
+  if ($('chat').hidden) { openChat(m.from); return; } // nobody else is open: show the new conversation right away
+  toFront(m.from); renderChat();
+  H.toast(`New message from ${m.from === E.ADMIN_ID ? ADMIN_NAME : p ? p.name : 'a player'}. Open their tab to read it.`, 'good');
 }
 
 // ---------------------------------------------------------------- setup
@@ -148,7 +179,7 @@ export function initChat(hooks) {
   const app = $('app');
   const m = document.createElement('div'); m.id = 'ctx'; m.className = 'ctx'; m.setAttribute('role', 'menu'); m.hidden = true; app.appendChild(m);
   const box = document.createElement('section'); box.id = 'chat'; box.className = 'chat'; box.hidden = true; box.setAttribute('aria-label', 'Chat');
-  box.innerHTML = `<header class="chat-hd"></header><div class="chat-log" role="log" aria-live="polite"></div>
+  box.innerHTML = `<header class="chat-hd"></header><nav class="chat-tabs" role="tablist" aria-label="Conversations" hidden></nav><div class="chat-log" role="log" aria-live="polite"></div>
     <form class="chat-f" autocomplete="off"><input maxlength="500" placeholder="Write a message…" aria-label="Message"><button type="submit">Send</button></form>`;
   app.appendChild(box);
   document.addEventListener('contextmenu', showCtx);
@@ -160,7 +191,10 @@ export function initChat(hooks) {
     if (e.key === 'Escape' && !box.hidden && box.contains(document.activeElement)) closeChat();
   }, true);
   m.addEventListener('click', (e) => { const b = e.target.closest('button[data-i]'); if (!b) return; const it = items[+b.dataset.i]; hideCtx(); if (it && it.run) it.run(); });
-  box.addEventListener('click', (e) => { if (e.target.closest('[data-chat="close"]')) closeChat(); });
+  box.addEventListener('click', (e) => {
+    if (e.target.closest('[data-chat="close"]')) { closeChat(); return; }
+    const t = e.target.closest('[data-tab-peer]'); if (t && t.dataset.tabPeer !== CH.peer) openChat(t.dataset.tabPeer);
+  });
   box.addEventListener('submit', (e) => { e.preventDefault(); e.stopPropagation(); send(e.target); });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) markRead(); });
   if (H.B.onChat) H.B.onChat(incoming);
@@ -174,5 +208,6 @@ export async function loadUnread() {
   const n = await H.B.chatUnread(); CH.unread = { ...n };
   if (CH.peer && CH.unread[CH.peer] && !$('chat').hidden) refresh();
   CH.inbox = H.B.chatInboxes ? await H.B.chatInboxes() : {};
+  if (!$('chat').hidden) renderChat();
   H.renderWho();
 }

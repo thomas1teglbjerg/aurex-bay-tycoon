@@ -130,6 +130,10 @@ async function adminChat(cityId: string, args: Record<string, unknown>, isAdmin:
     const n: Record<string, number> = {}; for (const r of data ?? []) { const k = op === 'unread' ? r.from_id : r.to_id; n[k] = (n[k] ?? 0) + 1; }
     return { ok: true, unread: n };
   }
+  if (op === 'peers') { // everyone this shared player has a conversation with, newest first
+    const { data, error } = await db.select('from_id,to_id,created_at').eq('city_id', cityId).or(`from_id.eq.${A},to_id.eq.${A}`).order('created_at', { ascending: false }).limit(300);
+    return error ? { ok: false, msg: error.message } : { ok: true, rows: data ?? [] };
+  }
   if (!UUID.test(peer) || peer === A) return { ok: false, msg: 'Pick a player.' };
   if (op === 'load') {
     const { data, error } = await db.select(COLS).eq('city_id', cityId)
