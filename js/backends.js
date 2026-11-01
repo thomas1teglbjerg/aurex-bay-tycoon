@@ -22,6 +22,7 @@ export function createLocalBackend(opts = {}) {
   const save = (force) => { const t = Date.now(); if (force || t - lastSave > 4000) { store.set(CITY_KEY, JSON.stringify(city)); lastSave = t; } };
   const emit = () => subs.forEach((f) => f());
   let lastAct = Number(store.get(ACT_KEY + me)) || Date.now();
+  const localPres = new Set();
   // ?admin=1 in the demo tries out the administrator player on this device
   const adminDemo = /[?&]admin=1\b/.test(location.search);
   let as = adminDemo && store.get(AS_KEY) === E.ADMIN_ID && city.players[E.ADMIN_ID] ? E.ADMIN_ID : null;
@@ -31,7 +32,9 @@ export function createLocalBackend(opts = {}) {
     get self() { return me; },
     // who is online: in the demo only you are; bots are not players at a screen
     get online() { return me ? [{ id: me, lastAct }] : []; },
-    onPresence() { /* nothing changes besides your own actions */ },
+    onPresence(f) { localPres.add(f); },
+    // any action (or click/key in the game) marks you active again
+    touch() { if (!me) return; const t = Date.now(); if (t - lastAct < 1000) return; lastAct = t; store.set(ACT_KEY + me, String(t)); localPres.forEach((f) => f()); },
     // chat: kept in this browser in the demo
     ...localChat(() => me),
     get city() { return city; }, get me() { return acting(); },
@@ -40,7 +43,7 @@ export function createLocalBackend(opts = {}) {
       store.set(AS_KEY, as || ''); save(true); emit(); return { ok: true };
     },
     async join({ first, last } = {}) { const av = E.BR.checkAvatarName(first, last); if (!av.ok) return av; me = 'local-' + Math.random().toString(36).slice(2, 9); store.set(ME_KEY, me); lastAct = Date.now(); E.addPlayer(city, me, av.name, Date.now(), av); save(true); emit(); return { ok: true }; },
-    async act(action, args) { lastAct = Date.now(); store.set(ACT_KEY + me, String(lastAct)); const r = E.apply(city, acting(), action, args, Date.now()); save(true); emit(); return r; },
+    async act(action, args) { this.touch(); const r = E.apply(city, acting(), action, args, Date.now()); save(true); emit(); return r; },
     tick() { const w = city.wk, over = city.over; E.advance(city, Date.now()); save(); if (city.wk !== w || city.over !== over) emit(); },
     async setSpeed(s) { E.setSpeed(city, s, Date.now()); save(true); emit(); },
     async reset() { store.del(CITY_KEY); store.del(ME_KEY); city = E.createCity(Date.now(), { speed: city.clock.speed }); me = null; save(true); emit(); },
@@ -133,12 +136,25 @@ export async function createOnlineBackend(cfg) {
   });
   let joined = false, lastAct = 0;
   const actKey = () => ACT_KEY + uid();
+  let sentAct = 0; // lastAct the other browsers have; resent at most every 20 s
   async function track(force) {
     const id = city && uid() && city.players[uid()] ? uid() : null;
     if (!id || !joined) return;
     if (!lastAct) lastAct = Number(store.get(actKey())) || Date.now();
     const k = id + ':' + lastAct; if (!force && k === tracked) return;
-    tracked = k; await room.track({ id, lastAct });
+    if (!force && lastAct - sentAct < 20000) return;
+    tracked = k; const was = sentAct; sentAct = lastAct;
+    let r = 'error'; try { r = await room.track({ id, lastAct }); } catch (e) { /* retried on the next action */ }
+    if (r !== 'ok') { tracked = ''; sentAct = was; }
+  }
+  // mark yourself active: shown at once in your own bar, then shared through Presence
+  function touch() {
+    const id = uid(); if (!id) return;
+    const t = Date.now(); if (t - lastAct < 1000) return;
+    lastAct = t; store.set(actKey(), String(t));
+    const mine = online.find((o) => o.id === id);
+    if (mine) { mine.lastAct = t; presSubs.forEach((f) => f()); }
+    track();
   }
   room.subscribe((st) => { if (st === 'SUBSCRIBED') { joined = true; track(true); } });
   subs.add(() => track());
@@ -203,7 +219,8 @@ export async function createOnlineBackend(cfg) {
     },
     async signOut() { await sb.auth.signOut(); location.reload(); },
     join: (o) => call('join', o),
-    act(a, args) { if (uid()) { lastAct = Date.now(); store.set(actKey(), String(lastAct)); track(); } return call(a, args); },
+    act(a, args) { touch(); return call(a, args); },
+    touch,
     get online() { return online; },
     onPresence(f) { presSubs.add(f); },
     async chatLoad(peer) {
