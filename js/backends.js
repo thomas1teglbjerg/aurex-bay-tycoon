@@ -25,7 +25,7 @@ export function createLocalBackend(opts = {}) {
   const localPres = new Set();
   // ?admin=1 in the demo tries out the administrator player on this device
   const adminDemo = /[?&]admin=1\b/.test(location.search);
-  let as = adminDemo && store.get(AS_KEY) === E.ADMIN_ID && city.players[E.ADMIN_ID] ? E.ADMIN_ID : null;
+  let as = adminDemo && E.AS_IDS.includes(store.get(AS_KEY)) && city.players[store.get(AS_KEY)] ? store.get(AS_KEY) : null;
   const acting = () => (as && me && city.players[as] ? as : me);
   return {
     mode: 'local', canSetSpeed: true, admin: adminDemo,
@@ -41,7 +41,7 @@ export function createLocalBackend(opts = {}) {
     async chatAdminInbox() { if (!adminDemo || acting() === E.ADMIN_ID) return 0; return Object.values(await localChat(() => E.ADMIN_ID).chatUnread()).reduce((a, b) => a + b, 0); },
     get city() { return city; }, get me() { return acting(); },
     async playAs(who) {
-      if (who === E.ADMIN_ID) { if (!adminDemo) return { ok: false, msg: 'Only an admin can play the administrator.' }; E.ensureAdmin(city, Date.now()); as = E.ADMIN_ID; } else as = null;
+      if (E.AS_IDS.includes(who)) { if (!adminDemo) return { ok: false, msg: 'Only an admin can switch to that player.' }; E.ensureAs(city, who, Date.now()); as = who; } else as = null;
       store.set(AS_KEY, as || ''); save(true); emit(); return { ok: true };
     },
     async join({ first, last } = {}) { const av = E.BR.checkAvatarName(first, last); if (!av.ok) return av; me = 'local-' + Math.random().toString(36).slice(2, 9); store.set(ME_KEY, me); lastAct = Date.now(); E.addPlayer(city, me, av.name, Date.now(), av); save(true); emit(); return { ok: true }; },
@@ -102,7 +102,7 @@ export async function createOnlineBackend(cfg) {
   const emit = () => subs.forEach((f) => f());
   const uid = () => (session ? session.user.id : null);
   // An admin can play the shared administrator tycoon; the server checks the account on every action.
-  let as = store.get(AS_KEY) === E.ADMIN_ID ? E.ADMIN_ID : null;
+  let as = E.AS_IDS.includes(store.get(AS_KEY)) ? store.get(AS_KEY) : null; // the administrator or the test player
   const self = () => (city && uid() && city.players[uid()] ? uid() : null);
   const acting = () => (as && admin && self() && city && city.players[as] ? as : self());
   const OWN = ['sync', 'join', 'adminPlay', 'adminSpeed']; // these never run as the administrator
@@ -183,11 +183,11 @@ export async function createOnlineBackend(cfg) {
     mode: 'online', get canSetSpeed() { return admin; }, get admin() { return admin; },
     get city() { return city; }, get me() { return acting(); }, get self() { return self(); },
     async playAs(who) {
-      if (who === E.ADMIN_ID) {
-        if (!admin) return { ok: false, msg: 'Only an admin can play the administrator.' };
-        const r = await call('adminPlay'); if (r && r.ok === false) return r;
-        if (!city || !city.players[E.ADMIN_ID]) return { ok: false, msg: 'The administrator is not ready. Try again.' };
-        as = E.ADMIN_ID;
+      if (E.AS_IDS.includes(who)) {
+        if (!admin) return { ok: false, msg: 'Only an admin can switch to that player.' };
+        const r = await call('adminPlay', { who }); if (r && r.ok === false) return r;
+        if (!city || !city.players[who]) return { ok: false, msg: 'That player is not ready. Try again.' };
+        as = who;
       } else as = null;
       store.set(AS_KEY, as || ''); emit(); return { ok: true };
     },

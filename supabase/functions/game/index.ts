@@ -43,10 +43,11 @@ Deno.serve(async (req) => {
   }
   const isAdmin = !!user && !user.is_anonymous && ADMINS.includes(String(user.email ?? '').toLowerCase());
   if (action === 'adminSpeed' && !isAdmin) return json({ result: { ok: false, msg: 'Only an admin can change the game speed.' } });
-  // The administrator player (unlimited money): only admin accounts may create it or act as it.
-  const asAdmin = body.as === Engine.ADMIN_ID;
-  if ((asAdmin || action === 'adminPlay') && !isAdmin) return json({ result: { ok: false, msg: 'Only an admin can play the administrator.' }, admin: false });
-  if (asAdmin && action === 'join') return json({ result: { ok: false, msg: 'Switch back to your own tycoon first.' }, admin: true });
+  // The administrator (unlimited money) and the test player: only admin accounts may create them or act as them.
+  const asId = Engine.AS_IDS.includes(String(body.as)) ? String(body.as) : null;
+  const asAdmin = asId === Engine.ADMIN_ID;
+  if ((asId || action === 'adminPlay') && !isAdmin) return json({ result: { ok: false, msg: 'Only an admin can switch to that player.' }, admin: false });
+  if (asId && action === 'join') return json({ result: { ok: false, msg: 'Switch back to your own tycoon first.' }, admin: true });
   const out = (body: Record<string, unknown>) => json({ ...body, admin: isAdmin });
   if (action === 'adminChat') return out({ result: await adminChat(cityId, args, isAdmin) });
 
@@ -80,9 +81,10 @@ Deno.serve(async (req) => {
         changed = true;
       }
     } else if (action === 'adminPlay') {
-      const had = !!city.players[Engine.ADMIN_ID];
-      Engine.ensureAdmin(city, now);
-      if (!had) { console.log(JSON.stringify({ city: cityId, admin: user?.email, created: Engine.ADMIN_ID })); changed = true; }
+      const who = Engine.AS_IDS.includes(String(args.who)) ? String(args.who) : Engine.ADMIN_ID;
+      const had = !!city.players[who];
+      Engine.ensureAs(city, who, now);
+      if (!had) { console.log(JSON.stringify({ city: cityId, admin: user?.email, created: who })); changed = true; }
     } else if (action === 'adminSpeed') {
       // The whole city changes pace: time so far is kept, only the rate from now on changes.
       const speed = Number(args.speed);
@@ -92,8 +94,8 @@ Deno.serve(async (req) => {
       console.log(JSON.stringify({ city: cityId, admin: user?.email, speed }));
       changed = true;
     } else if (action !== 'sync' && action !== 'tick') {
-      if (asAdmin) Engine.ensureAdmin(city, now);
-      result = Engine.apply(city, asAdmin ? Engine.ADMIN_ID : userId!, action, args, now);
+      if (asId) Engine.ensureAs(city, asId, now);
+      result = Engine.apply(city, asId ?? userId!, action, args, now);
       changed = true;
     }
 

@@ -131,6 +131,16 @@ export function ensureAdmin(city, now) {
   }
   refillAdmin(city); return p;
 }
+// The test player: an ordinary tycoon (normal start money, normal rules) that admins switch to,
+// to try the game as a regular player. It starts with its own parent company so it can play at once.
+export const TEST_ID = 'tester', AS_IDS = [ADMIN_ID, TEST_ID];
+export function ensureTester(city, now) {
+  if (city.players[TEST_ID]) { advance(city, now); return city.players[TEST_ID]; }
+  const p = addPlayer(city, TEST_ID, 'Test Player', now, { first: 'Test', last: 'Player' });
+  p.test = true; p.co = { name: 'Test Player Holding', color: 'teal', font: 'clean', sym: 'compass', hid: null, m: city.m };
+  return p;
+}
+export const ensureAs = (city, id, now) => (id === ADMIN_ID ? ensureAdmin(city, now) : id === TEST_ID ? ensureTester(city, now) : null);
 // Speeds an admin may pick online (the live city): from a quarter of live speed up to demo speed.
 export function validSpeed(s) { return typeof s === 'number' && Number.isFinite(s) && s >= 0.25 && s <= 2016; }
 export function setSpeed(city, speed, now) { advance(city, now); city.clock = { g: gameNow(city, now), at: now, speed }; }
