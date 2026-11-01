@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <defs>
+    <radialGradient id="l" cx="50%" cy="20%" r="80%"><stop offset="0" stop-color="#6b4a26"/><stop offset="0.55" stop-color="#2a1d12"/><stop offset="1" stop-color="#120c07"/></radialGradient>
+    <linearGradient id="f" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a2a1a"/><stop offset="1" stop-color="#0e0905"/></linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#l)"/>
+  <rect y="400" width="800" height="200" fill="url(#f)"/>
+  <ellipse cx="400" cy="440" rx="300" ry="26" fill="#000" opacity="0.5"/>
+  <g fill="none" stroke="#e8c27a" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity="0.9">
+    <path d="M130 410 L150 360 Q170 340 230 335 L300 290 Q340 262 420 262 Q500 262 560 300 L610 335 Q660 342 675 365 L680 410"/>
+    <path d="M300 290 L330 335 L560 335"/>
+    <path d="M440 266 L445 335"/>
+    <circle cx="240" cy="412" r="44"/><circle cx="580" cy="412" r="44"/>
+    <path d="M130 410 L196 410 M284 410 L536 410 M624 410 L680 410"/>
+  </g>
+  <rect x="0" y="0" width="800" height="600" fill="none"/>
+</svg>

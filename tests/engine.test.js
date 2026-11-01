@@ -1,0 +1,64 @@
+// Headless season simulation: runs a full 10-year season with one scripted human and the bots.
+import * as E from '../supabase/functions/_shared/engine.js';
+import { CONFIG } from '../supabase/functions/_shared/content.js';
+const assert = (c, m) => { if (!c) { console.error('FAIL', m); process.exit(1); } };
+let wins = 0, ranks = [];
+for (let run = 0; run < 12; run++) {
+  let now = 1_700_000_000_000;
+  const city = E.createCity(now, { speed: 2016 });
+  assert(Object.keys(city.players).length === 9, 'bots created');
+  const me = 'u1'; E.addPlayer(city, me, 'Thomas', now);
+  const stepMs = E.realMsPerMonth(city) / 3;
+  let hid = null;
+  while (city.g < 10) {
+    now += stepMs; E.advance(city, now);
+    const p = city.players[me];
+    // scripted player: buys affordable synergies, upgrades, hires, networks, forms a coop
+    const free = city.listings.filter((l) => !l.owner).sort((a, b) => E.listingPrice(a) - E.listingPrice(b));
+    if (free[0] && p.cash > E.listingPrice(free[0]) + 2) E.apply(city, me, 'buy', { lid: free[0].id }, now);
+    const up = E.ownedBy(city, 'p', me).find((l) => !l.upgrade && l.level < 5 && E.upgradeCost(l) < p.cash - 3);
+    if (up) E.apply(city, me, 'upgrade', { lid: up.id }, now);
+    if (p.staff.length < 2 && p.cash > 6) { const t = E.TAL; const f = Object.keys(city.talent).find((id) => !city.talent[id].owner && !p.team[t.PERSON[id].kind]); if (f) E.apply(city, me, 'hire', { tid: f, salary: t.ask(city, f) * 1.05, years: 2 }, now); }
+    E.TAL.teamOf(city, p).forEach((tid) => { const s = city.talent[tid]; if (s.until - city.m <= 6) E.apply(city, me, 'tRenew', { tid, salary: E.TAL.renewAsk(city, tid) * 1.05, years: 2 }, now); if (s.stress > 70) E.apply(city, me, 'tVacation', { tid }, now); if (s.boredom > 60) E.apply(city, me, 'tChallenge', { tid }, now); });
+    (city.tOffers || []).filter((o) => o.to === me && o.status === 'open').forEach((o) => E.apply(city, me, 'tOfferDecline', { oid: o.id }, now));
+    city.netReqs.filter((r) => r.to === me && r.status === 'open').forEach((r) => E.apply(city, me, 'netAccept', { pid: r.from }, now));
+    city.contracts.filter((c) => c.to === me && c.status === 'pending').forEach((c) => E.apply(city, me, 'contractAccept', { id: c.id }, now));
+    if (p.net.length < 2) { const b = Object.values(city.players).find((x) => x.bot && !p.net.includes(x.id)); E.apply(city, me, 'netRequest', { pid: b.id }, now); }
+    if (!hid && p.cash > 9) { const r = E.apply(city, me, 'holdingCreate', { name: 'Thomas & Co', amt: 8 }, now); assert(r.ok, 'create holding ' + r.msg); hid = Object.values(city.holdings).find((h) => h.founder === me).id; E.apply(city, me, 'holdingInvite', { hid, pid: 'bot-lars' }, now); }
+    if (hid && city.holdings[hid]) { const h = city.holdings[hid]; const f = city.listings.find((l) => !l.owner && E.listingPrice(l) <= h.treasury); if (f && !h.proposals.some((x) => x.status === 'open')) E.apply(city, me, 'buy', { lid: f.id, as: hid }, now); }
+    city.offers.filter((o) => o.to === me && o.status === 'open').forEach((o) => E.apply(city, me, 'offerDecline', { id: o.id }, now));
+    if (city.listings.every((l) => l.owner) && p.cash > 40) { const t = city.listings.find((l) => l.owner.k === 'p' && l.owner.id !== me); if (t) E.apply(city, me, 'offer', { lid: t.id, amt: Math.round(E.listingValue(t) * 1.45) }, now); }
+    E.ownedBy(city, 'p', me).forEach((l) => {
+      (l.ops.orders || []).slice().forEach((o) => {
+        if (o.status === 'new') E.apply(city, me, 'order', { lid: l.id, op: o.earning > 0 ? 'accept' : 'reject', oid: o.id }, now);
+        else if (o.status === 'accepted') E.apply(city, me, 'order', { lid: l.id, op: 'deliver', oid: o.id, cid: o.cid }, now);
+        else if (o.status === 'cancelled') E.apply(city, me, 'order', { lid: l.id, op: 'archive', oid: o.id }, now);
+      });
+      E.OPS.tasks(city, l).filter((t) => !['orders', 'deliver', 'archive'].includes(t.id)).forEach((t) => E.apply(city, me, 'task', { lid: l.id, task: t.id, choice: 'listen' }, now));
+      if (p.cash > 6 && !l.ops.depts.sales) { E.apply(city, me, 'deptOpen', { lid: l.id, dept: 'sales' }, now); E.apply(city, me, 'workers', { lid: l.id, dept: 'sales', delta: E.OPS.needWorkers(l, 'sales') }, now); }
+      if (p.cash > 6 && !l.ops.depts.procurement) { E.apply(city, me, 'deptOpen', { lid: l.id, dept: 'procurement' }, now); E.apply(city, me, 'workers', { lid: l.id, dept: 'procurement', delta: E.OPS.needWorkers(l, 'procurement') }, now); }
+    });
+    if (Object.keys(city.stocks).length && p.cash > 30) { E.apply(city, me, 'trade', { id: 'gold', qty: 3 }, now); }
+    if ((p.shares.gold || 0) > 6) { const r = E.apply(city, me, 'trade', { id: 'gold', qty: -3 }, now); assert(r.ok, 'sell stock'); }
+    p.inbox.slice(0, 1).forEach((d) => E.apply(city, me, 'decide', { id: d.id, opt: 0 }, now));
+    for (const [k, v] of Object.entries(city.stocks)) assert(Number.isFinite(v.p) && v.p > 0, 'stock price ' + k);
+    assert(Number.isFinite(p.cash), 'cash finite');
+  }
+  assert(!city.over, 'the city never ends'); const st = E.standings(city); const r = st.findIndex((x) => x.id === me) + 1; ranks.push(r); if (r === 1) wins++;
+  if (run === 0) {
+    console.log('final', st.map((x) => `${x.name}:${Math.round(x.score)}`).join(' | '));
+    console.log('news', city.news.length, 'holdings', Object.values(city.holdings).map((h) => `${h.name}(${Object.keys(h.members).length} owners, NAV ${Math.round(E.holdingNav(city, h))})`).join(', '));
+    console.log('my holding', hid && city.holdings[hid] ? JSON.stringify({owners:Object.keys(city.holdings[hid].members), nav:E.holdingNav(city, city.holdings[hid]), listings:E.ownedBy(city,'h',hid).length}) : 'none');
+    console.log('portfolio', JSON.stringify({ realized: Math.round((city.players[me].realized || 0) * 100) / 100, phist: city.players[me].phist.length, cost: city.players[me].cost }));
+    console.log('owned listings', city.listings.filter((l) => l.owner).length, '/', city.listings.length, 'contracts active', city.contracts.filter((c) => c.status === 'active').length);
+    console.log('player feed sample', city.players[me].feed.slice(0, 4).map((f) => f.title));
+  }
+}
+console.log('scripted player win rate', wins / 12, 'avg rank', (ranks.reduce((a, b) => a + b, 0) / ranks.length).toFixed(2));
+// offline progress: a city left alone for 3 real days at live speed advances 3/7 of a year
+let now = 1_700_000_000_000; const c2 = E.createCity(now, { speed: 1 }); E.addPlayer(c2, 'x', 'X', now);
+{ const f = c2.listings.filter((l) => !l.owner).sort((a, b) => E.listingPrice(a) - E.listingPrice(b))[0]; if (f) { c2.players.x.cash = 40; E.apply(c2, 'x', 'buy', { lid: f.id }, now); } }
+const before = c2.players.x.cash; now += 3 * 24 * 3600e3; E.advance(c2, now);
+console.log('offline 3 days: months passed', c2.m - CONFIG.HISTORY_MONTHS, 'cash', before.toFixed(1), '->', c2.players.x.cash.toFixed(1));
+const json = JSON.stringify(c2); console.log('city JSON size', Math.round(json.length / 1024), 'KB');
+console.log('OK');
