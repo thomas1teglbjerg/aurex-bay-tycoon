@@ -75,6 +75,7 @@ function localChat(who) {
       const msg = { id: Date.now() + Math.random(), from: m, to: peer, body: text, at: Date.now(), read: false };
       store.set(CHAT_KEY, JSON.stringify(all().concat(msg).slice(-1000))); return { ok: true, m: msg };
     },
+    async chatPeers() { const m = who(), out = []; for (const x of all().slice().reverse()) { const o = x.from === m ? x.to : x.to === m ? x.from : null; if (o && !out.includes(o)) out.push(o); } return out; },
     async chatRead(peer) { const m = who(); store.set(CHAT_KEY, JSON.stringify(all().map((x) => (x.to === m && x.from === peer ? { ...x, read: true } : x)))); },
     async chatUnread() { const m = who(), n = {}; for (const x of all()) if (x.to === m && !x.read) n[x.from] = (n[x.from] || 0) + 1; return n; },
     onChat(f) { subs.add(f); }
@@ -257,6 +258,13 @@ export async function createOnlineBackend(cfg) {
       if (!UUID.test(peer) || peer === m) return { ok: false, msg: 'You can only chat with other players.' };
       const { data, error } = await sb.from('chat_messages').insert({ city_id: cityId, to_id: peer, body: text }).select('id,from_id,to_id,body,created_at,read_at').single();
       return error ? { ok: false, msg: 'The message was not sent. Try again in a moment.' } : { ok: true, m: row(data) };
+    },
+    // everyone you have a conversation with, newest first
+    async chatPeers() {
+      let rows = [], m;
+      if (asAdm()) { const r = await admChat('peers'); rows = r.ok ? r.rows : []; m = toDb(acting()); }
+      else { m = uid(); if (!m) return []; const { data } = await sb.from('chat_messages').select('from_id,to_id,created_at').eq('city_id', cityId).or(`from_id.eq.${m},to_id.eq.${m}`).order('created_at', { ascending: false }).limit(300); rows = data || []; }
+      const out = []; for (const r of rows) { const o = fromDb(r.from_id === m ? r.to_id : r.from_id); if (!out.includes(o)) out.push(o); } return out;
     },
     async chatRead(peer) { if (asAdm()) { await admChat('read', { peer }); return; } const m = uid(); peer = toDb(peer); if (m && UUID.test(peer)) await sb.from('chat_messages').update({ read_at: new Date().toISOString() }).eq('city_id', cityId).eq('to_id', m).eq('from_id', peer).is('read_at', null); },
     async chatUnread() {
