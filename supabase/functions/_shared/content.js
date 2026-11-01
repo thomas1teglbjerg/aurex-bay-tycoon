@@ -9,6 +9,8 @@ export const TYPES = {
     perks: [{ t: 'Neighbourhood Spot', d: '+0.2 M YPI for each other company you own in the same district (max 3)' }], neg: [{ t: 'Tight Wallets', d: '−0.3 M YPI during a recession' }] },
   autorepair: { name: 'Auto Repair', sector: 'Automotive · Service', starter: true, price: 4, trade: 0.6, ypi: 0.9, group: 'service', tags: ['Automotive', 'Starter'],
     perks: [{ t: 'Steady Work', d: 'Cars always break: Trade unaffected by recessions' }], neg: [{ t: 'Thin Margins', d: 'No Trade bonus during a boom' }] },
+  clothing: { name: 'Clothing Store', sector: 'Fashion · Street Retail', starter: true, price: 4, trade: 0.6, ypi: 0.9, group: 'service', tags: ['Fashion', 'Starter'],
+    perks: [{ t: 'Street Style', d: 'Cashes in when fashion goes viral, and +0.3 M YPI during a boom' }], neg: [{ t: 'Tight Wallets', d: '−0.3 M YPI during a recession' }] },
   fashion: { name: 'Fashion House', sector: 'Luxury Goods · Retail Sector', price: 14, trade: 1.5, ypi: 2.5, group: 'media', tags: ['Fashion', 'Luxury'],
     perks: [{ t: 'Influencer Marketing', d: '+1 M YPI with a PR & Media Officer at HQ' }], neg: [] },
   hotel: { name: 'Hotel & Resort', sector: 'Luxury Goods · Service Industry', price: 18, trade: 2, ypi: 3, group: 'service', tags: ['Tourism', 'Luxury'],
@@ -56,7 +58,7 @@ export function placeOn(d, p) { const b = DISTRICT[d].box; return { x: Math.roun
 
 // 29 unique listings: [type, district, size, x, y within the district view]
 export const LISTINGS = [
-  ['fashion', 'ironport', 'M', 0.24, 0.31], ['fashion', 'aurex', 'L', 0.6, 0.72], ['fashion', 'marina', 'S', 0.54, 0.5],
+  ['clothing', 'ironport', 'S', 0.24, 0.31, 'Eastbridge Supply Co.'], ['fashion', 'aurex', 'L', 0.6, 0.72], ['fashion', 'marina', 'S', 0.54, 0.5],
   ['hotel', 'marina', 'L', 0.2, 0.3], ['hotel', 'marina', 'M', 0.42, 0.4], ['hotel', 'sunset', 'S', 0.45, 0.4],
   ['metal', 'harbor', 'L', 0.4, 0.53], ['metal', 'ironport', 'S', 0.08, 0.1], ['metal', 'harbor', 'M', 0.44, 0.66],
   ['car', 'harbor', 'L', 0.53, 0.46], ['dealer', 'ironport', 'M', 0.42, 0.83, 'Kazen Motors'], ['car', 'aurex', 'S', 0.3, 0.84],
@@ -182,6 +184,7 @@ export const RECIPES = {
   data: { cap: 25, unit: 'subscriptions', in: { chips: 0.3, energy: 1 }, out: { software: 1 } },
   pharma: { cap: 15, unit: 'treatment batches', in: { chemicals: 2, chips: 0.5, software: 0.5 }, out: {} },
   film: { cap: 12, unit: 'productions', in: { software: 1, energy: 1 }, out: { media: 1 } },
+  clothing: { cap: 40, unit: 'garment drops', in: { textiles: 1, energy: 0.2 }, out: {} },
   fashion: { cap: 20, unit: 'collections', in: { textiles: 3, media: 0.3 }, out: {} },
   hotel: { cap: 25, unit: 'room blocks', in: { food: 2, textiles: 0.5, energy: 1, media: 0.3 }, out: {} },
   finance: { cap: 20, unit: 'client accounts', in: { software: 0.5, energy: 0.5 }, out: {} }
@@ -229,7 +232,7 @@ export const WORKER = { salary: 0.08, hireFee: 0.02 };
 // ---------------------------------------------------------------- clients and orders
 // B2B companies have a few large corporate clients who negotiate hard but stay loyal.
 // B2C companies sell through many retail channels with smaller, faster, more impatient orders.
-export const MARKET_KIND = { bank: 'b2c', dealer: 'b2c', restaurant: 'b2c', autorepair: 'b2c', metal: 'b2b', chip: 'b2b', data: 'b2b', finance: 'b2b', pharma: 'b2b', car: 'b2c', fashion: 'b2c', hotel: 'b2c', film: 'b2c' };
+export const MARKET_KIND = { bank: 'b2c', dealer: 'b2c', restaurant: 'b2c', autorepair: 'b2c', metal: 'b2b', chip: 'b2b', data: 'b2b', finance: 'b2b', pharma: 'b2b', car: 'b2c', clothing: 'b2c', fashion: 'b2c', hotel: 'b2c', film: 'b2c' };
 export const CLIENT_RULES = {
   b2b: { start: 4, weight: [1, 2.5], orderChance: 0.55, expire: 3, renegotiate: 0.6, rejectHit: 18, label: 'Corporate client' },
   b2c: { start: 6, weight: [0.4, 1.2], orderChance: 0.7, expire: 2, renegotiate: 0.42, rejectHit: 10, label: 'Retail channel' }
@@ -245,6 +248,7 @@ export const CLIENT_NAMES = {
   finance: ['Harbor Logistics', 'Ironport Shipyards', 'Aurex Real Estate', 'Crown Hills Family Office', 'Southgate Assembly', 'Midtown Retail Group', 'Lagoon Marine', 'Greenfield Farms'],
   pharma: ['Nevus Medical Group', 'Aurex General Hospital', 'Crown Hills Clinics', 'PharmaPlus Chain', 'Harbor Health', 'Greenfield Care Homes', 'Midtown Pharmacy Co', 'Sunset Wellness'],
   car: ['Midtown Auto Mall', 'Harbor Row Motors', 'Crown Hills Car Gallery', 'Sunset Strand Rentals', 'Greenfield Fleet Leasing', 'Old Grid Garage', 'Aurex Taxi Co', 'Ironport Truck Center', 'Nevus Isle EV Hub'],
+  clothing: ['Walk-in shoppers', 'Ironport skaters', 'Old Grid students', 'Harbor Row dock workers', 'Online drops', 'Sunset Surf & Style', 'Night market stall', 'Local sports clubs', 'Vintage collectors'],
   fashion: ['Boutique Lumen', 'Old Grid Department Store', 'Aurex Mall', 'Sunset Surf & Style', 'Crown Hills Atelier', 'Harbor Outlet', 'Midtown Sneaker Lab', 'Lagoon Resort Shops', 'Nevus Concept Store'],
   hotel: ['Northwind Travel', 'Cruise Terminal Desk', 'Aurex Business Travel', 'Wedding Planners Co', 'Conference Bureau', 'Sunset Tour Operators', 'Harbor Row Events', 'Crown Hills Golf Club', 'Airport Shuttle Partners'],
   film: ['Grand Cinema Midtown', 'Harbor Row Drive-in', 'StreamBay', 'Crown Hills Film Festival', 'Old Grid Arthouse', 'Nevus Media Network', 'Sunset Open Air', 'Aurex TV', 'Lagoon IMAX']
