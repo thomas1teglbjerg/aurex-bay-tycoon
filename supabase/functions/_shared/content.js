@@ -248,6 +248,8 @@ export const DEPTS = [
     manual: { id: 'reviewContracts', label: 'Review contracts', note: 'Go through clauses with your lawyer' },
     auto: 'Strict compliance makes this company immune to regulation fines.', without: 'Fines hit unless you review contracts yourself.' }
 ];
+// Small companies run lean: no HR, Finance, R&D or Legal. The owner looks after the few people there are.
+export const SMALL_SKIP = ['hr', 'finance', 'rnd', 'legal'];
 export const DEPT_DEFAULTS = { ops: { shifts: 1 }, procurement: { policy: 'cheapest', stock: 1, carrier: 'ridge' }, sales: { price: 'standard', b2b: 'market' }, social: { intensity: 'normal' }, hr: { wages: 'market', training: 'off' }, finance: { costs: 'normal' }, rnd: { budget: 'low' }, legal: { level: 'basic' } };
 export const WORKER = { salary: 0.08, hireFee: 0.02 };
 

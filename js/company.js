@@ -122,7 +122,7 @@ export function companyHTML(lid, ui = {}) {
   const ords = (o.orders || []).slice().sort((a, b) => ['new', 'accepted', 'renegotiating', 'cancelled'].indexOf(a.status) - ['new', 'accepted', 'renegotiating', 'cancelled'].indexOf(b.status));
   const clients = (o.clients || []).filter((x) => x.status === 'active').sort((a, b) => b.weight - a.weight);
   const left = (o.clients || []).filter((x) => x.status === 'left').length;
-  const depts = DEPTS.map((d) => ro ? deptCardRO(l, d) : deptCard(l, d)).join('');
+  const depts = O.deptsFor(l).map((d) => ro ? deptCardRO(l, d) : deptCard(l, d)).join('');
   const ready = ords.filter((x) => x.status === 'accepted').length;
 
   return `<div class="crumbs"><button class="btn sm" data-a="back">‹ ${ro ? 'Coop' : 'Empire'}</button><span class="muted">${coop ? `${esc(coop.name)} · co-owned · costs come out of the coop treasury` : ro ? `${esc(owner.name)}'s company` : 'Company dashboard'}</span></div>
@@ -166,7 +166,7 @@ export function companyHTML(lid, ui = {}) {
       ${accountsBox(l, ui, y)}
     </div>
     <div class="col">
-      <div class="box"><h2>Departments<small>${Object.keys(o.depts).length} OF ${DEPTS.length}</small></h2><div class="in"><div class="depts">${depts}</div></div></div>
+      <div class="box"><h2>Departments<small>${Object.keys(o.depts).length} OF ${O.deptsFor(l).length}</small></h2><div class="in"><div class="depts">${depts}</div></div></div>
       ${ro ? '' : `<div class="box"><h2>Company</h2><div class="in"><div class="btns">
         ${l.upgrade ? `<span class="chip">Upgrading to level ${l.upgrade.to}</span>` : l.level < 5 ? `<button class="btn ${coop ? 'coop' : 'navy'}" data-a="upgrade" data-lid="${l.id}" ${!coop && p.cash < E.upgradeCost(l) ? 'disabled' : ''}>${coop ? 'Propose upgrade' : 'Upgrade'} to level ${l.level + 1} · ${M(E.upgradeCost(l))}</button>` : ''}
         ${coop ? '' : `<button class="btn danger" data-a="sell" data-lid="${l.id}">Sell for ${M(E.listingValue(l) * 0.8)}</button>`}</div>${coop ? `<p class="empty" style="font-size:13px">Treasury ${M(coop.treasury)}. Upgrades and sales are decided by a vote of the co-owners.</p>` : ''}

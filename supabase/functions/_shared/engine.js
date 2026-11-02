@@ -319,9 +319,28 @@ function migrateMap(city) {
   city.shipments = [];
   city.mapV = 4;
 }
+// small companies lost HR, Finance, R&D and Legal: their heads go back to the owner's bench, their workers move
+// to Operations where there is room, the rest leave without severance, and the opening fee is paid back
+function trimSmall(city) {
+  if (city.smallV === 1) return;
+  city.listings.filter((l) => l.size === 'S' && l.ops).forEach((l) => {
+    const o = l.ops, gone = Object.keys(o.depts).filter((k) => !OPS.deptAllowed(l, k)); if (!gone.length) return;
+    let moved = 0, left = 0, fee = 0;
+    gone.forEach((k) => {
+      const dd = o.depts[k];
+      Object.values(city.players).forEach((p) => { if (p.assign && p.assign[dd.head] && p.assign[dd.head].lid === l.id) unassign(city, p, dd.head); });
+      if (!o.managed) { const ops = o.depts.ops, room = Math.max(0, OPS.needWorkers(l, 'ops') * 3 - ops.w), n = Math.min(room, dd.w); ops.w += n; moved += n; left += dd.w - n; fee += OPS.deptOpenCost(l, k); }
+      delete o.depts[k];
+    });
+    if (o.managed || !l.owner || (l.owner.k === 'p' ? !city.players[l.owner.id] : !city.holdings[l.owner.id])) return;
+    fee = r2(fee); if (fee > 0) payOwner(city, l, fee);
+    notifyOwner(city, l, `${l.title || TYPES[l.type].name} runs lean now`, `Small companies no longer have ${gone.map((k) => OPS.DEPT[k].name).join(', ')}. ${moved ? `${moved} worker${moved > 1 ? 's' : ''} moved to Operations. ` : ''}${left ? `${left} left without severance. ` : ''}Specialists who led them are free to lead elsewhere.${fee > 0 ? ` Opening fees refunded: ${fee} M.` : ''}`, 'info');
+  });
+  city.smallV = 1;
+}
 function migrateLife(city) { migrateMap(city); if (city.over) city.over = false; if (!city.talent) TAL.ensure(city); if (city.wk == null) city.wk = city.m * 4; if (city.migratedLife === 1) return; LIFE.ensure(city); city.migratedLife = 1; }
 export function advance(city, now) {
-  migrate(city); migrateLife(city); coopRunMode(city);
+  migrate(city); migrateLife(city); trimSmall(city); coopRunMode(city);
   if (city.over) return;
   const target = gameTime(city, now);
   let loops = 0;
@@ -854,7 +873,7 @@ function applyAs(city, pid, p, action, a, now) {
       const hq = l.owner.k === 'h' ? city.holdings[l.owner.id] : null;
       const payer = hq ? { get cash() { return hq.treasury; }, set cash(v) { hq.treasury = v; } } : p;
       const o = l.ops, d = a.dept ? OPS.DEPT[a.dept] : null;
-      if (action === 'deptOpen') { if (!d) return err('Unknown department.'); if (o.depts[a.dept]) return err('Already open.'); const c = OPS.deptOpenCost(l, a.dept); if (payer.cash < c) return err(`Opening costs ${c} M.`); payer.cash -= c; o.depts[a.dept] = { w: 0, set: { ...DEPT_DEFAULTS[a.dept] }, head: null }; return ok(`${d.name} is open. Hire workers to automate it, or run it yourself.`); }
+      if (action === 'deptOpen') { if (!d) return err('Unknown department.'); if (!OPS.deptAllowed(l, a.dept)) return err(`Small companies have no ${d.name} department.`); if (o.depts[a.dept]) return err('Already open.'); const c = OPS.deptOpenCost(l, a.dept); if (payer.cash < c) return err(`Opening costs ${c} M.`); payer.cash -= c; o.depts[a.dept] = { w: 0, set: { ...DEPT_DEFAULTS[a.dept] }, head: null }; return ok(`${d.name} is open. Hire workers to automate it, or run it yourself.`); }
       if (action === 'deptClose') { if (!d || a.dept === 'ops' || !o.depts[a.dept]) return err('Cannot close this department.'); const dd = o.depts[a.dept]; if (dd.head) unassign(city, p, dd.head); payer.cash -= dd.w * WORKER.salary * 0.25; delete o.depts[a.dept]; return ok(`${d.name} closed.`); }
       if (action === 'workers') {
         const dd = o.depts[a.dept]; if (!dd) return err('Open the department first.'); const n = Math.trunc(Number(a.delta)) || 0, max = OPS.needWorkers(l, a.dept) * 3;
