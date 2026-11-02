@@ -101,6 +101,23 @@ export const STOCKS = [
 ];
 
 // One World Card is drawn every game quarter (about 42 real hours at normal speed)
+// small things that happen to a company at a random moment in the week (about one every three weeks per company)
+// fx: rep / morale / rp are points, cust a customer change (0.04 = +4%), cash M × size, stock = share of one supply lost
+// guard: a department that turns a bad one around when it is at least half staffed (or has a head)
+export const HAPPENINGS = [
+  { id: 'review', title: 'A glowing review', text: 'A popular local blogger raved about {co}.', kind: 'good', fx: { rep: 3, cust: 0.03 } },
+  { id: 'press', title: 'Featured in the Aurex Bay Herald', text: 'The paper ran a story on {co}. New faces are coming in.', kind: 'good', fx: { cust: 0.05 } },
+  { id: 'idea', title: 'A worker had a good idea', text: 'A small fix on the floor at {co} that nobody had thought of.', kind: 'good', fx: { rp: 12, morale: 3 } },
+  { id: 'tip', title: 'A loyal customer tipped the team', text: 'The crew at {co} is in a good mood today.', kind: 'good', fx: { morale: 6 } },
+  { id: 'refund', title: 'An old invoice was paid', text: 'A client who had forgotten {co} finally paid up.', kind: 'good', fx: { cash: 0.06 } },
+  { id: 'breakdown', title: 'A machine broke down', text: 'Repairs at {co} cost money and a day of work.', kind: 'bad', fx: { cash: -0.08, morale: -3 }, guard: 'ops', saved: 'Your Operations team fixed it before the shift ended.' },
+  { id: 'complaint', title: 'An angry post went viral', text: 'A customer of {co} is complaining online.', kind: 'bad', fx: { rep: -3, cust: -0.02 }, guard: 'social', saved: 'Your social media team answered quickly and turned it around.' },
+  { id: 'inspection', title: 'Surprise inspection', text: 'City inspectors went through {co}.', kind: 'bad', fx: { cash: -0.1 }, guard: 'legal', saved: 'Every permit was in order. No fine.' },
+  { id: 'theft', title: 'Supplies went missing', text: 'Part of a delivery at {co} is gone.', kind: 'bad', fx: { stock: 0.08 }, guard: 'procurement', saved: 'Procurement had counted everything. The missing crates turned up.' },
+  { id: 'sick', title: 'Flu at the workplace', text: 'Half the team at {co} called in sick.', kind: 'bad', fx: { morale: -5 }, guard: 'hr', saved: 'HR had cover ready. Nobody noticed.' },
+  { id: 'heatwave', title: 'A busy day', text: 'Sunny weather brought a rush of customers to {co}.', kind: 'good', fx: { cust: 0.02, rep: 1 } }
+];
+
 export const WORLD = [
   { id: 'boom', title: 'Economic Boom', econ: 'Boom', text: 'Consumer spending surges across Aurex Bay. Luxury stores report record sales and hotels are fully booked.', shock: { diamonds: 0.08, watches: 0.08, fashion: 0.06 }, at: [255, 470] },
   { id: 'recession', title: 'Recession Hits Aurex Bay', econ: 'Recession', text: 'Unemployment climbs and spending dries up. Investors flee to gold while banks tighten lending.', shock: { gold: 0.06 }, at: [830, 440] },

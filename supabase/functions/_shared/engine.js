@@ -1,7 +1,7 @@
 // Aurex Bay Tycoon — game engine.
 // Pure functions over one plain "city" object, so the exact same rules run in the browser demo
 // and server-side in the Supabase Edge Function. Time is real time: 1 game year = 1 real week (speed 1).
-import { DISTRICTS, TYPES, SYNERGY, SIZES, LISTINGS, STAFF, STOCKS, WORLD, DECISIONS, BOTS, CONFIG, DEPT_DEFAULTS, WORKER, GOODS, TAKEOVER } from './content.js';
+import { DISTRICTS, TYPES, SYNERGY, SIZES, LISTINGS, STAFF, STOCKS, WORLD, DECISIONS, HAPPENINGS, BOTS, CONFIG, DEPT_DEFAULTS, WORKER, GOODS, TAKEOVER } from './content.js';
 import * as OPS from './ops.js';
 import * as LOG from './logistics.js';
 import * as LIFE from './life.js';
@@ -83,7 +83,7 @@ export function createCity(now, opts = {}) {
   LIFE.ensure(city); TAL.ensure(city); TAL.seedBots(city);
   news(city, 0, 'Season ' + city.season + ' opens in Aurex Bay', 'Twenty-seven companies are for sale. The first tycoons are already moving in.', 'info');
   // the city has a history before you arrive
-  for (let m = 1; m <= CONFIG.HISTORY_MONTHS; m++) { for (let k = 1; k < 4; k++) weekBoundary(city, (m - 1) * 4 + k); monthBoundary(city, m); }
+  for (let wk = 1; wk <= CONFIG.HISTORY_MONTHS * 4; wk++) stepWeek(city, wk);
   city.wk = CONFIG.HISTORY_MONTHS * 4;
   city.clock = { g: CONFIG.HISTORY_MONTHS / 12, at: now, speed: opts.speed || 1 }; city.mapV = 4;
   return city;
@@ -328,11 +328,15 @@ export function advance(city, now) {
   // the city moves in weekly steps (4 per game month); every 4th step closes the month
   while ((city.wk + 1) / 48 <= target + 1e-9 && loops < 1600) {
     const wk = city.wk + 1; LOG.arrivals(city, wk / 48, (sh) => shipmentArrived(city, sh));
-    if (wk % 4 === 0) monthBoundary(city, wk / 4); else weekBoundary(city, wk);
+    stepWeek(city, wk);
     city.wk = wk; loops++;
   }
   if (loops >= 1600) { city.clock = { g: city.wk / 48, at: now, speed: city.clock.speed }; }
-  settleAll(city, Math.max(city.g, Math.min(target, (city.wk + 1) / 48)));
+  // between weekly steps: whatever was planned for a moment that has now passed happens, orders land one by one
+  const g = Math.max(city.g, Math.min(target, (city.wk + 1) / 48));
+  runAgenda(city, g);
+  settleAll(city, g);
+  city.listings.forEach((l) => { if (l.ops && l.owner && !l.ops.managed) OPS.releaseQueue(city, l, g); });
   LOG.arrivals(city, city.g, (sh) => shipmentArrived(city, sh));
   refillAdmin(city);
 }
@@ -363,6 +367,71 @@ function weekBoundary(city, wk, monthEnd) {
     city.listings.forEach((l) => { if (l.ops && l.owner) OPS.weekStep(city, CTX, l, wk); });
     if (city.life) LIFE.weekStep(city, wk, LCTX);
   }
+  planWeek(city, wk);
+}
+function stepWeek(city, wk) { runAgenda(city, wk / 48); if (wk % 4 === 0) monthBoundary(city, wk / 4); else weekBoundary(city, wk); }
+
+// ---------------------------------------------------------------- the agenda: things that happen at their own moment inside a week
+// every weekly step plans the coming week; each entry fires when the clock passes its time (g, in game years), so the city never goes quiet
+const hashId = (id) => [...String(id)].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
+function plan(city, at, k, x = {}) { (city.agenda = city.agenda || []).push({ at: Math.round(at * 1e6) / 1e6, k, ...x }); }
+const inWeek = (wk) => (wk + 0.05 + rand() * 0.9) / 48;
+const humanOwned = (city, l) => !!l.owner && (l.owner.k === 'p' ? !!city.players[l.owner.id] && !city.players[l.owner.id].bot : humanCoop(city, city.holdings[l.owner.id]));
+function planWeek(city, wk) {
+  Object.values(city.players).forEach((p) => {
+    if (p.bot) { if (rand() < 0.27) plan(city, inWeek(wk), 'bot', { pid: p.id }); return; }
+    const waiting = (city.agenda || []).filter((e) => e.k === 'decision' && e.pid === p.id).length;
+    if (p.inbox.length + waiting < 3 && rand() < 0.12) plan(city, inWeek(wk), 'decision', { pid: p.id });
+  });
+  city.listings.forEach((l) => {
+    if (!l.ops || l.ops.managed || !humanOwned(city, l)) return;
+    if (rand() < 0.33) plan(city, inWeek(wk), 'happening', { lid: l.id });
+    if ((l.type === 'film' || l.type === 'music') && rand() < 1 / 130) plan(city, inWeek(wk), 'hit', { lid: l.id });
+  });
+  // the next world card lands somewhere in the first half of the quarter
+  if (wk % 12 === 0) plan(city, (wk + 0.5 + rand() * 6) / 48, 'world');
+}
+function runAgenda(city, g) {
+  if (!city.agenda || !city.agenda.length) return;
+  const due = city.agenda.filter((e) => e.at <= g + 1e-9).sort((a, b) => a.at - b.at); if (!due.length) return;
+  city.agenda = city.agenda.filter((e) => e.at > g + 1e-9);
+  due.forEach((e) => { settleAll(city, Math.max(city.g, e.at)); const f = AGENDA[e.k]; if (f) f(city, e); });
+}
+const AGENDA = {
+  world: (city) => worldCard(city, city.m),
+  bot: (city, e) => { const p = city.players[e.pid]; if (p && p.bot) botAct(city, p, city.m); },
+  decision: (city, e) => {
+    const p = city.players[e.pid]; if (!p || p.bot || p.inbox.length >= 3) return;
+    const types = new Set(ownedBy(city, 'p', p.id).map((l) => l.type)), m = city.m;
+    const pool = DECISIONS.filter((d) => (!d.needs || types.has(d.needs)) && !p.inbox.some((x) => x.def === d.id)); if (!pool.length) return;
+    const d = pick(pool); p.inbox.push({ id: uid('d'), def: d.id, m, dueM: m + 2 });
+    feed(p, m, `New decision: ${d.title}`, 'Answer it in your inbox within two months.', 'info');
+  },
+  happening: (city, e) => {
+    const l = listing(city, e.lid); if (!l || !l.ops || l.ops.managed || !humanOwned(city, l)) return;
+    happening(city, l, pick(HAPPENINGS));
+  },
+  hit: (city, e) => {
+    const l = listing(city, e.lid); if (!l || !l.owner || l.owner.k !== 'p') return; const p = city.players[l.owner.id]; if (!p) return;
+    if (!hasHead(city, l, p, 'sofia') && OPS.automation(l, 'social') <= 0) return;
+    const m = city.m, film = l.type === 'film', v = r2((film ? 8 : 3) * SIZES[l.size].mult); p.cash += v; p.inf += 1;
+    if (film) { feed(p, m, 'Your new film is a blockbuster', `+${v} M and +1 Influence.`, 'good'); if (!p.bot) news(city, m, `${p.name} scores a blockbuster`, 'Lines around the block in Crown Hills.', 'info'); }
+    else { feed(p, m, `${l.title || TYPES[l.type].name} has a hit single`, `+${v} M and +1 Influence.`, 'good'); if (!p.bot) news(city, m, `${p.name}'s studio has a hit`, `${l.title || TYPES[l.type].name} is on every playlist in Aurex Bay.`, 'good'); }
+  }
+};
+function happening(city, l, h) {
+  const o = l.ops, co = `your ${l.title || TYPES[l.type].name} in ${l.district}`, fx = h.fx, s = SIZES[l.size].mult;
+  const d = h.guard && o.depts[h.guard];
+  if (h.kind === 'bad' && d && (d.head || OPS.automation(l, h.guard) >= 0.5)) { notifyOwner(city, l, h.title, `${h.text.replace('{co}', co)} ${h.saved}`, 'good'); return; }
+  const bits = [];
+  if (fx.rep) { o.rep = Math.max(0, Math.min(100, o.rep + fx.rep)); bits.push(`reputation ${fx.rep > 0 ? '+' : '−'}${Math.abs(fx.rep)}`); }
+  if (fx.cust) { o.customers = Math.max(20, Math.min(400, o.customers * (1 + fx.cust))); bits.push(`customers ${fx.cust > 0 ? '+' : '−'}${Math.round(Math.abs(fx.cust) * 100)}%`); }
+  if (fx.morale) { o.morale = Math.max(0, Math.min(100, o.morale + fx.morale)); bits.push(`morale ${fx.morale > 0 ? '+' : '−'}${Math.abs(fx.morale)}`); }
+  if (fx.rp) { o.rp += fx.rp; bits.push(`+${fx.rp} research points`); }
+  if (fx.cash) { const v = r2(fx.cash * s); credit(city, l.owner, v); bits.push(`${v > 0 ? '+' : '−'}${Math.abs(v)} M`); }
+  if (fx.stock) { const gs = Object.keys(o.inv).filter((g) => o.inv[g] >= 1); if (!gs.length) return; const g = pick(gs), q = Math.round(o.inv[g] * fx.stock); o.inv[g] -= q; bits.push(`${q} ${GOODS[g].unit} of ${GOODS[g].name.toLowerCase()} lost`); }
+  const text = h.text.replace('{co}', co);
+  notifyOwner(city, l, h.title, `${text.charAt(0).toUpperCase()}${text.slice(1)} ${bits.join(', ')}.`, h.kind);
 }
 function monthBoundary(city, m) {
   settleAll(city, m / 12); city.m = m;
@@ -371,8 +440,8 @@ function monthBoundary(city, m) {
   // stocks drift every month
   weekBoundary(city, m * 4, true);
   if (city.fx && city.fx.untilM <= m) city.fx = null;
-  if (m % 3 === 0) worldCard(city, m);
-  if (m % 12 === 0) yearly(city, m);
+  influenceMonth(city, m);
+  if (m % 12 === 0) yearReview(city, m);
   OPS.ensureMarket(city);
   const running = city.listings.filter((l) => l.owner);
   running.forEach((l) => { if (!l.ops) l.ops = OPS.newOps(l, isManaged(city, l)); if (city.life && l.owner.k === 'p' && city.players[l.owner.id]) l.ops.pt = LIFE.tierOf(city, city.players[l.owner.id]); OPS.produce(city, CTX, l, m); });
@@ -388,7 +457,6 @@ function monthBoundary(city, m) {
   holdingsMonthly(city, m);
   resolveBotReplies(city, m);
   decisionsMonthly(city, m);
-  Object.values(city.players).filter((p) => p.bot).forEach((p) => botAct(city, p, m));
   botHoldingsAct(city, m);
   botSocial(city, m);
   Object.values(city.players).forEach((p) => solvency(city, p, m));
@@ -420,16 +488,19 @@ function worldCard(city, m) {
   city.lastCard = { id: card.id, m, prev };
   news(city, m, card.title, card.text + (city.econ !== prev ? ` The economy moves from ${prev.toLowerCase()} to ${city.econ.toLowerCase()}.` : ''), card.econ === 'Crisis' || card.econ === 'Recession' ? 'bad' : card.econ === 'Boom' ? 'good' : 'info', { world: card.id, at: card.at });
 }
-function yearly(city, m) {
+// Influence used to arrive all at once at New Year. Now every source pays on its own anniversary month,
+// so a little lands somewhere in the city every month: a studio on the month it was bought, specialists and prestige on dates of their own.
+function influenceMonth(city, m) {
   Object.values(city.players).forEach((p) => {
-    let inf = 0; const owned = ownedBy(city, 'p', p.id);
-    owned.filter((l) => l.type === 'film').forEach((l) => { inf += 1; if ((hasHead(city, l, p, 'sofia') || OPS.automation(l, 'social') > 0) && rand() < 2 / 6) { const v = r2(8 * SIZES[l.size].mult); p.cash += v; inf += 1; feed(p, m, 'Your new film is a blockbuster', `+${v} M and +1 Influence.`, 'good'); if (!p.bot) news(city, m, `${p.name} scores a blockbuster`, 'Lines around the block in Crown Hills.', 'info'); } });
-    owned.filter((l) => l.type === 'music').forEach((l) => { inf += 1; if ((hasHead(city, l, p, 'sofia') || OPS.automation(l, 'social') > 0) && rand() < 2 / 6) { const v = r2(3 * SIZES[l.size].mult); p.cash += v; inf += 1; feed(p, m, `${l.title || TYPES[l.type].name} has a hit single`, `+${v} M and +1 Influence.`, 'good'); if (!p.bot) news(city, m, `${p.name}'s studio has a hit`, `${l.title || TYPES[l.type].name} is on every playlist in Aurex Bay.`, 'good'); } });
-    owned.filter((l) => (l.type === 'chip' || l.type === 'data') && !p.est[l.id] && l.boughtM !== null && m - l.boughtM >= 12).forEach((l) => { p.est[l.id] = true; inf += 2; feed(p, m, `${TYPES[l.type].name} is established`, '+2 Influence.', 'good'); });
-    if (hasStaff(p, 'sofia')) inf += 2; if (hasStaff(p, 'carlos')) inf += 1;
-    if (city.life) { const t = LIFE.tierOf(city, p); if (t) { inf += t; if (!p.bot) feed(p, m, `Prestige: +${t} Influence`, `Being ${LIFE.prestige(city, p).name} in Aurex Bay pays off.`, 'good'); } }
-    p.inf += inf;
+    const owned = ownedBy(city, 'p', p.id), off = hashId(p.id) % 12, at = (k) => (m + off + k) % 12 === 0;
+    owned.filter((l) => (l.type === 'film' || l.type === 'music') && l.boughtM !== null && m > l.boughtM && (m - l.boughtM) % 12 === 0).forEach((l) => { p.inf += 1; if (!p.bot) feed(p, m, `${l.title || TYPES[l.type].name} had a strong year`, '+1 Influence.', 'good'); });
+    owned.filter((l) => (l.type === 'chip' || l.type === 'data') && !p.est[l.id] && l.boughtM !== null && m - l.boughtM >= 12).forEach((l) => { p.est[l.id] = true; p.inf += 2; feed(p, m, `${TYPES[l.type].name} is established`, '+2 Influence.', 'good'); });
+    if (at(0) && hasStaff(p, 'sofia')) { p.inf += 2; if (!p.bot) feed(p, m, 'Your media contacts pay off', '+2 Influence.', 'good'); }
+    if (at(4) && hasStaff(p, 'carlos')) { p.inf += 1; if (!p.bot) feed(p, m, 'Your logistics network is talked about', '+1 Influence.', 'good'); }
+    if (at(8) && city.life) { const t = LIFE.tierOf(city, p); if (t) { p.inf += t; if (!p.bot) feed(p, m, `Prestige: +${t} Influence`, `Being ${LIFE.prestige(city, p).name} in Aurex Bay pays off.`, 'good'); } }
   });
+}
+function yearReview(city, m) {
   const top = standings(city).slice(0, 3);
   news(city, m, `Year ${m / 12} in review`, `Richest tycoons: ${top.map((t, i) => `${i + 1}. ${t.name} (${Math.round(t.nw)} M)`).join(', ')}.`, 'info');
 }
@@ -585,8 +656,6 @@ function decisionsMonthly(city, m) {
   Object.values(city.players).filter((p) => !p.bot).forEach((p) => {
     p.inbox.filter((d) => d.dueM <= m).forEach((d) => { const def = DECISIONS.find((x) => x.id === d.def); const safeIx = def.options.findIndex((o) => o.safe);
       const ix = p.policy === 'cautious' ? safeIx : p.policy === 'bold' ? 1 - safeIx : Math.floor(rand() * 2); resolveDecisionFor(city, p, d.id, ix, true); });
-    const types = new Set(ownedBy(city, 'p', p.id).map((l) => l.type));
-    if (p.inbox.length < 3 && rand() < 0.3) { const pool = DECISIONS.filter((d) => (!d.needs || types.has(d.needs)) && !p.inbox.some((x) => x.def === d.id)); if (pool.length) { const d = pick(pool); p.inbox.push({ id: uid('d'), def: d.id, m, dueM: m + 2 }); } }
   });
 }
 function resolveDecisionFor(city, p, did, ix, auto) {
