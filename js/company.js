@@ -170,7 +170,7 @@ export function companyHTML(lid, ui = {}) {
       <div class="box"><h2>Departments<small>${Object.keys(o.depts).length} OF ${DEPTS.length}</small></h2><div class="in"><div class="depts">${depts}</div></div></div>
       ${ro ? '' : `<div class="box"><h2>Company</h2><div class="in"><div class="btns">
         ${l.upgrade ? `<span class="chip">Upgrading to level ${l.upgrade.to}</span>` : l.level < 5 ? `<button class="btn ${coop ? 'coop' : 'navy'}" data-a="upgrade" data-lid="${l.id}" ${!coop && p.cash < E.upgradeCost(l) ? 'disabled' : ''}>${coop ? 'Propose upgrade' : 'Upgrade'} to level ${l.level + 1} · ${M(E.upgradeCost(l))}</button>` : ''}
-        ${coop ? '' : `<button class="btn danger" data-a="sell" data-lid="${l.id}">Sell for ${M(E.listingValue(l) * 0.8)}</button>`}</div>${coop ? `<p class="empty" style="font-size:13px">Treasury ${M(coop.treasury)}. Upgrades and sales are decided by a vote of the co-owners.</p>` : ''}
+        ${coop ? (coop.proposals.some((x) => x.status === 'open' && x.kind === 'sell' && x.lid === l.id) ? '<span class="chip">Sale vote running</span>' : `<button class="btn danger" data-a="sell" data-lid="${l.id}">Propose sale · ${M(E.listingValue(l) * 0.8)} to treasury</button>`) : `<button class="btn danger" data-a="sell" data-lid="${l.id}">Sell for ${M(E.listingValue(l) * 0.8)}</button>`}</div>${coop ? `<p class="empty" style="font-size:13px">Treasury ${M(coop.treasury)}. Upgrades and sales are decided by a vote of the co-owners.</p>` : ''}
         <p class="empty" style="font-size:13px">Upgrading raises capacity, steady income and the number of workers each department needs.</p></div></div>`}
     </div>
   </div>`;
