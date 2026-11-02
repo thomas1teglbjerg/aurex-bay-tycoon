@@ -37,7 +37,7 @@ const go = (u, inner, cls = '') => `<a href="#" class="${cls}" data-a="webGo" da
 const CARD_FALLBACK = { art: 'img/h1-art.jpg', wine: 'img/h1-wine.jpg', watch: 'img/h1-watch.jpg', car: 'img/ph-car.svg' };
 export function itemBg(cid) {
   const c = L.ITEM[cid];
-  return c.img ? `background-image:url(img/x-${cid}.jpg);background-position:${c.img};background-size:cover` : `background-image:url(img/x-${cid}.jpg), linear-gradient(135deg, rgba(40,30,20,0.35), rgba(20,14,8,0.55)), url(${CARD_FALLBACK[c.cat]});background-size:cover;background-position:center`;
+  return c.img ? `background-image:url(img/x-${cid}.jpg);background-position:${c.img};background-size:cover` : `background-image:${L.isMade(c) ? '' : `url(img/x-${cid}.jpg), `}linear-gradient(135deg, rgba(40,30,20,0.35), rgba(20,14,8,0.55)), url(${CARD_FALLBACK[c.cat]});background-size:cover;background-position:center`;
 }
 
 // ---------------------------------------------------------------- browser chrome

@@ -1,11 +1,15 @@
 // Shared helpers for the UI modules
 import * as E from '../supabase/functions/_shared/engine.js';
-import { CONFIG as GC, MAP, DISTRICT, TYPES } from '../supabase/functions/_shared/content.js';
+import { CONFIG as GC, MAP, DISTRICT, TYPES, LISTINGS } from '../supabase/functions/_shared/content.js';
 // a company's display name: its own title when it has one, else its type
 export const lname = (l) => l.title || TYPES[l.type].name;
+// a listing may have its own picture (img in LISTINGS), otherwise the picture of its type
+const LIMG = Object.fromEntries(LISTINGS.filter((l) => l.img).map((l) => [l.id, l.img]));
+export const coImg = (l) => `img/${LIMG[l.id] || 'c-' + l.type}.jpg`;
 
 export const S = { B: null };
-export const city = () => S.B.city;
+let madeSeen = null; // wines bottled by vineyards join the collectible catalogue when a new city state arrives
+export const city = () => { const c = S.B.city; if (c && c.life && c.life.made && c.life.made !== madeSeen) { madeSeen = c.life.made; E.LIFE.register(c); } return c; };
 export const meId = () => S.B.me;
 export const me = () => (S.B.me ? S.B.city.players[S.B.me] : null);
 export const now = () => Date.now();
