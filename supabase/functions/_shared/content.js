@@ -30,11 +30,14 @@ export const TYPES = {
   music: { name: 'Music Studio', sector: 'Media & Entertainment · Music', price: 12, trade: 1.2, ypi: 1.8, group: 'media', tags: ['Media', 'Music'],
     perks: [{ t: 'Hit Single', d: '+3 M & +1 Influence on a hit (2 in 6 per year) when Social Media runs or a PR & Media Officer leads it' }, { t: 'Studio Buzz', d: '+1 Influence per year' }], neg: [{ t: 'Fickle Charts', d: '−0.4 M YPI during a recession' }] },
   film: { name: 'Film Production', sector: 'Media & Entertainment', price: 38, trade: 2.5, ypi: 3.5, group: 'media', tags: ['Media', 'Influence'],
-    perks: [{ t: 'Influence Boost', d: '+1 Influence per year' }, { t: 'Blockbuster Success', d: '+8 M & +1 Influence on a blockbuster (2 in 6 per year)' }], neg: [{ t: 'Influencer Staff Requirement', d: 'Blockbusters need a PR & Media Officer at HQ' }] }
+    perks: [{ t: 'Influence Boost', d: '+1 Influence per year' }, { t: 'Blockbuster Success', d: '+8 M & +1 Influence on a blockbuster (2 in 6 per year)' }], neg: [{ t: 'Influencer Staff Requirement', d: 'Blockbusters need a PR & Media Officer at HQ' }] },
+  vineyard: { name: 'Vineyard', sector: 'Food & Drink · Wine Estate', price: 12, trade: 1.2, ypi: 1.6, group: 'service', tags: ['Wine', 'Collectibles'],
+    perks: [{ t: 'Vintage Year', d: 'Every harvest: 50% chance to bottle a collectible wine. Sell it to the dealer, at auction or to other players' }, { t: 'Estate Specialists', d: 'Each specialist leading a department raises the odds and the rarity' }, { t: 'House Wine', d: '+YPI to a Restaurant in the portfolio' }],
+    neg: [{ t: 'Small Harvests', d: 'Small estates rarely bottle anything above Rare and never a Legendary' }, { t: 'Crisis Hangover', d: '−0.4 M YPI during a crisis' }] }
 };
 
 // Portfolio synergies: owning (or contracting with) the first type boosts the second
-export const SYNERGY = [['car', 'dealer'], ['autorepair', 'dealer'], ['car', 'autorepair'], ['metal', 'car'], ['metal', 'chip'], ['chip', 'data'], ['chip', 'pharma'], ['film', 'fashion'], ['hotel', 'fashion'], ['finance', 'data']];
+export const SYNERGY = [['car', 'dealer'], ['autorepair', 'dealer'], ['car', 'autorepair'], ['metal', 'car'], ['metal', 'chip'], ['chip', 'data'], ['chip', 'pharma'], ['film', 'fashion'], ['hotel', 'fashion'], ['finance', 'data'], ['vineyard', 'restaurant']];
 
 export const SIZES = { S: { label: 'Small', mult: 0.6 }, M: { label: 'Medium', mult: 1 }, L: { label: 'Large', mult: 1.5 } };
 
@@ -58,10 +61,10 @@ DISTRICTS.forEach((d) => { d.x = Math.round(d.box.x + d.box.w / 2); d.y = Math.r
 export const DISTRICT = Object.fromEntries(DISTRICTS.map((d) => [d.id, d]));
 export function placeOn(d, p) { const b = DISTRICT[d].box; return { x: Math.round(b.x + p[0] * b.w), y: Math.round(b.y + p[1] * b.h) }; }
 
-// 29 unique listings: [type, district, size, x, y within the district view]
+// 32 unique listings: [type, district, size, x, y within the district view, title, own picture in img/]
 export const LISTINGS = [
   ['clothing', 'ironport', 'S', 0.24, 0.31, 'Eastbridge Supply Co.'], ['fashion', 'aurex', 'L', 0.6, 0.72], ['fashion', 'marina', 'S', 0.54, 0.5],
-  ['hotel', 'marina', 'L', 0.2, 0.3], ['hotel', 'marina', 'M', 0.42, 0.4], ['hotel', 'sunset', 'S', 0.45, 0.4],
+  ['hotel', 'marina', 'L', 0.2, 0.3], ['hotel', 'marina', 'M', 0.42, 0.4], ['hotel', 'sunset', 'S', 0.45, 0.4, null, 'c-hotel-sunset'],
   ['metal', 'harbor', 'L', 0.4, 0.53], ['metal', 'ironport', 'S', 0.08, 0.1], ['metal', 'harbor', 'M', 0.44, 0.66],
   ['car', 'harbor', 'L', 0.53, 0.46], ['dealer', 'ironport', 'M', 0.42, 0.83, 'Kazen Motors'], ['car', 'aurex', 'S', 0.3, 0.84],
   ['finance', 'aurex', 'L', 0.5, 0.34], ['finance', 'aurex', 'M', 0.76, 0.36], ['bank', 'ironport', 'S', 0.48, 0.44, 'Aurex Bank'],
@@ -70,8 +73,9 @@ export const LISTINGS = [
   ['pharma', 'nevus', 'L', 0.78, 0.63], ['pharma', 'greenfield', 'M', 0.43, 0.3], ['pharma', 'crown', 'S', 0.86, 0.38],
   ['film', 'crown', 'L', 0.11, 0.17], ['music', 'ironport', 'M', 0.75, 0.88, 'Watertower Sound'], ['film', 'harbor', 'S', 0.58, 0.3],
   ['autorepair', 'ironport', 'S', 0.3, 0.6, 'Kingside Auto Works'],
-  ['restaurant', 'ironport', 'S', 0.62, 0.6, 'Ground Café']
-].map(([type, d, size, px, py, title], i) => ({ id: 'L' + (i + 1), type, d, p: [px, py], district: DISTRICT[d].name, size, ...(title ? { title } : {}), ...placeOn(d, [px, py]) }));
+  ['restaurant', 'ironport', 'S', 0.62, 0.6, 'Ground Café'],
+  ['vineyard', 'greenfield', 'S', 0.66, 0.2, 'Greenfield Hill Vines'], ['vineyard', 'crown', 'M', 0.42, 0.6, 'Aurex Bay Vineyard'], ['vineyard', 'nevus', 'L', 0.33, 0.42, 'Nevus Cliff Estate']
+].map(([type, d, size, px, py, title, img], i) => ({ id: 'L' + (i + 1), type, d, p: [px, py], district: DISTRICT[d].name, size, ...(title ? { title } : {}), ...(img ? { img } : {}), ...placeOn(d, [px, py]) }));
 
 export const STAFF = [
   { id: 'michael', role: 'Junior Financial Analyst', name: 'Michael Turner', cost: 1.5, upkeep: 0.5, passive: ['Loan Bonus', 'Gain +0.5 M when taking a loan. Your interest drops 1 M a year.'], hq: 'Head of Finance: running costs −5% in that company.', tags: 'Finance · Risk' },
@@ -209,7 +213,8 @@ export const RECIPES = {
   clothing: { cap: 40, unit: 'garment drops', in: { textiles: 1, energy: 0.2 }, out: {} },
   fashion: { cap: 20, unit: 'collections', in: { textiles: 3, media: 0.3 }, out: {} },
   hotel: { cap: 25, unit: 'room blocks', in: { food: 2, textiles: 0.5, energy: 1, media: 0.3 }, out: {} },
-  finance: { cap: 20, unit: 'client accounts', in: { software: 0.5, energy: 0.5 }, out: {} }
+  finance: { cap: 20, unit: 'client accounts', in: { software: 0.5, energy: 0.5 }, out: {} },
+  vineyard: { cap: 20, unit: 'barrels', in: { chemicals: 0.3, energy: 0.3, food: 0.2 }, out: {} }
 };
 
 // ---------------------------------------------------------------- departments
@@ -254,7 +259,7 @@ export const WORKER = { salary: 0.08, hireFee: 0.02 };
 // ---------------------------------------------------------------- clients and orders
 // B2B companies have a few large corporate clients who negotiate hard but stay loyal.
 // B2C companies sell through many retail channels with smaller, faster, more impatient orders.
-export const MARKET_KIND = { bank: 'b2c', dealer: 'b2c', restaurant: 'b2c', autorepair: 'b2c', metal: 'b2b', chip: 'b2b', data: 'b2b', finance: 'b2b', pharma: 'b2b', car: 'b2c', clothing: 'b2c', fashion: 'b2c', hotel: 'b2c', music: 'b2c', film: 'b2c' };
+export const MARKET_KIND = { bank: 'b2c', dealer: 'b2c', restaurant: 'b2c', autorepair: 'b2c', metal: 'b2b', chip: 'b2b', data: 'b2b', finance: 'b2b', pharma: 'b2b', car: 'b2c', clothing: 'b2c', fashion: 'b2c', hotel: 'b2c', music: 'b2c', film: 'b2c', vineyard: 'b2c' };
 export const CLIENT_RULES = {
   b2b: { start: 4, weight: [1, 2.5], orderChance: 0.55, expire: 3, renegotiate: 0.6, rejectHit: 18, label: 'Corporate client' },
   b2c: { start: 6, weight: [0.4, 1.2], orderChance: 0.7, expire: 2, renegotiate: 0.42, rejectHit: 10, label: 'Retail channel' }
@@ -274,6 +279,7 @@ export const CLIENT_NAMES = {
   fashion: ['Boutique Lumen', 'Old Grid Department Store', 'Aurex Mall', 'Sunset Surf & Style', 'Crown Hills Atelier', 'Harbor Outlet', 'Midtown Sneaker Lab', 'Lagoon Resort Shops', 'Nevus Concept Store'],
   hotel: ['Northwind Travel', 'Cruise Terminal Desk', 'Aurex Business Travel', 'Wedding Planners Co', 'Conference Bureau', 'Sunset Tour Operators', 'Harbor Row Events', 'Crown Hills Golf Club', 'Airport Shuttle Partners'],
   music: ['StreamBay', 'Aurex FM', 'Old Grid Jazz Club', 'Ironport warehouse nights', 'Indie artists', 'Midtown ad agencies', 'Sunset Open Air', 'Crown Hills Film Festival', 'Podcast networks'],
+  vineyard: ['Cellar Door wine merchants', 'Crown Hills Golf Club', 'Marina Bay restaurants', 'Wine club members', 'Sunset Strand beach bars', 'Aurex Bay Hotel', 'Tasting room visitors', 'Wedding Planners Co', 'Duty-free at the airport'],
   film: ['Grand Cinema Midtown', 'Harbor Row Drive-in', 'StreamBay', 'Crown Hills Film Festival', 'Old Grid Arthouse', 'Nevus Media Network', 'Sunset Open Air', 'Aurex TV', 'Lagoon IMAX']
 };
 
@@ -415,6 +421,16 @@ export const COLLECTIBLES = [
   { id: 'c6', cat: 'car', name: 'Nordvik Rally', maker: 'Nordvik', year: 1985, rarity: 'Rare', v: 0.3, ed: 2, medium: 'Group B rally car' },
   { id: 'c7', cat: 'car', name: 'Brasco 440', maker: 'Brasco', year: 1970, rarity: 'Common', v: 0.12, ed: 3, medium: 'Muscle car' }
 ];
+// Vineyards bottle a collectible wine at harvest (once a year). odds = rarity weights by estate size; top = the rarest a size can make.
+// Each specialist leading a department adds perHead to the chance and bump × rating to the chance of one rarity step up.
+export const VINTAGE = {
+  chance: 0.5, perHead: 0.08, maxChance: 0.85, bump: 0.04, maxBump: 0.6, harvest: 34,
+  odds: { S: { Common: 72, Rare: 25, Epic: 3, Legendary: 0 }, M: { Common: 55, Rare: 33, Epic: 10, Legendary: 2 }, L: { Common: 40, Rare: 38, Epic: 17, Legendary: 5 } },
+  top: { S: 'Epic', M: 'Legendary', L: 'Legendary' },
+  cases: { Common: 10, Rare: 6, Epic: 3, Legendary: 1 },
+  value: { Common: [0.012, 0.02], Rare: [0.025, 0.05], Epic: [0.08, 0.12], Legendary: [0.2, 0.3] },
+  styles: { Common: [['Table Red', 'red'], ['Rosé', 'rosé'], ['Coastal White', 'white']], Rare: [['Reserve', 'red'], ['Pinot Noir', 'red'], ['Brut', 'sparkling']], Epic: [['Grand Reserve', 'red'], ['Single Vineyard', 'red'], ['Blanc de Blancs', 'sparkling']], Legendary: [['Grand Cru', 'red'], ['Cuvée Héritage', 'red']] }
+};
 export const SETS = {
   kestrel: { name: 'The Kestrel Harbors', bonus: 0.12, prestige: 40 },
   crowns: { name: 'Okafor-Lind Crowns', bonus: 0.15, prestige: 40 },

@@ -42,7 +42,7 @@ export function cardHTML(cid, o = {}) {
   const mono = c.maker.split(' ').map((w) => w[0]).join('').slice(0, 2);
   const tag = o.tag ? `<span class="ctag">${esc(o.tag)}</span>` : '';
   return `<button class="ccard r-${c.rarity.toLowerCase()} ${o.cls || ''}" style="--rc:${r.col}" data-a="${o.a || 'cid'}" ${o.attrs || `data-cid="${cid}"`} aria-label="${esc(c.name)}, ${c.rarity}">
-    <span class="cimg" style="${c.img ? `background-image:linear-gradient(180deg, transparent 60%, rgba(10,8,6,0.6)), url(img/x-${cid}.jpg);background-position:center, ${c.img}` : `background-image:linear-gradient(180deg, transparent 55%, rgba(10,8,6,0.75)), url(img/x-${cid}.jpg), linear-gradient(135deg, hsla(${hue(cid)},45%,40%,0.55), rgba(20,14,8,0.4)), url(${CARD_FALLBACK[c.cat]})`}">${c.img ? '' : `<span class="mono">${esc(mono)}</span>${ricon(c.cat, 16)}`}<span class="rar">${c.rarity}</span>${tag}</span>
+    <span class="cimg" style="${c.img ? `background-image:linear-gradient(180deg, transparent 60%, rgba(10,8,6,0.6)), url(img/x-${cid}.jpg);background-position:center, ${c.img}` : `background-image:linear-gradient(180deg, transparent 55%, rgba(10,8,6,0.75)), ${L.isMade(c) ? '' : `url(img/x-${cid}.jpg), `}linear-gradient(135deg, hsla(${hue(cid)},45%,40%,0.55), rgba(20,14,8,0.4)), url(${CARD_FALLBACK[c.cat]})`}">${c.img ? '' : `<span class="mono">${esc(mono)}</span>${ricon(c.cat, 16)}`}<span class="rar">${c.rarity}</span>${tag}</span>
     <span class="cbody"><b>${esc(c.name)}</b><span>${esc(c.maker)} · ${c.year}</span><span class="cval"><strong>${money(v)}</strong>${o.noDelta ? '' : `<em class="${d >= 0 ? 'up' : 'down'}">${P(d)}</em>`}</span></span>
     ${c.set ? `<span class="cset" title="${esc(SETS[c.set].name)}">Set</span>` : ''}</button>`;
 }

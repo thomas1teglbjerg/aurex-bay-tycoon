@@ -1,7 +1,7 @@
 // Aurex Bay Tycoon — game engine.
 // Pure functions over one plain "city" object, so the exact same rules run in the browser demo
 // and server-side in the Supabase Edge Function. Time is real time: 1 game year = 1 real week (speed 1).
-import { DISTRICTS, TYPES, SYNERGY, SIZES, LISTINGS, STAFF, STOCKS, WORLD, DECISIONS, HAPPENINGS, BOTS, CONFIG, DEPT_DEFAULTS, WORKER, GOODS, TAKEOVER } from './content.js';
+import { DISTRICTS, TYPES, SYNERGY, SIZES, LISTINGS, STAFF, STOCKS, WORLD, DECISIONS, HAPPENINGS, BOTS, CONFIG, VINTAGE, DEPT_DEFAULTS, WORKER, GOODS, TAKEOVER } from './content.js';
 import * as OPS from './ops.js';
 import * as LOG from './logistics.js';
 import * as LIFE from './life.js';
@@ -32,7 +32,7 @@ const CTX = { listingYield: (...a) => listingYield(...a), credit, debit, notify:
   book: (city, l, o) => { LOG.ensureWarehouses(city); return LOG.book(city, { from: { k: 'import', id: (LOG.CARRIER[o.carrier] || LOG.CARRIER.ridge).mode }, to: { k: 'l', id: l.id }, ...o, owner: l.owner.id, gNow: city.g }); },
   fromWarehouse: (city, l, needs) => (l.owner && l.owner.k === 'p' && city.players[l.owner.id] && hasStaff(city.players[l.owner.id], 'carlos') ? LOG.supplyFromWarehouses(city, city.players[l.owner.id], l, needs, city.g) : needs) };
 const LCTX = { feed: (p, m, t, x, k) => feed(p, m, t, x, k), news: (city, m, t, x, k) => news(city, m, t, x, k),
-  clientsBoost: (city0, n) => 0 };
+  credit, notify: (city, l, t, x, k) => notifyOwner(city, l, t, x, k), clientsBoost: (city0, n) => 0 };
 // a tycoon who has not done anything for a while is "away": their specialists drift and unprotected companies can be taken over
 export function inactive(city, p) { return !!p && !p.bot && !p.admin && city.m - (p.lastAct ?? city.m) >= TAKEOVER.inactiveMonths; }
 const TCTX = { feed: (p, m, t, x, k) => feed(p, m, t, x, k), news: (city, m, t, x, k) => news(city, m, t, x, k), unassign: (city, p, k) => unassign(city, p, k),
@@ -226,6 +226,7 @@ export function listingYield(city, l, owner) {
   if (l.type === 'hotel' && econ === 'Recession') { ypi -= s; notes.push(`Recession −${r2(s)}`); }
   if (l.type === 'metal' && econ === 'Crisis') { ypi -= 3 * s; notes.push(`Crisis −${r2(3 * s)}`); }
   if (l.type === 'pharma' && econ === 'Crisis') { ypi += 3 * s; notes.push(`Emergency profits +${r2(3 * s)}`); }
+  if (l.type === 'vineyard' && econ === 'Crisis') { ypi -= 0.4 * s; notes.push(`Crisis −${r2(0.4 * s)}`); }
   if (l.type === 'data') { const h = city.stocks.ai.h, n = h.length, t = n > 1 ? Math.sign(h[n - 1] - h[n - 2]) : 0; if (t) { ypi += t * s; notes.push(`AI trend ${t > 0 ? '+' : '−'}${r2(s)}`); } }
   if (l.type === 'finance' && econ === 'Recession') { ypi = 0; notes.push('Recession: no YPI'); }
   if (l.type === 'restaurant' && owner) { const n = Math.min(3, city.listings.filter((x) => x.id !== l.id && x.d === l.d && x.owner && x.owner.k === owner.k && x.owner.id === owner.id).length); if (n) { ypi += 0.2 * n; notes.push(`Neighbourhood +${r2(0.2 * n)}`); } }
@@ -319,7 +320,7 @@ function migrateMap(city) {
   city.shipments = [];
   city.mapV = 4;
 }
-function migrateLife(city) { migrateMap(city); if (city.over) city.over = false; if (!city.talent) TAL.ensure(city); if (city.wk == null) city.wk = city.m * 4; if (city.migratedLife === 1) return; LIFE.ensure(city); city.migratedLife = 1; }
+function migrateLife(city) { migrateMap(city); LIFE.register(city); if (city.over) city.over = false; if (!city.talent) TAL.ensure(city); if (city.wk == null) city.wk = city.m * 4; if (city.migratedLife === 1) return; LIFE.ensure(city); city.migratedLife = 1; }
 export function advance(city, now) {
   migrate(city); migrateLife(city); coopRunMode(city);
   if (city.over) return;
@@ -388,8 +389,20 @@ function planWeek(city, wk) {
     if (rand() < 0.33) plan(city, inWeek(wk), 'happening', { lid: l.id });
     if ((l.type === 'film' || l.type === 'music') && rand() < 1 / 130) plan(city, inWeek(wk), 'hit', { lid: l.id });
   });
+  // vineyards harvest once a year, each in its own week of the autumn
+  city.listings.forEach((l) => { if (l.type === 'vineyard' && l.owner && wk % 48 === harvestWeek(l)) plan(city, inWeek(wk), 'vintage', { lid: l.id }); });
   // the next world card lands somewhere in the first half of the quarter
   if (wk % 12 === 0) plan(city, (wk + 0.5 + rand() * 6) / 48, 'world');
+}
+export const harvestWeek = (l) => VINTAGE.harvest + hashId(l.id) % 6;
+// the specialists leading a department in this company (ratings), the ones who make a better vintage
+function leadRatings(city, l) {
+  const p = l.owner && l.owner.k === 'p' ? city.players[l.owner.id] : null; if (!p || p.bot || !city.talent) return [];
+  return Object.entries(p.assign || {}).filter(([, a]) => a && a.lid === l.id).map(([spec]) => city.talent[p.team && p.team[spec]]).filter((t) => t && t.leave == null).map((t) => t.rating);
+}
+export function vintageOdds(city, l) {
+  const h = leadRatings(city, l), sum = h.reduce((a, r) => a + r, 0);
+  return { heads: h.length, chance: Math.min(VINTAGE.maxChance, VINTAGE.chance + VINTAGE.perHead * h.length), bump: Math.min(VINTAGE.maxBump, VINTAGE.bump * sum), top: VINTAGE.top[l.size] };
 }
 function runAgenda(city, g) {
   if (!city.agenda || !city.agenda.length) return;
@@ -410,6 +423,18 @@ const AGENDA = {
   happening: (city, e) => {
     const l = listing(city, e.lid); if (!l || !l.ops || l.ops.managed || !humanOwned(city, l)) return;
     happening(city, l, pick(HAPPENINGS));
+  },
+  vintage: (city, e) => {
+    const l = listing(city, e.lid); if (!l || !l.owner || l.type !== 'vineyard') return;
+    const yr = Math.floor(city.m / 12); if (l.vintY === yr) return; l.vintY = yr;
+    const r = LIFE.vintage(city, l, { heads: leadRatings(city, l), name: l.title || TYPES[l.type].name });
+    const co = `${l.title || TYPES[l.type].name} in ${l.district}`;
+    if (!r.def) { notifyOwner(city, l, `Harvest at ${co}`, `A good year for drinking wine, but nothing worth laying down. Next harvest in a year (chance ${Math.round(r.chance * 100)}%).`, 'info'); return; }
+    const d = r.def;
+    // run by bots or an autopilot coop: the cases go straight to the wine merchant
+    if (isManaged(city, l)) { const v = LIFE.cellarSellAll(city, l, d.id); credit(city, l.owner, v); return; }
+    notifyOwner(city, l, `${co} bottled a ${d.rarity.toLowerCase()} vintage`, `${d.ed} case${d.ed > 1 ? 's' : ''} of ${d.name} are in the estate cellar, worth about ${Math.round(LIFE.itemValue(city, d.id) * 1e4) / 1e4} M each. Sell them to the wine merchant, at auction or move them to your own cellar.`, 'good');
+    if (d.rarity === 'Epic' || d.rarity === 'Legendary') news(city, city.m, `${co} bottles a ${d.rarity.toLowerCase()} vintage`, `${d.name}: only ${d.ed} case${d.ed > 1 ? 's' : ''} exist.`, 'info');
   },
   hit: (city, e) => {
     const l = listing(city, e.lid); if (!l || !l.owner || l.owner.k !== 'p') return; const p = city.players[l.owner.id]; if (!p) return;
@@ -800,7 +825,7 @@ function applyAs(city, pid, p, action, a, now) {
   }
   if (action === 'hostileBid') return hostileBid(city, p, a);
   if (/^(life|home|item|bid|trade|host|bank)/.test(action)) {
-    const ctx = { ...LCTX, clientsBoost: (id, n) => { let k = 0; ownedBy(city, 'p', id).forEach((l) => (l.ops && l.ops.clients || []).forEach((c) => { if (c.status === 'active') { c.mood = Math.min(100, c.mood + n); k++; } })); return k; } };
+    const ctx = { ...LCTX, canRun: (l) => canRun(city, pid, l), clientsBoost: (id, n) => { let k = 0; ownedBy(city, 'p', id).forEach((l) => (l.ops && l.ops.clients || []).forEach((c) => { if (c.status === 'active') { c.mood = Math.min(100, c.mood + n); k++; } })); return k; } };
     const r = LIFE.act(city, p, action, a, ctx); if (r) return r;
   }
   switch (action) {

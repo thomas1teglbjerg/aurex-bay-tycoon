@@ -1,10 +1,10 @@
 // Company dashboard: one page per company with production, supplies, orders and departments
 import * as E from '../supabase/functions/_shared/engine.js';
-import { TYPES, SIZES, GOODS, RECIPES, DEPTS, STAFF, WORKER, MARKET_KIND, CLIENT_RULES } from '../supabase/functions/_shared/content.js';
+import { TYPES, SIZES, GOODS, RECIPES, DEPTS, STAFF, WORKER, MARKET_KIND, CLIENT_RULES, LIFE as LC, VINTAGE } from '../supabase/functions/_shared/content.js';
 import { carrierPicker, deliveriesBox } from './freight.js';
-import { money } from './life.js';
+import { money, cardHTML } from './life.js';
 import { scenesHTML, sceneFor } from './scenes.js';
-import { city, me, esc, lname, dollars, M, K, N, P, dateLabel, shortDate, deptIcon, spark, barChart, seg } from './util.js';
+import { city, me, esc, lname, coImg, dollars, M, K, N, P, dateLabel, shortDate, deptIcon, spark, barChart, seg } from './util.js';
 
 const O = E.OPS;
 const STAFF_BY = Object.fromEntries(STAFF.map((s) => [s.id, s]));
@@ -12,7 +12,7 @@ export const DEPT_TINT = { ops: '#22344f', procurement: '#5c4220', sales: '#175c
 const STATE_LABEL = { auto: 'Automated', partial: 'Partly automated', manual: 'You run it', closed: 'Not opened' };
 
 export function deptHeader(l, d, state, compact) {
-  const bg = `linear-gradient(100deg, ${DEPT_TINT[d.id]}f2 0%, ${DEPT_TINT[d.id]}b0 45%, ${DEPT_TINT[d.id]}30 100%), url(img/d-${d.id}.jpg), url(img/c-${l.type}.jpg)`;
+  const bg = `linear-gradient(100deg, ${DEPT_TINT[d.id]}f2 0%, ${DEPT_TINT[d.id]}b0 45%, ${DEPT_TINT[d.id]}30 100%), url(img/d-${d.id}.jpg), url(${coImg(l)})`;
   return `<header class="dh ${compact ? 'sm' : ''} ${state === 'closed' ? 'closed' : ''}" style="background-image:${bg}">
     <span class="dh-ic">${deptIcon(d.id, compact ? 20 : 26)}</span><div><b>${esc(d.name)}</b><span class="pill st-${state}">${STATE_LABEL[state]}</span></div></header>`;
 }
@@ -25,7 +25,7 @@ export function statusOf(l) {
 export function companyRow(l) {
   const c = city(), y = E.listingYield(c, l, l.owner), st = statusOf(l), t = O.tasks(c, l).length;
   const auto = l.ops ? Math.round(DEPTS.filter((d) => l.ops.depts[d.id]).reduce((a, d) => a + O.automation(l, d.id), 0) / Math.max(1, Object.keys(l.ops.depts).length) * 100) : 0;
-  return `<button class="crow" data-a="company" data-lid="${l.id}"><span class="thumb lg" style="background-image:url(img/c-${l.type}.jpg)"></span>
+  return `<button class="crow" data-a="company" data-lid="${l.id}"><span class="thumb lg" style="background-image:url(${coImg(l)})"></span>
     <div class="grow"><b>${esc(lname(l))}</b><span>${esc(l.district)} · ${SIZES[l.size].label} · Level ${l.level}${l.upgrade ? ` → ${l.upgrade.to}` : ''}</span>
       <div class="chips" style="margin-top:4px"><span class="chip ${st.cls}">${esc(st.label)}</span>${t ? `<span class="chip warn">${t} to-do</span>` : ''}<span class="chip">${auto}% automated</span>${(() => { const pr = E.protection(c, l); return pr.soft ? '<span class="chip bad" title="Rivals can bid for it if you are away for months">Exposed if you go away</span>' : pr.safe && pr.why ? '<span class="chip good" title="' + esc(pr.why) + '">Protected</span>' : '<span class="chip bad">Unprotected</span>'; })()}</div></div>
     <div class="right"><b class="num up">${M(Math.max(0, y.ypi) * (l.ops ? l.ops.eff : 1) + E.opsEstimate(c, l) - O.runningCosts(l).total, true)}</b><span>per year</span></div></button>`;
@@ -126,7 +126,7 @@ export function companyHTML(lid, ui = {}) {
   const ready = ords.filter((x) => x.status === 'accepted').length;
 
   return `<div class="crumbs"><button class="btn sm" data-a="back">‹ ${ro ? 'Coop' : 'Empire'}</button><span class="muted">${coop ? `${esc(coop.name)} · co-owned · costs come out of the coop treasury` : ro ? `${esc(owner.name)}'s company` : 'Company dashboard'}</span></div>
-  <section class="chero" style="background-image:linear-gradient(180deg, rgba(10,20,35,0.05) 30%, rgba(10,20,35,0.88)), url(img/c-${l.type}.jpg)">
+  <section class="chero" style="background-image:linear-gradient(180deg, rgba(10,20,35,0.05) 30%, rgba(10,20,35,0.88)), url(${coImg(l)})">
     <div class="chero-in"><span class="chip ${st.cls}">${esc(st.label)}</span><h2>${esc(lname(l))}</h2><p>${l.title ? esc(def.name) + ' · ' : ''}${esc(l.district)} · ${SIZES[l.size].label} · Level ${l.level}${l.upgrade ? ` (upgrading to ${l.upgrade.to})` : ''} · Tech ${o.tech} · ${kind === 'b2b' ? 'B2B' : 'B2C'}</p></div>
     <div class="chero-act"><button class="btn sm" data-a="open" data-lid="${l.id}">Company card</button></div>
   </section>
@@ -146,6 +146,7 @@ export function companyHTML(lid, ui = {}) {
   <div class="grid">
     <div class="col">
       ${ro ? '' : `<div class="box"><h2>To-do<small>${tasks.length}</small></h2><div class="in">${taskHTML}<p class="empty" style="font-size:13px">Tasks appear when a department has no staff. Hire workers to hand the work over.</p></div></div>`}
+      ${cellarBox(c, l, ro)}
       <div class="box" id="orders-box"><h2>Customer orders<small>${ords.length} OPEN</small></h2><div class="in">
         ${!ro && ready ? `<button class="btn navy" data-a="deliverOpen" data-lid="${l.id}">Open delivery map · ${ready} ready</button>` : ''}
         ${ords.length ? `<div class="orders">${ords.map((od) => orderCard(c, l, od, ro)).join('')}</div>` : `<p class="empty">${O.automation(l, 'sales') >= 1 ? 'Your sales team answers and ships every order.' : 'No open orders. New orders arrive every month from your clients.'}</p>`}
@@ -173,6 +174,24 @@ export function companyHTML(lid, ui = {}) {
         <p class="empty" style="font-size:13px">Upgrading raises capacity, steady income and the number of workers each department needs.</p></div></div>`}
     </div>
   </div>`;
+}
+// vineyards: the yearly harvest and the estate's own wine cellar
+function cellarBox(c, l, ro) {
+  if (l.type !== 'vineyard') return '';
+  const od = E.vintageOdds(c, l), hw = E.harvestWeek(l), yr = Math.floor(c.m / 12), done = l.vintY === yr || c.wk % 48 > hw;
+  const when = `${E.monthName(Math.floor(hw / 4))}, Year ${yr + (done ? 2 : 1)}`;
+  const groups = {}; (l.cellar || []).forEach((x) => (groups[x.cid] = groups[x.cid] || []).push(x));
+  const solo = l.owner.k === 'p';
+  const rows = Object.entries(groups).filter(([cid]) => E.LIFE.ITEM[cid]).map(([cid, xs]) => {
+    const v = E.LIFE.itemValue(c, cid), free = xs.filter((x) => !x.lot), lots = xs.filter((x) => x.lot), b = (how, uid, label, cls = '') => `<button class="btn sm ${cls}" data-a="cellar" data-lid="${l.id}" data-uid="${uid}" data-v="${how}">${label}</button>`;
+    const acts = ro ? '' : `<div class="btns" style="margin-top:6px">${free.length ? b('dealer', free[0].uid, `Sell 1 to Cellar Door · ${money(v * LC.dealerBuyback)}`) + (free.length > 1 ? b('dealerAll', free[0].uid, `Sell all ${free.length} · ${money(v * LC.dealerBuyback * free.length)}`) : '') + b('auction', free[0].uid, `Auction 1 case · est. ${money(v)}`, 'gold') + (solo ? b('take', free[0].uid, 'Move 1 to my own cellar') : '') : ''}${lots.map((x) => b('withdraw', x.uid, 'Withdraw from auction')).join('')}</div>`;
+    return `<div class="row" style="align-items:flex-start;gap:12px">${cardHTML(cid, { cls: 'sm', noDelta: true })}<div class="grow"><b>${free.length} case${free.length === 1 ? '' : 's'} in the cellar${lots.length ? ` · ${lots.length} at auction` : ''}</b><span>${money(v)} per case · ${esc(E.LIFE.wineWindow(E.LIFE.ITEM[cid], c.m / 12) || '')}</span>${acts}</div></div>`;
+  }).join('');
+  return `<div class="box"><h2>Harvest & wine cellar<small>${(l.cellar || []).length} CASES</small></h2><div class="in">
+    <p style="margin:0 0 8px">Next harvest: <b>${when}</b> · ${Math.round(od.chance * 100)}% chance of a collectible vintage${od.heads ? ` (${od.heads} specialist${od.heads > 1 ? 's' : ''} leading: +${Math.round((od.chance - VINTAGE.chance) * 100)}% chance, ${Math.round(od.bump * 100)}% chance of a rarer wine)` : ''}. Best this estate can make: ${od.top}.</p>
+    ${rows ? `<div class="rows">${rows}</div>` : '<p class="empty">The cellar is empty. Wine you bottle lands here, ready to sell to the wine merchant, put up at the auction house or keep.</p>'}
+    <p class="empty" style="font-size:13px">Specialists who lead a department here raise the chance and the rarity. Sales go to the company${solo ? '. Wine moved to your own cellar can be traded with other players from the Life tab' : ''}.</p>
+  </div></div>`;
 }
 function deptCardRO(l, d) {
   const state = O.deptState(l, d.id), dd = l.ops.depts[d.id];

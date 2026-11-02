@@ -2,7 +2,7 @@
 // the delivery map for customer orders, and the warehouse window.
 import * as E from '../supabase/functions/_shared/engine.js';
 import { TYPES, GOODS, RECIPES, INTERACTIONS, COLLEAGUES, WAREHOUSE_SITES, MAP } from '../supabase/functions/_shared/content.js';
-import { city, me, esc, M, K, N, dur, msUntilMonth, deptIcon, ICON, cropStyle } from './util.js';
+import { city, me, esc, coImg, M, K, N, dur, msUntilMonth, deptIcon, ICON, cropStyle } from './util.js';
 import { DEPT_TINT } from './company.js';
 import { carrierPicker, shipRow } from './freight.js';
 import { money } from './life.js';
@@ -32,7 +32,7 @@ export function deliveryHTML(st) {
     ${ready.length ? `<div class="dorders">${ready.map((x) => { const cl = O.clientById(o, x.cid); return `<button class="dord ${sel && sel.id === x.id ? 'on' : ''}" data-a="deliverSel" data-id="${x.id}"><b>${esc(cl ? cl.name : '')}</b><span>${N(x.units)} units · ${M(x.value)} · due ${x.due <= c.m ? 'now' : 'next month'}</span></button>`; }).join('')}</div>` : '<p class="empty">All accepted orders are delivered.</p>'}
     ${target ? `<div class="dhint">Deliver <b>${N(sel.units)} units</b> to <b>${esc(target.name)}</b> in ${esc(target.district)}</div>` : ''}
     <div class="dmap-wrap"><div class="dmap"><img src="img/map.jpg" alt="Map of Aurex Bay with your clients">
-      <span class="dhome" style="left:${(l.x / MAP.w * 100).toFixed(2)}%;top:${(l.y / MAP.h * 100).toFixed(2)}%" title="Your ${esc(TYPES[l.type].name)}"><span style="background-image:url(img/c-${l.type}.jpg)"></span></span>
+      <span class="dhome" style="left:${(l.x / MAP.w * 100).toFixed(2)}%;top:${(l.y / MAP.h * 100).toFixed(2)}%" title="Your ${esc(TYPES[l.type].name)}"><span style="background-image:url(${coImg(l)})"></span></span>
       ${pins}${truck}</div></div>
     <button class="btn" data-a="close">Done</button></article>`;
 }
