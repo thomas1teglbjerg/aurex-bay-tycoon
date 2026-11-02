@@ -330,7 +330,8 @@ function orderMonth(city, ctx, l, m, dem, price) {
     recalc(city, l, od);
     // orders trickle in through the month: the first arrives now, the rest in the coming weeks
     const wait = fresh.length ? Math.floor(rand() * 4) : 0;
-    if (wait && !o.managed) { (o.queue = o.queue || []).push({ od, wk: m * 4 + wait }); } else { o.orders.push(od); fresh.push(od); }
+    // each one lands at its own moment inside its week, not on the week boundary
+    if (wait && !o.managed) { (o.queue = o.queue || []).push({ od, wk: m * 4 + wait, at: (m * 4 + wait - 0.9 + rand() * 0.85) / 48 }); } else { o.orders.push(od); fresh.push(od); }
   });
   // a staffed sales team answers and ships orders by itself
   const a = automation(l, 'sales');
@@ -353,10 +354,15 @@ export function weekStep(city, ctx, l, wk) {
     const a0 = automation(l, 'sales'), m0 = Math.floor(wk / 4);
     if (a0 > 0) (o.orders || []).filter((od) => od.status === 'accepted' && (od.auto || a0 >= 1)).forEach((od) => { if (rand() < a0 && (o.fg || 0) >= od.units) deliverOrder(city, ctx, l, od, m0); });
   }
-  if (!o.queue || !o.queue.length) return;
-  const due = o.queue.filter((q) => q.wk <= wk); if (!due.length) return;
-  o.queue = o.queue.filter((q) => q.wk > wk);
-  const m = Math.floor(wk / 4), a = automation(l, 'sales');
+  releaseQueue(city, l, wk / 48, Math.floor(wk / 4));
+}
+// queued orders whose moment has come (g in game years) reach the order book
+export function releaseQueue(city, l, g, m = city.m) {
+  const o = l.ops; if (!o || !o.queue || !o.queue.length) return;
+  const when = (q) => (q.at != null ? q.at : q.wk / 48);
+  const due = o.queue.filter((q) => when(q) <= g + 1e-9); if (!due.length) return;
+  o.queue = o.queue.filter((q) => when(q) > g + 1e-9);
+  const a = automation(l, 'sales');
   due.forEach((q) => { const c = clientById(o, q.od.cid); if (!c || c.status !== 'active') return; recalc(city, l, q.od); o.orders.push(q.od); if (a > 0) autoAnswer(o, q.od, a, m); });
   o.orders = o.orders.slice(-30);
 }
