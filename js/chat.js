@@ -30,7 +30,6 @@ function menuFor(e) {
       out.push({ label: chip.dataset.id ? `Play as ${adm ? 'the administrator' : 'the test player'}${n ? ` (${n} unread)` : ''}` : 'Play as yourself', icon: 'back', run: () => chip.click() });
     }
   }
-  if (as && as !== E.ADMIN_ID && id !== E.ADMIN_ID) out.push({ label: 'Chat with administrator', icon: 'chat', run: () => openChat(E.ADMIN_ID) }); // anyone can reach the administrator
   const sel = String(window.getSelection ? window.getSelection() : '').trim();
   if (sel) out.push({ label: 'Copy', icon: 'copy', run: () => navigator.clipboard && navigator.clipboard.writeText(sel).then(() => H.toast('Copied.', 'good'), () => {}) });
   if (out.length) out.push({ sep: true });
