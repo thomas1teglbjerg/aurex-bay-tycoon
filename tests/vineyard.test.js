@@ -9,7 +9,7 @@ const vines = LISTINGS.filter((l) => l.type === 'vineyard');
 assert(vines.length === 3 && ['S', 'M', 'L'].every((s) => vines.some((v) => v.size === s)), 'three vineyards on the map: small, medium and large');
 assert(LISTINGS.find((l) => l.type === 'hotel' && l.d === 'sunset').img === 'c-hotel-sunset', 'the Sunset Strand hotel has its own picture');
 
-const city = E.createCity(now, { speed: 2016 }); E.addPlayer(city, 'u', 'Thomas', now); const p = city.players.u; p.cash = 500;
+let city; do { city = E.createCity(now, { speed: 2016 }); } while (!city.listings.some((x) => x.type === 'vineyard' && !x.owner)); E.addPlayer(city, 'u', 'Thomas', now); const p = city.players.u; p.cash = 500;
 assert(city.listings.filter((l) => l.type === 'vineyard').length === 3, 'a new city has the vineyards');
 
 // the odds: about half the harvests, small estates never Legendary, specialists help
@@ -23,7 +23,7 @@ assert(led.rate > 0.68 && led.rate <= VINTAGE.maxChance + 0.03, `three specialis
 assert((led.rar.Rare || 0) / (led.rate * 3000) > (s.rar.Rare || 0) / (s.rate * 3000), 'specialists raise the rarity');
 
 // buy the medium estate and let a year pass: the harvest happens on its own
-const l = city.listings.find((x) => x.type === 'vineyard' && x.size === 'M');
+const l = city.listings.find((x) => x.type === 'vineyard' && x.size === 'M' && !x.owner) || city.listings.find((x) => x.type === 'vineyard' && !x.owner);
 assert(E.apply(city, 'u', 'buy', { lid: l.id }, now).ok, 'buy the vineyard');
 const weekMs = E.realMsPerMonth(city) / 4;
 for (let i = 0; i < 50; i++) { now += weekMs; E.apply(city, 'u', 'ping', {}, now); }

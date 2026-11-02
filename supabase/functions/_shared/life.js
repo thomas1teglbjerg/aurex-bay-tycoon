@@ -439,13 +439,13 @@ export function act(city, p, action, a, ctx) {
 // once a year at harvest: a chance to bottle a collectible wine. o.heads = ratings of the specialists leading the estate.
 const RAR = ['Common', 'Rare', 'Epic', 'Legendary'];
 export function vintage(city, l, o) {
-  ensure(city); const V = VINTAGE, m = city.m, g = m / 12, year = Math.floor(m / 12) + 1, heads = o.heads || [];
-  const chance = Math.min(V.maxChance, V.chance + V.perHead * heads.length);
+  ensure(city); const V = VINTAGE, m = city.m, g = m / 12, year = Math.floor(m / 12) + 1, heads = o.heads || [], x = o.extra || { chance: 0, bump: 0 };
+  const chance = Math.min(V.maxChance, V.chance + V.perHead * heads.length + x.chance);
   if (rand() >= chance) return { chance, def: null };
   const odds = V.odds[l.size] || V.odds.M, top = RAR.indexOf(V.top[l.size] || 'Legendary');
   let t = RAR.reduce((a, k) => a + odds[k], 0) * rand(), ri = 0;
   for (let i = 0; i < RAR.length; i++) { t -= odds[RAR[i]]; if (t <= 0 && odds[RAR[i]] > 0) { ri = i; break; } }
-  if (rand() < Math.min(V.maxBump, V.bump * heads.reduce((a, r) => a + r, 0))) ri++;
+  if (rand() < Math.min(V.maxBump, V.bump * heads.reduce((a, r) => a + r, 0) + x.bump)) ri++;
   const rarity = RAR[Math.min(ri, top)], [style, color] = pick(V.styles[rarity]), [lo, hi] = V.value[rarity];
   const id = uid('v'), ed = Math.max(1, Math.round(V.cases[rarity] * SIZES[l.size].mult * (0.8 + rand() * 0.4)));
   const def = { id, cat: 'wine', name: `${o.name} ${style} Y${year}`, maker: o.name, year: `Y${year}`, rarity, v: r4((lo + rand() * (hi - lo)) * (1 + 0.1 * ((l.level || 1) - 1))), ed,

@@ -6,7 +6,7 @@ let now = 1_700_000_000_000;
 const city = E.createCity(now, { speed: 2016 }); E.addPlayer(city, 'u', 'Thomas', now); const p = city.players.u; p.cash = 300;
 const step = (act = true) => { now += E.realMsPerMonth(city); E.advance(city, now); if (act) E.apply(city, 'u', 'ping', {}, now); };
 const A = (a, x) => E.apply(city, 'u', a, x, now);
-assert(Object.keys(city.talent).length === 27, '27 specialists in the city');
+assert(Object.keys(city.talent).length === 29, '29 specialists in the city');
 assert(Object.values(city.players).filter((x) => x.bot).some((b) => T.teamOf(city, b).length), 'rival tycoons employ specialists');
 const free = (kind) => Object.keys(city.talent).find((id) => T.PERSON[id].kind === kind && !city.talent[id].owner);
 let tid = free('jason') || free('sofia') || Object.keys(city.talent).find((id) => !city.talent[id].owner); const kind = T.PERSON[tid].kind;

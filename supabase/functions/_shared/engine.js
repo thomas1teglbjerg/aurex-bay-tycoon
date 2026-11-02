@@ -1,7 +1,7 @@
 // Aurex Bay Tycoon — game engine.
 // Pure functions over one plain "city" object, so the exact same rules run in the browser demo
 // and server-side in the Supabase Edge Function. Time is real time: 1 game year = 1 real week (speed 1).
-import { DISTRICTS, TYPES, SYNERGY, SIZES, LISTINGS, STAFF, STOCKS, WORLD, DECISIONS, HAPPENINGS, BOTS, CONFIG, VINTAGE, DEPT_DEFAULTS, WORKER, GOODS, TAKEOVER } from './content.js';
+import { DISTRICTS, TYPES, SYNERGY, SIZES, LISTINGS, STAFF, STOCKS, WORLD, DECISIONS, HAPPENINGS, BOTS, CONFIG, VINTAGE, DEPT_DEFAULTS, WORKER, GOODS, TAKEOVER, SOMMELIER } from './content.js';
 import * as OPS from './ops.js';
 import * as LOG from './logistics.js';
 import * as LIFE from './life.js';
@@ -238,6 +238,7 @@ export function listingYield(city, l, owner) {
       if (def.group === 'media' && hasHead(city, l, p, 'sofia')) { ypi += s; notes.push(`Sofia +${r2(s)}`); }
       if ((def.group === 'industry' || l.type === 'chip') && hasHead(city, l, p, 'carlos')) { ypi += s; notes.push(`Logistics +${r2(s)}`); }
       if (l.type === 'dealer' && hasHead(city, l, p, 'jason') && p.team && p.team.jason === 'rohan') { ypi += s; notes.push(`Rohan +${r2(s)}`); }
+      sommeliers(city, l).forEach((tid) => { const v = SOMMELIER[tid].ypi * s; if (v) { ypi += v; notes.push(`${TAL.PERSON[tid].name.split(' ')[0]} (sommelier) +${r2(v)}`); } });
       if ((l.type === 'autorepair' || l.type === 'car' || l.type === 'dealer') && hasHead(city, l, p, 'marco')) { ypi += s; notes.push(`Workshop +${r2(s)}`); }
       if (def.group === 'tech' && hasHead(city, l, p, 'anika')) { ypi += s; notes.push(`Anika +${r2(s)}`); }
       // every specialist leading a department here adds leadership value, more the better they are
@@ -400,9 +401,16 @@ function leadRatings(city, l) {
   const p = l.owner && l.owner.k === 'p' ? city.players[l.owner.id] : null; if (!p || p.bot || !city.talent) return [];
   return Object.entries(p.assign || {}).filter(([, a]) => a && a.lid === l.id).map(([spec]) => city.talent[p.team && p.team[spec]]).filter((t) => t && t.leave == null).map((t) => t.rating);
 }
+// sommeliers (SOMMELIER) heading a department of a hotel, restaurant or vineyard
+export function sommeliers(city, l) {
+  if (!SOMMELIER.types.includes(l.type) || !l.owner || l.owner.k !== 'p' || !city.talent) return [];
+  const p = city.players[l.owner.id]; if (!p || !p.team) return [];
+  return Object.keys(SOMMELIER).filter((tid) => tid !== 'types' && TAL.PERSON[tid] && p.team[TAL.PERSON[tid].kind] === tid && hasHead(city, l, p, TAL.PERSON[tid].kind) && city.talent[tid] && city.talent[tid].leave == null);
+}
+function vintageExtra(city, l) { return sommeliers(city, l).reduce((a, tid) => ({ chance: a.chance + SOMMELIER[tid].chance, bump: a.bump + SOMMELIER[tid].bump }), { chance: 0, bump: 0 }); }
 export function vintageOdds(city, l) {
-  const h = leadRatings(city, l), sum = h.reduce((a, r) => a + r, 0);
-  return { heads: h.length, chance: Math.min(VINTAGE.maxChance, VINTAGE.chance + VINTAGE.perHead * h.length), bump: Math.min(VINTAGE.maxBump, VINTAGE.bump * sum), top: VINTAGE.top[l.size] };
+  const h = leadRatings(city, l), sum = h.reduce((a, r) => a + r, 0), x = vintageExtra(city, l);
+  return { heads: h.length, chance: Math.min(VINTAGE.maxChance, VINTAGE.chance + VINTAGE.perHead * h.length + x.chance), bump: Math.min(VINTAGE.maxBump, VINTAGE.bump * sum + x.bump), top: VINTAGE.top[l.size], somm: sommeliers(city, l) };
 }
 function runAgenda(city, g) {
   if (!city.agenda || !city.agenda.length) return;
@@ -427,7 +435,7 @@ const AGENDA = {
   vintage: (city, e) => {
     const l = listing(city, e.lid); if (!l || !l.owner || l.type !== 'vineyard') return;
     const yr = Math.floor(city.m / 12); if (l.vintY === yr) return; l.vintY = yr;
-    const r = LIFE.vintage(city, l, { heads: leadRatings(city, l), name: l.title || TYPES[l.type].name });
+    const r = LIFE.vintage(city, l, { heads: leadRatings(city, l), extra: vintageExtra(city, l), name: l.title || TYPES[l.type].name });
     const co = `${l.title || TYPES[l.type].name} in ${l.district}`;
     if (!r.def) { notifyOwner(city, l, `Harvest at ${co}`, `A good year for drinking wine, but nothing worth laying down. Next harvest in a year (chance ${Math.round(r.chance * 100)}%).`, 'info'); return; }
     const d = r.def;

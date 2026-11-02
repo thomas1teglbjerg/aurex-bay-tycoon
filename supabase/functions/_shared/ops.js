@@ -3,7 +3,7 @@
 // output, sells to customers and puts surplus supplies on the city market.
 // Bots and coops run in "managed" mode (fully staffed); human-owned companies run
 // exactly as well as their departments are staffed — or as attentive as the owner is.
-import { TYPES, SIZES, GOODS, RECIPES, DEPTS, DEPT_DEFAULTS, WORKER, MARKET_KIND, CLIENT_RULES, CLIENT_NAMES, DISTRICTS } from './content.js';
+import { TYPES, SIZES, GOODS, RECIPES, DEPTS, DEPT_DEFAULTS, WORKER, MARKET_KIND, CLIENT_RULES, CLIENT_NAMES, DISTRICTS, SOMMELIER } from './content.js';
 
 const r2 = (v) => Math.round(v * 100) / 100;
 const r4 = (v) => Math.round(v * 10000) / 10000;
@@ -87,7 +87,7 @@ export function demand(city, l) {
   const o = l.ops; const price = PRICE[o.managed ? 'standard' : setting(l, 'sales', 'price')];
   const led = (tid) => !o.managed && Object.values(o.depts).some((d) => d && d.head && d.who === tid);
   const econ = led('dario') ? Math.max(1, ECON_DEMAND[city.econ]) : ECON_DEMAND[city.econ];
-  return baseCap(l) * (o.customers / 100) * (0.8 + 0.4 * o.rep / 100) * price.demand * (1 + 0.06 * o.tech) * econ * (led('rohan') ? 1.15 : 1);
+  return baseCap(l) * (o.customers / 100) * (0.8 + 0.4 * o.rep / 100) * price.demand * (1 + 0.06 * o.tech) * econ * (led('rohan') ? 1.15 : 1) * (SOMMELIER.types.includes(l.type) ? Object.keys(SOMMELIER).reduce((a, k) => a * (k !== 'types' && led(k) ? SOMMELIER[k].demand : 1), 1) : 1);
 }
 export function unitPrice(l, yieldTrade) {
   const price = PRICE[l.ops.managed ? 'standard' : setting(l, 'sales', 'price')];
