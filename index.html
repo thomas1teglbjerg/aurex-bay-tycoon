@@ -476,6 +476,15 @@ button.who-c { border: 0; padding: 0; font: inherit; cursor: pointer; }
 .ctx button:hover:not([disabled]) svg, .ctx button:focus-visible svg { color: #fff; }
 .ctx button[disabled] { color: var(--ink-2); cursor: default; font-weight: 500; }
 .ctx hr { border: 0; border-top: 1px solid var(--line); margin: 4px 6px; }
+.ctx button span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.helpcard { position: absolute; z-index: 51; width: min(320px, calc(100% - 16px)); padding: 12px 14px 12px; background: rgba(255,255,255,0.98); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid var(--line); border-left: 4px solid var(--gold); border-radius: 12px; box-shadow: 0 12px 32px rgba(5,20,35,0.32); color: var(--ink); font-size: 14px; line-height: 1.45; }
+.helpcard:focus { outline: none; }
+.helpcard .hc-k { display: block; font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); padding-right: 26px; }
+.helpcard .hc-t { display: block; font-family: var(--head); font-size: 15.5px; margin: 2px 26px 6px 0; }
+.helpcard p { margin: 0 0 6px; } .helpcard p:last-child { margin-bottom: 0; }
+.helpcard .hc-tip { font-size: 13px; color: var(--ink-2); border-top: 1px solid var(--line); padding-top: 6px; }
+.helpcard .hc-x { position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; border-radius: 8px; font-size: 20px; line-height: 1; color: var(--ink-2); }
+.helpcard .hc-x:hover { background: var(--panel-2); color: var(--ink); }
 /* chat between players */
 .chat { position: absolute; z-index: 35; right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(92px + env(safe-area-inset-bottom, 0px)); width: 330px; height: min(440px, calc(100% - var(--topH, 80px) - 104px)); min-height: 240px; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 16px 44px rgba(5,20,35,0.35); overflow: hidden; }
 .chat-hd { display: flex; align-items: center; gap: 10px; padding: 9px 10px 9px 12px; background: var(--band); color: #fff; }
