@@ -537,8 +537,21 @@ export const TALENT = [
   { id: 'dario', kind: 'marco', name: 'Dario Russo', rating: 4, img: true, role: 'General Manager', pay: 2,
     bio: 'Turned around two failing dealerships in the last downturn. Calm, demanding and allergic to excuses. When the market drops, his numbers do not.',
     passive: ['Steady Hand', 'Recessions and crises never cut customer demand in the company where he heads Operations.'] },
-  { id: 'jason', kind: 'jason', name: 'Jason Miller', rating: 3, img: true }, { id: 't-elena', kind: 'jason', name: 'Elena Rossi', rating: 5 }, { id: 't-kofi', kind: 'jason', name: 'Kofi Mensah', rating: 2 }
+  { id: 'jason', kind: 'jason', name: 'Jason Miller', rating: 3, img: true }, { id: 't-elena', kind: 'jason', name: 'Elena Rossi', rating: 5 }, { id: 't-kofi', kind: 'jason', name: 'Kofi Mensah', rating: 2 },
+  { id: 'laurent', kind: 'marco', name: 'Laurent Beaumont', rating: 5, img: true, role: 'Master Sommelier', pay: 1.8,
+    bio: 'Forty harvests in Crown Hills. Names the vintage, the slope and the weather that year from one sip, and has sent back wine at every five-star table in the bay.',
+    passive: ['Grand Palate', 'At a hotel, restaurant or vineyard where he heads Operations: +1 M YPI. At a vineyard: +15% chance of a collectible vintage and +20% chance it comes out one rarity higher.'] },
+  { id: 'elise', kind: 'jason', name: 'Elise Marchand', rating: 4, img: true, role: 'Sommelier', pay: 1.4,
+    bio: 'Grew up between the barrels at Crown Hills. Runs the wine list at the best tables in Aurex Bay and has the case sold before the cork is out.',
+    passive: ['Perfect Pairing', 'At a hotel, restaurant or vineyard where she heads Sales: customer demand +12% and +0.5 M YPI. At a vineyard: +10% vintage chance and +10% rarity chance.'] }
 ];
+// Sommeliers pay off in hospitality: where one heads a department of these types. ypi × size; demand multiplies;
+// chance / bump add to the vineyard's vintage odds (VINTAGE).
+export const SOMMELIER = {
+  types: ['hotel', 'restaurant', 'vineyard'],
+  laurent: { ypi: 1, demand: 1, chance: 0.15, bump: 0.2 },
+  elise: { ypi: 0.5, demand: 1.12, chance: 0.1, bump: 0.1 }
+};
 export const TALENT_TITLE = ['Junior', 'Associate', '', 'Senior', 'Star'];
 // salary ask per year = base[kind] × mult[rating]; signing fee for free agents = fee × mult
 export const TALENT_RULES = {

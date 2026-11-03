@@ -192,9 +192,9 @@ function cellarBox(c, l, ro) {
     return `<div class="row" style="align-items:flex-start;gap:12px">${cardHTML(cid, { cls: 'sm', noDelta: true })}<div class="grow"><b>${free.length} case${free.length === 1 ? '' : 's'} in the cellar${lots.length ? ` · ${lots.length} at auction` : ''}</b><span>${money(v)} per case · ${esc(E.LIFE.wineWindow(E.LIFE.ITEM[cid], c.m / 12) || '')}</span>${acts}</div></div>`;
   }).join('');
   return `<div class="box"><h2>Harvest & wine cellar<small>${(l.cellar || []).length} CASES</small></h2><div class="in">
-    <p style="margin:0 0 8px">Next harvest: <b>${when}</b> · ${Math.round(od.chance * 100)}% chance of a collectible vintage${od.heads ? ` (${od.heads} specialist${od.heads > 1 ? 's' : ''} leading: +${Math.round((od.chance - VINTAGE.chance) * 100)}% chance, ${Math.round(od.bump * 100)}% chance of a rarer wine)` : ''}. Best this estate can make: ${od.top}.</p>
+    <p style="margin:0 0 8px">Next harvest: <b>${when}</b> · ${Math.round(od.chance * 100)}% chance of a collectible vintage${od.heads ? ` (${od.heads} specialist${od.heads > 1 ? 's' : ''} leading: +${Math.round((od.chance - VINTAGE.chance) * 100)}% chance, ${Math.round(od.bump * 100)}% chance of a rarer wine${od.somm.length ? `, with sommelier ${od.somm.map((t) => esc(E.TAL.PERSON[t].name)).join(' and ')}` : ''})` : ''}. Best this estate can make: ${od.top}.</p>
     ${rows ? `<div class="rows">${rows}</div>` : '<p class="empty">The cellar is empty. Wine you bottle lands here, ready to sell to the wine merchant, put up at the auction house or keep.</p>'}
-    <p class="empty" style="font-size:13px">Specialists who lead a department here raise the chance and the rarity. Sales go to the company${solo ? '. Wine moved to your own cellar can be traded with other players from the Life tab' : ''}.</p>
+    <p class="empty" style="font-size:13px">Specialists who lead a department here raise the chance and the rarity; a sommelier raises them most. Sales go to the company${solo ? '. Wine moved to your own cellar can be traded with other players from the Life tab' : ''}.</p>
   </div></div>`;
 }
 function deptCardRO(l, d) {
