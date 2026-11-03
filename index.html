@@ -476,6 +476,11 @@ button.who-c { border: 0; padding: 0; font: inherit; cursor: pointer; }
 .ctx button:hover:not([disabled]) svg, .ctx button:focus-visible svg { color: #fff; }
 .ctx button[disabled] { color: var(--ink-2); cursor: default; font-weight: 500; }
 .ctx hr { border: 0; border-top: 1px solid var(--line); margin: 4px 6px; }
+@media (pointer: coarse) { /* long press opens the game's menu, not the system's callout or text selection */
+  #app { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+  #app input, #app textarea, #app [contenteditable="true"], .chat-log p { -webkit-user-select: text; user-select: text; }
+  .ctx button { padding: 11px 12px; }
+}
 .ctx button span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .helpcard { position: absolute; z-index: 51; width: min(320px, calc(100% - 16px)); padding: 12px 14px 12px; background: rgba(255,255,255,0.98); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid var(--line); border-left: 4px solid var(--gold); border-radius: 12px; box-shadow: 0 12px 32px rgba(5,20,35,0.32); color: var(--ink); font-size: 14px; line-height: 1.45; }
 .helpcard:focus { outline: none; }
