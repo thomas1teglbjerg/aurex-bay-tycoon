@@ -4,8 +4,9 @@
 import * as E from '../supabase/functions/_shared/engine.js';
 import { city, $, esc } from './util.js';
 import { symbolIcon } from './brand.js';
+import { helpAt, showHelp, hideHelp, initHelp } from './help.js';
 
-let H = null; // hooks from main.js: { B, toast, renderWho, navBack, setTab, initials }
+let H = null; // hooks from main.js: { B, toast, renderWho, navBack, setTab, initials, where }
 const CH = { peer: null, msgs: [], unread: {}, poll: 0, inbox: {}, peers: [] };
 export const unreadFrom = () => CH.unread;
 // admins: unread messages waiting for the administrator / the test player while you play as someone else
@@ -30,6 +31,9 @@ function menuFor(e) {
       out.push({ label: chip.dataset.id ? `Play as ${adm ? 'the administrator' : 'the test player'}${n ? ` (${n} unread)` : ''}` : 'Play as yourself', icon: 'back', run: () => chip.click() });
     }
   }
+  // Help: what the right-clicked thing is and what it does
+  const hp = helpAt(e.target, H.where ? H.where() : {});
+  if (hp && hp.d) { const x = e.clientX, y = e.clientY; out.push({ label: `Help: ${hp.t}`, icon: 'help', help: !hp.gen, run: () => showHelp(hp, x, y) }); }
   const sel = String(window.getSelection ? window.getSelection() : '').trim();
   if (sel) out.push({ label: 'Copy', icon: 'copy', run: () => navigator.clipboard && navigator.clipboard.writeText(sel).then(() => H.toast('Copied.', 'good'), () => {}) });
   if (out.length) out.push({ sep: true });
@@ -43,6 +47,7 @@ const ICONS = {
   back: '<path d="M10 6 4 12l6 6M4 12h16"/>',
   map: '<path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="M9 4v14M15 6v14"/>',
   reload: '<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>',
+  help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7M12 17h.01"/>',
   copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>'
 };
 const ico = (k) => `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k] || ''}</svg>`;
@@ -52,7 +57,8 @@ function showCtx(e) {
   if (!H.B.city) return;
   items = menuFor(e);
   // a long press on a phone only opens the menu where it has something special (a player's icon), not while panning the map
-  if (e.pointerType === 'touch' && !items.some((x) => x.head)) return;
+  if (e.pointerType === 'touch' && !items.some((x) => x.head || x.help)) return;
+  hideHelp();
   const m = $('ctx');
   m.innerHTML = items.map((x, i) => x.sep ? '<hr>' : x.head ? `<div class="ctx-h">${esc(x.head)}</div>`
     : `<button role="menuitem" data-i="${i}"${x.off ? ' disabled' : ''}>${ico(x.icon)}<span>${esc(x.label)}</span></button>`).join('');
@@ -181,6 +187,7 @@ export function initChat(hooks) {
   box.innerHTML = `<header class="chat-hd"></header><nav class="chat-tabs" role="tablist" aria-label="Conversations" hidden></nav><div class="chat-log" role="log" aria-live="polite"></div>
     <form class="chat-f" autocomplete="off"><input maxlength="500" placeholder="Write a message…" aria-label="Message"><button type="submit">Send</button></form>`;
   app.appendChild(box);
+  initHelp();
   document.addEventListener('contextmenu', showCtx);
   document.addEventListener('pointerdown', (e) => { if (!e.target.closest('#ctx')) hideCtx(); }, true);
   window.addEventListener('blur', hideCtx); window.addEventListener('resize', hideCtx);
