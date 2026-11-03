@@ -154,8 +154,10 @@ function districtStats(c, d) {
   const ls = c.listings.filter((l) => l.d === d.id), mine = ls.filter((l) => ownerLabel(c, l).mine).length;
   return { total: ls.length, sale: ls.filter((l) => !l.owner).length, mine, wh: WAREHOUSE_SITES.filter((x) => x.d === d.id).length, homes: HOMES.filter((h) => h.d === d.id).length };
 }
+// Admins can drag company pins to a better spot; the server saves it for every player (adminMove, city.pins).
+let pinEdit = false, pinDrag = null;
 function renderMarks() {
-  const c = city(), box = $('mapmarks'); if (!box || !c) return;
+  const c = city(), box = $('mapmarks'); if (!box || !c || pinDrag) return;
   if (!view.level) {
     box.innerHTML = DISTRICTS.map((d) => { const st = districtStats(c, d);
       return `<button class="zone" data-zone="${d.id}" style="left:${d.box.x}px;top:${d.box.y}px;width:${d.box.w}px;height:${d.box.h}px" aria-label="${esc(d.name)}"><span class="zlabel"${d.ly ? ` style="top:${d.ly * 100}%"` : ''}><b>${esc(d.name)}</b><span>${st.total} compan${st.total === 1 ? 'y' : 'ies'}${st.sale ? ` · <em class="s">${st.sale} for sale</em>` : ''}${st.mine ? ` · <em class="m">${st.mine} yours</em>` : ''}</span></span></button>`; }).join('');
@@ -163,7 +165,7 @@ function renderMarks() {
   }
   const d = DISTRICT[view.level], pos = (o) => ({ x: o.p[0] * view.W, y: o.p[1] * view.H }), out = [];
   c.listings.filter((l) => l.d === d.id).forEach((l) => { const o = ownerLabel(c, l), col = !l.owner ? PIN_COL.sale : o.mine ? PIN_COL.mine : o.coop ? PIN_COL.coop : PIN_COL.taken, q = pos(l);
-    out.push(`<button class="mp ${o.mine ? 'mine' : ''}" data-mk="l:${l.id}" style="left:${q.x}px;top:${q.y}px;--c:${col}" aria-label="${esc(TYPES[l.type].name)}">${pinIcon('company')}</button>`); });
+    out.push(`<button class="mp ${o.mine ? 'mine' : ''}${pinEdit ? ' mv' : ''}" data-mk="l:${l.id}" style="left:${q.x}px;top:${q.y}px;--c:${col}" aria-label="${esc(TYPES[l.type].name)}">${pinIcon('company')}</button>`); });
   WAREHOUSE_SITES.filter((x) => x.d === d.id).forEach((site) => { const w = (c.warehouses || []).find((x) => x.id === site.id), mine = w && w.owner === meId(), q = pos(site);
     out.push(`<button class="mp sq ${mine ? 'mine' : ''}" data-mk="w:${site.id}" style="left:${q.x}px;top:${q.y}px;--c:${mine ? PIN_COL.mine : PIN_COL.wh}" aria-label="${esc(site.name)}">${pinIcon('wh')}</button>`); });
   HOMES.filter((h) => h.d === d.id).forEach((h) => { const lp = me() && me().life, mine = lp && lp.homes.some((x) => x.hid === h.id), q = pos(h);
@@ -175,7 +177,7 @@ function renderMapNav() {
   if (!view.level) { nav.innerHTML = `<div class="mn-crumb glass"><b>Aurex Bay</b><span>Choose a district</span></div>`; return; }
   const d = DISTRICT[view.level], i = DISTRICTS.indexOf(d), prev = DISTRICTS[(i + DISTRICTS.length - 1) % DISTRICTS.length], next = DISTRICTS[(i + 1) % DISTRICTS.length];
   nav.innerHTML = `<div class="mn-crumb glass"><button data-a="mapCity" class="mn-back" aria-label="Back to the city">‹ Aurex Bay</button><b>${esc(d.name)}</b><span class="mn-step"><button data-a="mapGo" data-v="${prev.id}" aria-label="Previous district: ${esc(prev.name)}">‹</button><button data-a="mapGo" data-v="${next.id}" aria-label="Next district: ${esc(next.name)}">›</button></span></div>
-    <div class="mn-legend glass"><span><i style="--c:${PIN_COL.sale}"></i>For sale</span><span><i style="--c:${PIN_COL.taken}"></i>Owned</span><span><i style="--c:${PIN_COL.mine}"></i>Yours</span><span><i class="sq" style="--c:${PIN_COL.wh}"></i>Warehouse</span><span><i style="--c:${PIN_COL.home}"></i>Home</span></div>`;
+    <div class="mn-legend glass"><span><i style="--c:${PIN_COL.sale}"></i>For sale</span><span><i style="--c:${PIN_COL.taken}"></i>Owned</span><span><i style="--c:${PIN_COL.mine}"></i>Yours</span><span><i class="sq" style="--c:${PIN_COL.wh}"></i>Warehouse</span><span><i style="--c:${PIN_COL.home}"></i>Home</span></div>${B.admin ? `<button class="mn-edit glass${pinEdit ? ' on' : ''}" data-a="pinEdit" aria-pressed="${pinEdit}" title="Admin: drag company pins to a new spot for every player">${pinEdit ? 'Done moving' : 'Move pins'}</button>` : ''}${pinEdit ? '<div class="mn-hint glass">Drag a company pin. Where you drop it is saved for everyone.</div>' : ''}`;
 }
 // the hover card
 let cardKey = null, cardTimer = 0, lastPointer = 'mouse', flying = false;
@@ -214,8 +216,9 @@ function setupMapEvents() {
   w.addEventListener('pointerdown', (e) => { lastPointer = e.pointerType || 'mouse'; warm(e); }, true);
   w.addEventListener('mouseover', (e) => {
     warm(e);
-    if (lastPointer === 'touch' || flying) return;
+    if (lastPointer === 'touch' || flying || pinDrag) return;
     const z = e.target.closest('.zlabel') && e.target.closest('.zone'), m = e.target.closest('.mp'), t = z || m; if (!t) return; // district info only over its title box
+    if (m && m.classList.contains('mv')) return; // moving pins: no cards
     const key = z ? 'z:' + z.dataset.zone : m.dataset.mk; if (key === cardKey) return;
     document.querySelectorAll('.zone.on').forEach((x) => x.classList.remove('on')); if (z) z.classList.add('on');
     showMapCard(key, z ? z.querySelector('.zlabel') : m);
@@ -224,9 +227,33 @@ function setupMapEvents() {
   w.addEventListener('click', (e) => {
     const z = e.target.closest('.zone'), m = e.target.closest('.mp');
     if (z) { hideMapCard(); enterDistrict(z.dataset.zone, e); return; }
+    if (m && m.classList.contains('mv')) return; // moving pins: no opening
     if (m) { if (lastPointer === 'touch' && cardKey !== m.dataset.mk) { showMapCard(m.dataset.mk, m); return; } hideMapCard(); openMark(m.dataset.mk); return; }
     hideMapCard();
   });
+  // admin: drag a company pin (the map does not pan while a pin is held)
+  w.addEventListener('pointerdown', (e) => {
+    const m = e.target.closest('.mp.mv'); if (!m || !pinEdit || flying) return;
+    e.stopPropagation(); e.preventDefault(); hideMapCard();
+    pinDrag = { el: m, lid: m.dataset.mk.slice(2), id: e.pointerId, x0: e.clientX, y0: e.clientY, moved: false };
+    m.classList.add('held');
+  });
+  window.addEventListener('pointermove', (e) => {
+    const g = pinDrag; if (!g || e.pointerId !== g.id) return;
+    if (!g.moved && Math.abs(e.clientX - g.x0) + Math.abs(e.clientY - g.y0) < 4) return;
+    g.moved = true;
+    const r = $('viewport').getBoundingClientRect(), x = Math.min(view.W, Math.max(0, (e.clientX - r.left - view.x) / view.s)), y = Math.min(view.H, Math.max(0, (e.clientY - r.top - view.y) / view.s));
+    g.p = [x / view.W, y / view.H]; g.el.style.left = x + 'px'; g.el.style.top = y + 'px';
+  });
+  const drop = async (e) => {
+    const g = pinDrag; if (!g || e.pointerId !== g.id) return;
+    g.el.classList.remove('held');
+    if (!g.moved || e.type === 'pointercancel') { pinDrag = null; renderMarks(); return; }
+    const r = await B.moveListing(g.lid, g.p); pinDrag = null;
+    if (r && r.ok === false) toast(r.msg, 'bad'); else toast((r && r.msg) || 'Moved.', 'good');
+    renderMarks();
+  };
+  window.addEventListener('pointerup', drop); window.addEventListener('pointercancel', drop);
   $('mapcard').addEventListener('mouseenter', () => clearTimeout(cardTimer));
   $('mapcard').addEventListener('click', (e) => { if (cardKey && cardKey.startsWith('z:') && !e.target.closest('[data-a]')) { const id = cardKey.slice(2); hideMapCard(); enterDistrict(id); } });
   $('mapcard').addEventListener('mouseleave', () => hideMapCard(false));
@@ -749,6 +776,7 @@ async function onClick(e) {
     case 'open': hideMapCard(); openListing(d.lid); return;
     case 'mapCity': { const d0 = DISTRICT[view.level]; setLevel(null); return; }
     case 'mapGo': setLevel(d.v); return;
+    case 'pinEdit': pinEdit = !pinEdit && !!B.admin; hideMapCard(); renderMapNav(); renderMarks(); return;
     case 'mapHome': hideMapCard(); openMark('h:' + d.hid); return;
     case 'company': closeModal(); setTab('empire'); UI.company = d.lid; $('panel').scrollTop = 0; renderPanel(); return;
     case 'back': UI.company = null; $('panel').scrollTop = 0; renderPanel(); return;

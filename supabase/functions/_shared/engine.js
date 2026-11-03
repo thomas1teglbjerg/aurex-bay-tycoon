@@ -1,7 +1,7 @@
 // Aurex Bay Tycoon — game engine.
 // Pure functions over one plain "city" object, so the exact same rules run in the browser demo
 // and server-side in the Supabase Edge Function. Time is real time: 1 game year = 1 real week (speed 1).
-import { DISTRICTS, TYPES, SYNERGY, SIZES, LISTINGS, STAFF, STOCKS, WORLD, DECISIONS, HAPPENINGS, BOTS, CONFIG, VINTAGE, VIP, DEPT_DEFAULTS, WORKER, GOODS, TAKEOVER, SOMMELIER } from './content.js';
+import { DISTRICTS, TYPES, SYNERGY, SIZES, LISTINGS, STAFF, STOCKS, WORLD, DECISIONS, HAPPENINGS, BOTS, CONFIG, VINTAGE, VIP, DEPT_DEFAULTS, WORKER, GOODS, TAKEOVER, SOMMELIER, placeOn } from './content.js';
 import * as OPS from './ops.js';
 import * as LOG from './logistics.js';
 import * as LIFE from './life.js';
@@ -324,11 +324,30 @@ function migrateMap(city) {
   if (city.mapV === 4) return;
   const byId = Object.fromEntries(LISTINGS.map((l) => [l.id, l]));
   city.listings.forEach((l) => { const n = byId[l.id]; if (n) Object.assign(l, { d: n.d, p: n.p, x: n.x, y: n.y, district: n.district }); });
+  keepPins(city);
   if (city.mapV === 2 || city.mapV === 3) { city.mapV = 4; return; }
   const ds = DISTRICTS;
   city.listings.forEach((l) => (l.ops && l.ops.clients || []).forEach((c) => { const d = ds[Math.floor(rand() * ds.length)]; Object.assign(c, { district: d.name, x: Math.round(d.box.x + (0.15 + rand() * 0.7) * d.box.w), y: Math.round(d.box.y + (0.15 + rand() * 0.7) * d.box.h) }); }));
   city.shipments = [];
   city.mapV = 4;
+}
+// Positions an admin dragged on the map (city.pins: { lid: { type, p } }). They outlive map updates in content.js;
+// a pin is dropped when another kind of business takes over the site.
+function keepPins(city) {
+  const pins = city.pins || {};
+  Object.keys(pins).forEach((id) => { const l = city.listings.find((x) => x.id === id), pin = pins[id];
+    if (!l || l.type !== pin.type) { delete pins[id]; return; }
+    Object.assign(l, { p: pin.p.slice(), ...placeOn(l.d, pin.p) }); });
+}
+// admin only (checked by the game function): move a company's pin inside its district, for everyone, for good
+export function moveListing(city, lid, p) {
+  const l = city.listings.find((x) => x.id === lid);
+  if (!l) return { ok: false, msg: 'That company is not on the map.' };
+  if (!Array.isArray(p) || p.length !== 2 || !p.every((v) => typeof v === 'number' && Number.isFinite(v))) return { ok: false, msg: 'Drop the pin on the district map.' };
+  const q = p.map((v) => Math.round(Math.min(0.99, Math.max(0.01, v)) * 1e4) / 1e4);
+  city.pins = city.pins || {}; city.pins[lid] = { type: l.type, p: q };
+  Object.assign(l, { p: q, ...placeOn(l.d, q) });
+  return { ok: true, msg: `${l.title || TYPES[l.type].name} moved.` };
 }
 function migrateLife(city) { migrateMap(city); LIFE.register(city); if (city.over) city.over = false; if (!city.talent) TAL.ensure(city); if (city.wk == null) city.wk = city.m * 4; if (city.migratedLife === 1) return; LIFE.ensure(city); city.migratedLife = 1; }
 export function advance(city, now) {
