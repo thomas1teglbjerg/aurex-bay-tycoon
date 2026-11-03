@@ -302,6 +302,7 @@ export function helpAt(el, where = {}) {
   if (q('.webbtn')) return { ...ACTIONS.web, t: 'Web browser', k: 'Top bar' };
   if ((x = q('.mp[data-mk]'))) return markHelp(x.dataset.mk);
   if ((x = q('.zone[data-zone]'))) { const d = DISTRICT[x.dataset.zone]; return d && { t: d.name, k: 'District', d: d.blurb, tip: 'Click to zoom into the district and see its companies, warehouses and homes.' }; }
+  if (q('.mn-crumb')) return { t: 'Where you are', k: 'Map', d: 'The part of the city you are looking at. In a district, ‹ Aurex Bay takes you back to the whole city and the arrows step to the previous or next district.' };
   if (q('.mn-legend')) return { t: 'Map colours', k: 'Map', d: 'Gold pins are companies for sale, grey are owned by others, green are yours. Squares are warehouses, house pins are homes.' };
 
   // departments: a setting, the worker stepper, the head, or the department itself

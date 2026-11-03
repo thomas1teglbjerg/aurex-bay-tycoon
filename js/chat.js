@@ -55,9 +55,10 @@ function showCtx(e) {
   if (native(e)) return;
   e.preventDefault();
   if (!H.B.city) return;
+  // phones and tablets: a long press opens the menu (our own timer below, or the browser's contextmenu on Android), once
+  if (e.long || e.pointerType === 'touch' || e.pointerType === 'pen') { if (Date.now() - LP.shown < 900) return; LP.shown = Date.now(); }
   items = menuFor(e);
   // a long press on a phone only opens the menu where it has something special (a player's icon), not while panning the map
-  if (e.pointerType === 'touch' && !items.some((x) => x.head || x.help)) return;
   hideHelp();
   const m = $('ctx');
   m.innerHTML = items.map((x, i) => x.sep ? '<hr>' : x.head ? `<div class="ctx-h">${esc(x.head)}</div>`
@@ -68,6 +69,24 @@ function showCtx(e) {
   m.style.top = Math.max(6, Math.min(e.clientY, Hh - r.height - 6)) + 'px';
   const first = m.querySelector('button:not([disabled])'); if (first) first.focus({ preventScroll: true });
 }
+// long press on touch screens (iOS Safari never fires contextmenu): hold still for LP.ms to open the menu
+const LP = { ms: 520, timer: 0, x: 0, y: 0, id: null, fired: 0, shown: 0 };
+function lpStart(e) {
+  if (e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
+  lpCancel();
+  if (!e.isPrimary || e.target.closest('#ctx, #helpcard') || native(e)) return;
+  LP.x = e.clientX; LP.y = e.clientY; LP.id = e.pointerId;
+  const target = e.target;
+  LP.timer = setTimeout(() => {
+    LP.timer = 0; LP.fired = Date.now();
+    if (navigator.vibrate) try { navigator.vibrate(12); } catch (_) {}
+    showCtx({ long: true, target, clientX: LP.x, clientY: LP.y, shiftKey: false, preventDefault() {} });
+  }, LP.ms);
+}
+function lpMove(e) { if (LP.timer && e.pointerId === LP.id && Math.hypot(e.clientX - LP.x, e.clientY - LP.y) > 10) lpCancel(); }
+function lpCancel() { clearTimeout(LP.timer); LP.timer = 0; }
+// the finger lifting after a long press must not also tap what is under it
+function lpSwallow(e) { if (Date.now() - LP.fired < 700 && !e.target.closest('#ctx, #helpcard')) { e.preventDefault(); e.stopPropagation(); } }
 function hideCtx() { const m = $('ctx'); if (m && !m.hidden) m.hidden = true; }
 function ctxKeys(e) {
   const m = $('ctx'); if (m.hidden) return false;
@@ -190,6 +209,10 @@ export function initChat(hooks) {
   initHelp();
   document.addEventListener('contextmenu', showCtx);
   document.addEventListener('pointerdown', (e) => { if (!e.target.closest('#ctx')) hideCtx(); }, true);
+  document.addEventListener('pointerdown', lpStart, true);
+  document.addEventListener('pointermove', lpMove, true);
+  ['pointerup', 'pointercancel', 'scroll'].forEach((k) => document.addEventListener(k, lpCancel, true));
+  document.addEventListener('click', lpSwallow, true);
   window.addEventListener('blur', hideCtx); window.addEventListener('resize', hideCtx);
   document.addEventListener('wheel', hideCtx, { passive: true });
   document.addEventListener('keydown', (e) => {
