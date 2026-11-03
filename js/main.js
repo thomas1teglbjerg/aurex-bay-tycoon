@@ -606,7 +606,7 @@ function coopHTML() {
   };
   return `<h2 class="ph1">Coop parent companies</h2><p class="lede">Pool money with other players in a shared parent company. Every owner holds a stake in proportion to what they put in. Purchases, sales, upgrades and dividends are decided by vote: more than half of the stakes decides at once, otherwise the majority of votes cast after one game month. Sale money goes to the treasury. Owners don't need to be online at the same time: open votes close after one game month.</p>
     ${invites.length ? `<div class="box"><h2>Invitations<small>${invites.length}</small></h2><div class="in"><div class="rows">${invites.map((h) => `<div class="row"><div class="grow"><b>${esc(h.name)}</b><span>Value ${M(E.holdingNav(c, h))} · ${Object.keys(h.members).length} owners</span></div><button class="btn sm coop" data-a="hjoin" data-hid="${h.id}">Invest ${M(UI.coopAmt)}</button></div>`).join('')}</div></div></div>` : ''}
-    <div class="grid"><div class="col">${mineH.map(card).join('') || '<div class="box"><div class="in"><p class="empty">You are not part of a coop yet. Found one to buy companies that are too expensive alone.</p></div></div>'}</div>
+    <div class="grid"><div class="col">${mineH.map((h) => card(h) + (!h.bot && c.talent ? teamBoxHTML(E.TAL.coopEmp(c, h)) : '')).join('') || '<div class="box"><div class="in"><p class="empty">You are not part of a coop yet. Found one to buy companies that are too expensive alone.</p></div></div>'}</div>
     <div class="col">
       <div class="box"><h2>Found a coop</h2><div class="in"><div class="field"><label for="coop-name">Name</label><input id="coop-name" maxlength="32" placeholder="Harbor Row Capital" autocomplete="off"></div>
         <div class="btns" style="align-items:center"><span class="cap">Your capital</span><div class="stepper"><button data-a="camt" data-v="-5" aria-label="Less">−</button><output class="num">${M(UI.coopAmt)}</output><button data-a="camt" data-v="5" aria-label="More">+</button></div></div>
@@ -619,7 +619,7 @@ function coopHTML() {
 function modal(html) { const m = $('modal'); m.innerHTML = `<div class="wrap"><button class="close" data-a="close" aria-label="Close">${ICON.x}</button>${html}</div>`; m.hidden = false; liveUpdate(); }
 function closeModal() { $('modal').hidden = true; $('modal').innerHTML = ''; UI.modal = null; }
 function openListing(lid) { UI.modal = { t: 'listing', id: lid }; const st = $('modal').scrollTop; modal(companyCard(E.listing(city(), lid))); $('modal').scrollTop = st; }
-function openStaff(id, keep) { if (!keep || !UI.modal || UI.modal.id !== id) UI.modal = { t: 'staff', id }; const sc = $('modal').scrollTop; modal(c0().talent ? talentModal(UI.modal) : staffCard(STAFF_BY[id])); if (keep) $('modal').scrollTop = sc; }
+function openStaff(id, keep, coop) { if (!keep || !UI.modal || UI.modal.id !== id) UI.modal = { t: 'staff', id, coop: coop || UI.talentFor || null }; const sc = $('modal').scrollTop; modal(c0().talent ? talentModal(UI.modal) : staffCard(STAFF_BY[id])); if (keep) $('modal').scrollTop = sc; }
 const c0 = () => city();
 function openStock(id) { UI.modal = { t: 'stock', id }; const st = $('modal').scrollTop; modal(stockModal(id, UI.sqty)); $('modal').scrollTop = st; }
 function openWarehouse(id) { UI.modal = { t: 'wh', id }; const st = $('modal').scrollTop; modal(warehouseHTML(id, UI)); $('modal').scrollTop = st; }
@@ -736,7 +736,7 @@ async function onClick(e) {
     }
     case 'chat': openChat(d.id); return;
     // ---- the in-game browser
-    case 'web': openWeb(d.u || (UI.web && UI.web.url) || HOME_URL); return;
+    case 'web': if (d.coop) UI.talentFor = d.coop; else if (!t.closest('#web')) UI.talentFor = null; openWeb(d.u || (UI.web && UI.web.url) || HOME_URL); return;
     case 'webGo': navWeb(d.u); return;
     case 'webBack': if (UI.web.back.length) { UI.web.fwd.push(UI.web.url); UI.web.url = UI.web.back.pop(); UI.web.amt = null; renderWeb(true); } return;
     case 'webFwd': if (UI.web.fwd.length) { UI.web.back.push(UI.web.url); UI.web.url = UI.web.fwd.pop(); UI.web.amt = null; renderWeb(true); } return;
@@ -799,10 +799,11 @@ async function onClick(e) {
     case 'listGoods': await act('listGoods', { lid: d.lid, g: d.g }); return;
     case 'exportGoods': await act('exportGoods', { lid: d.lid, g: d.g, carrier: d.c }); return;
     case 'cancelOffer': await act('cancelOffer', { id: d.id }); return;
-    case 'assignHead': await act('assignHead', { lid: d.lid, dept: d.dept, spec: d.spec }); return;
-    case 'unassignHead': await act('unassignHead', { spec: d.spec }, 'Head removed.'); return;
+    case 'assignHead': await act('assignHead', { lid: d.lid, dept: d.dept, spec: d.spec, coop: d.coop }); return;
+    case 'unassignHead': await act('unassignHead', { spec: d.spec, coop: d.coop }, 'Head removed.'); return;
     case 'approveAll': await act('approveAll', {}); return;
-    case 'staff': openStaff(d.id); return;
+    case 'staff': openStaff(d.id, false, d.coop); return;
+    case 'tFor': UI.modal.coop = d.v || null; UI.talentFor = UI.modal.coop; UI.modal.salary = null; openStaff(UI.modal.id, true); return;
     case 'obView': { const o = obState(); ['ob-first', 'ob-last', 'ob-email'].forEach((id) => { if ($(id)) o[id.slice(3)] = $(id).value; }); o.view = d.v; o.err = null; o.note = null; renderOb(); return; }
     case 'obMode': UI.found.mode = d.v; UI.found.err = null; renderOb(); return;
     case 'obColor': UI.found.color = d.v; renderOb(); return;
@@ -823,16 +824,16 @@ async function onClick(e) {
     case 'buyas': await act('buy', { lid: d.lid, as: d.hid }); return;
     case 'sell': await act('sell', { lid: d.lid }); return;
     case 'upgrade': await act('upgrade', { lid: d.lid }); return;
-    case 'hire': { const r = await act('hire', { tid: d.tid || d.id, salary: Number(d.v), years: Number(d.y) }); return; }
-    case 'fire': { const r = await act('fire', { tid: d.tid || d.id }); if (r && r.ok) closeModal(); return; }
+    case 'hire': { const r = await act('hire', { tid: d.tid || d.id, salary: Number(d.v), years: Number(d.y), coop: d.coop }); return; }
+    case 'fire': { const r = await act('fire', { tid: d.tid || d.id, coop: d.coop }); if (r && r.ok) closeModal(); return; }
     case 'tStep': talentStep(UI.modal, d.k, Number(d.v)); openStaff(UI.modal.id, true); return;
     case 'tYears': UI.modal.years = Number(d.v); openStaff(UI.modal.id, true); return;
-    case 'tSalary': UI.modal.salary = null; await act('tSalary', { tid: d.tid, salary: Number(d.v) }); return;
-    case 'tVacation': case 'tChallenge': case 'tBonus': case 'tScout': await act(a, { tid: d.tid }); return;
-    case 'tRenew': await act('tRenew', { tid: d.tid, salary: Number(d.v), years: Number(d.y) }); return;
-    case 'tList': await act('tList', { tid: d.tid, price: Number(d.v) }); return;
-    case 'tOffer': await act('tOffer', { tid: d.tid, fee: Number(d.f), salary: Number(d.v), years: Number(d.y) }); return;
-    case 'tOfferAccept': case 'tOfferDecline': await act(a, { oid: d.oid }); return;
+    case 'tSalary': UI.modal.salary = null; await act('tSalary', { tid: d.tid, salary: Number(d.v), coop: d.coop }); return;
+    case 'tVacation': case 'tChallenge': case 'tBonus': case 'tScout': await act(a, { tid: d.tid, coop: d.coop }); return;
+    case 'tRenew': await act('tRenew', { tid: d.tid, salary: Number(d.v), years: Number(d.y), coop: d.coop }); return;
+    case 'tList': await act('tList', { tid: d.tid, price: Number(d.v), coop: d.coop }); return;
+    case 'tOffer': await act('tOffer', { tid: d.tid, fee: Number(d.f), salary: Number(d.v), years: Number(d.y), coop: d.coop }); return;
+    case 'tOfferAccept': case 'tOfferDecline': await act(a, { oid: d.oid, coop: d.coop }); return;
     case 'hostileBid': await act('hostileBid', { lid: d.lid, amt: Number(d.v) }); return;
     case 'loan': await act('loan', { amt: Number(d.v) }); return;
     case 'repay': await act('repay', { amt: Number(d.v) }, 'Repaid.'); return;
