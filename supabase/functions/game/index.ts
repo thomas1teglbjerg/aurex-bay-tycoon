@@ -43,6 +43,7 @@ Deno.serve(async (req) => {
   }
   const isAdmin = !!user && !user.is_anonymous && ADMINS.includes(String(user.email ?? '').toLowerCase());
   if (action === 'adminSpeed' && !isAdmin) return json({ result: { ok: false, msg: 'Only an admin can change the game speed.' } });
+  if (action === 'adminMove' && !isAdmin) return json({ result: { ok: false, msg: 'Only an admin can move companies on the map.' } });
   // The administrator (unlimited money) and the test player: only admin accounts may create them or act as them.
   const asId = Engine.AS_IDS.includes(String(body.as)) ? String(body.as) : null;
   const asAdmin = asId === Engine.ADMIN_ID;
@@ -92,6 +93,12 @@ Deno.serve(async (req) => {
       if (speed === city.clock.speed) return out({ result: { ok: true }, city });
       Engine.setSpeed(city, speed, now);
       console.log(JSON.stringify({ city: cityId, admin: user?.email, speed }));
+      changed = true;
+    } else if (action === 'adminMove') {
+      // A company's pin moves for every player, and stays put through later map updates (city.pins).
+      result = Engine.moveListing(city, String(args.lid ?? ''), args.p as number[]);
+      if (!(result as { ok: boolean }).ok) return out({ result, city });
+      console.log(JSON.stringify({ city: cityId, admin: user?.email, moved: args.lid, p: args.p }));
       changed = true;
     } else if (action !== 'sync' && action !== 'tick') {
       if (asId) Engine.ensureAs(city, asId, now);
