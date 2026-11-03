@@ -4,7 +4,7 @@ import { TYPES, SIZES, GOODS, RECIPES, DEPTS, STAFF, WORKER, MARKET_KIND, CLIENT
 import { carrierPicker, deliveriesBox } from './freight.js';
 import { money, cardHTML } from './life.js';
 import { scenesHTML, sceneFor } from './scenes.js';
-import { city, me, esc, lname, coImg, dollars, M, K, N, P, dateLabel, shortDate, deptIcon, spark, barChart, seg } from './util.js';
+import { city, me, esc, lname, coImg, faceUrl, dollars, M, K, N, P, dateLabel, shortDate, deptIcon, spark, barChart, seg } from './util.js';
 
 const O = E.OPS;
 const STAFF_BY = Object.fromEntries(STAFF.map((s) => [s.id, s]));
@@ -211,7 +211,7 @@ function deptCard(l, d) {
   const lead = d.head && dd.head ? bosses.find((x) => x.assign && x.assign[d.head] && x.assign[d.head].lid === l.id && x.assign[d.head].dept === d.id) : null;
   const tid = lead && lead.team ? lead.team[d.head] : null, tp = tid ? E.TAL.PERSON[tid] : null, ts = tid ? c.talent[tid] : null, hb = Math.round((dd.hb ?? 0.5) * 100);
   const canManage = lead && (lead.id === p.id || lead.coop);
-  const face = (id) => (E.TAL.PERSON[id] && E.TAL.PERSON[id].img ? `background-image:url(img/s-${id}.jpg);background-position:center 20%` : 'background:#2c4a78');
+  const face = (id) => (E.TAL.PERSON[id] && E.TAL.PERSON[id].img ? `background-image:url(${faceUrl(id)});background-position:center 20%` : 'background:#2c4a78');
   const cand = (emp) => { const id = emp && emp.team && emp.team[d.head]; return id && c.talent[id] && c.talent[id].owner === emp.id ? id : null; };
   const offerBtn = (emp) => { const id = cand(emp); if (!id) return ''; const away = emp.assign && emp.assign[d.head]; return `<button class="btn sm" data-a="assignHead" data-lid="${l.id}" data-dept="${d.id}" data-spec="${d.head}"${emp.coop ? ` data-coop="${emp.id}"` : ''}>Make ${esc(E.TAL.PERSON[id].name)}${emp.coop ? ' (coop)' : ''} head of ${esc(d.name)}${away ? ' (moves from another company)' : ''}</button>`; };
   const offers = [cemp, p].map(offerBtn).join('');
