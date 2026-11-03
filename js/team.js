@@ -14,61 +14,75 @@ const yrs = (months) => (months >= 12 ? `${Math.floor(months / 12)} yr${months %
 function meter(label, v, bad) { const lvl = bad ? (v > 75 ? 'bad' : v > 55 ? 'warn' : 'ok') : (v < 35 ? 'bad' : v < 55 ? 'warn' : 'ok'); return `<div class="tm ${lvl}"><span>${label}</span><div class="bar"><i style="width:${Math.round(v)}%"></i></div><b>${Math.round(v)}</b></div>`; }
 const moodChip = (s) => { const m = T.mood(s); const cls = /notice|Burned|burnout|Unhappy/.test(m) ? 'bad' : /Bored/.test(m) ? 'warn' : /Thriving/.test(m) ? 'good' : ''; return `<span class="chip ${cls}">${esc(m)}</span>`; };
 
-// ---------------------------------------------------------------- Empire: your team
-export function teamBoxHTML() {
-  const c = city(), p = me(); if (!c.talent) return '';
+// the coops I co-own that can hire (a human coop); the employer a specialist card acts for
+const myCoops = (c, p) => E.myHoldings(c, p.id).filter((h) => !h.bot);
+const whoName = (c, p, id) => { const o = T.who(c, id); return !o ? '?' : o.id === p.id ? 'You' : o.name; };
+const cattr = (emp) => (emp && emp.coop ? ` data-coop="${emp.id}"` : '');
+function employerFor(c, p, st) {
+  const s = c.talent[st.id], h = s && s.owner && c.holdings[s.owner];
+  if (s && s.owner === p.id) return p;
+  if (h && h.members[p.id]) return T.coopEmp(c, h); // a specialist of my coop is managed for the coop
+  const pick = st.coop && c.holdings[st.coop] && c.holdings[st.coop].members[p.id] ? c.holdings[st.coop] : null;
+  return pick ? T.coopEmp(c, pick) : p;
+}
+
+// ---------------------------------------------------------------- Empire: your team (or a coop's team, paid from its treasury)
+export function teamBoxHTML(emp) {
+  const c = city(), me0 = me(), p = emp || me0, cd = cattr(p); if (!c.talent) return '';
   const rows = STAFF.map((role) => {
     const tid = p.team && p.team[role.id], s = tid && c.talent[tid];
-    if (!tid || !s || s.owner !== p.id) return `<button class="trow empty" data-a="web" data-u="apextalent.ab/role/${role.id}"><span class="tp ini empty">+</span><div class="grow"><b>${esc(role.role.replace(/^(Junior|Senior) /, ''))}</b><span>Open role · leads ${esc(E.OPS.DEPT[E.OPS.DEPTS_BY_HEAD[role.id]].name)}</span></div><span class="chip">Find ›</span></button>`;
+    if (!tid || !s || s.owner !== p.id) return `<button class="trow empty" data-a="web" data-u="apextalent.ab/role/${role.id}"${cd}><span class="tp ini empty">+</span><div class="grow"><b>${esc(role.role.replace(/^(Junior|Senior) /, ''))}</b><span>Open role · leads ${esc(E.OPS.DEPT[E.OPS.DEPTS_BY_HEAD[role.id]].name)}</span></div><span class="chip">Find ›</span></button>`;
     const a = p.assign && p.assign[role.id], al = a ? E.listing(c, a.lid) : null, left = s.until - c.m;
-    return `<button class="trow" data-a="staff" data-id="${tid}">${portrait(tid)}<div class="grow"><b>${esc(T.PERSON[tid].name)} <em class="stars">${stars(s.rating)}</em></b><span>${esc(T.title(c, tid))} · ${al ? `heads ${esc(TYPES[al.type].name)}` : 'not assigned'}</span>
+    return `<button class="trow" data-a="staff" data-id="${tid}"${cd}>${portrait(tid)}<div class="grow"><b>${esc(T.PERSON[tid].name)} <em class="stars">${stars(s.rating)}</em></b><span>${esc(T.title(c, tid))} · ${al ? `heads ${esc(TYPES[al.type].name)}` : 'not assigned'}</span>
       <div class="tmini">${meter('Stress', s.stress, true)}${meter('Bored', s.boredom, true)}${meter('Happy', s.sat)}</div></div>
       <div class="right"><b>${M(s.salary)}/yr</b><span class="${left <= 6 ? 'down' : ''}">${yrs(left)} left</span>${moodChip(s)}</div></button>`;
   }).join('');
   const offers = (c.tOffers || []).filter((o) => o.status === 'open' && o.to === p.id);
-  return `<div class="box"><h2>Your team<small>${T.teamOf(c, p).length} OF ${STAFF.length} ROLES</small></h2><div class="in">
-    ${offers.map((o) => `<div class="task urgent"><div class="grow"><b>${esc(c.players[o.from].name)} bids ${M(o.fee)} for ${esc(T.PERSON[o.tid].name)}</b><span>Offering them ${M(o.salary)}/yr for ${o.years} yr. Answer within ${dur(msUntilMonth(o.m + R.offerMonths))}.</span></div><div class="btns"><button class="btn sm gold" data-a="tOfferAccept" data-oid="${o.id}">Sell</button><button class="btn sm" data-a="tOfferDecline" data-oid="${o.id}">Keep</button></div></div>`).join('')}
-    <p class="empty" style="font-size:13.5px">Specialists head one department each. Pay them right, keep their workload in check and give them new challenges, or they burn out, get bored and leave. Contracts run for a fixed number of years.</p>
-    <div class="rows">${rows}</div><button class="btn navy" data-a="web" data-u="apextalent.ab">Scout specialists on Apex Talent</button></div></div>`;
+  return `<div class="box"><h2>${p.coop ? `${esc(p.name)} team` : 'Your team'}<small>${T.teamOf(c, p).length} OF ${STAFF.length} ROLES</small></h2><div class="in">
+    ${offers.map((o) => `<div class="task urgent"><div class="grow"><b>${esc(whoName(c, me0, o.from))} bids ${M(o.fee)} for ${esc(T.PERSON[o.tid].name)}</b><span>Offering them ${M(o.salary)}/yr for ${o.years} yr. Answer within ${dur(msUntilMonth(o.m + R.offerMonths))}.</span></div><div class="btns"><button class="btn sm gold" data-a="tOfferAccept" data-oid="${o.id}"${cd}>Sell</button><button class="btn sm" data-a="tOfferDecline" data-oid="${o.id}"${cd}>Keep</button></div></div>`).join('')}
+    <p class="empty" style="font-size:13.5px">${p.coop ? 'Signed by any co-owner and paid from the coop treasury: fees, salaries and bonuses. Coop specialists lead departments in the coop\'s own companies. ' : ''}Specialists head one department each. Pay them right, keep their workload in check and give them new challenges, or they burn out, get bored and leave. Contracts run for a fixed number of years.</p>
+    <div class="rows">${rows}</div><button class="btn navy" data-a="web" data-u="apextalent.ab"${cd}>Scout specialists on Apex Talent</button></div></div>`;
 }
 
 // ---------------------------------------------------------------- the specialist card
 export function talentModal(st) {
-  const c = city(), p = me(), tid = st.id, t = T.PERSON[tid], s = c.talent[tid]; if (!t) return '';
-  const role = T.ROLE[t.kind], mine = s.owner === p.id, owner = s.owner ? c.players[s.owner] : null, seen = T.scouted(c, p, tid), ask = T.ask(c, tid);
+  const c = city(), me0 = me(), tid = st.id, t = T.PERSON[tid], s = c.talent[tid]; if (!t) return '';
+  const p = employerFor(c, me0, st), cd = cattr(p), coops = myCoops(c, me0);
+  const role = T.ROLE[t.kind], mine = s.owner === p.id, owner = s.owner ? T.who(c, s.owner) : null, seen = T.scouted(c, p, tid), ask = T.ask(c, tid);
   const sal = st.salary ?? (mine ? s.salary : Math.round(ask * (owner ? 1.15 : 1) * 100) / 100), years = st.years ?? 2, fee = st.fee ?? Math.round(T.value(c, tid) * 100) / 100;
   const ovr = 40 + 9 * s.rating + Math.min(9, Math.floor(s.xp / 6)), known = seen || !owner || mine;
   const head = `<div class="dz-hero tall ${t.img ? '' : 'noimg'}" ${t.img ? `style="background-image:url(img/s-${tid}.jpg)"` : `style="--kc:${KIND_COL[t.kind]}"`} role="img" aria-label="${esc(t.name)}">${t.img ? '' : `<span class="dz-ini">${esc(t.name.split(' ').map((w) => w[0]).join('').slice(0, 2))}</span>`}<span class="dz-ovr" title="Overall rating">${ovr}</span>${s.listed != null ? `<span class="dz-coord">Transfer listed · ${M(s.listed)}</span>` : ''}</div>
-    <div class="dz-body"><div class="dz-title"><div><span class="dz-k">${esc(T.title(c, tid))}</span><h2>${esc(t.name)}</h2><span class="dz-sub">${owner ? (mine ? 'On your team' : `Works for ${esc(owner.name)}`) : 'Free agent'}${s.owner ? ` · ${yrs(s.until - c.m)} left` : ''} · <em class="stars">${stars(s.rating)}</em></span></div>
+    <div class="dz-body"><div class="dz-title"><div><span class="dz-k">${esc(T.title(c, tid))}</span><h2>${esc(t.name)}</h2><span class="dz-sub">${owner ? (mine ? (p.coop ? `On the ${esc(p.name)} team` : 'On your team') : owner.id === me0.id ? 'On your own team' : `Works for ${esc(owner.name)}`) : 'Free agent'}${s.owner ? ` · ${yrs(s.until - c.m)} left` : ''} · <em class="stars">${stars(s.rating)}</em></span></div>
       <div class="dz-price"><span>${s.owner ? 'Salary' : 'Asks'}</span><b>${s.owner ? (known ? M(s.salary) : '?') : M(ask)}<small>/yr</small></b></div></div>
     ${t.bio ? `<p class="dz-bio">${esc(t.bio)}</p>` : ''}<p class="dz-pass"><b>${esc((t.passive || role.passive)[0])}.</b> ${esc((t.passive || role.passive)[1])}</p>${t.passive ? `<p class="dz-pass dim">Role: ${esc(role.passive[1])}</p>` : ''}`;
   const bar = (label, v, bad) => { const col = bad ? (v > 75 ? 'var(--bad)' : v > 55 ? '#e8b25f' : '#8fa3b8') : (v < 35 ? 'var(--bad)' : v < 55 ? '#e8b25f' : 'var(--good)'); return `<div class="dz-m"><div><span>${label}</span><b>${Math.round(v)}</b></div><i><u style="width:${Math.round(v)}%;background:${col}"></u></i></div>`; };
-  const stats = known ? `<div class="dz-meters">${bar('Satisfaction', s.sat)}${bar('Stress', s.stress, true)}${bar('Boredom', s.boredom, true)}<div class="dz-m mood"><div><span>Mood</span></div>${moodChip(s)}</div></div>` : `<div class="tlock">Scout ${esc(t.name.split(' ')[0])} to see stress, boredom and satisfaction. <button class="btn sm" data-a="tScout" data-tid="${tid}">Scout · ${M(R.scoutFee)}</button></div>`;
+  const stats = known ? `<div class="dz-meters">${bar('Satisfaction', s.sat)}${bar('Stress', s.stress, true)}${bar('Boredom', s.boredom, true)}<div class="dz-m mood"><div><span>Mood</span></div>${moodChip(s)}</div></div>` : `<div class="tlock">Scout ${esc(t.name.split(' ')[0])} to see stress, boredom and satisfaction. <button class="btn sm" data-a="tScout" data-tid="${tid}"${cd}>Scout · ${M(R.scoutFee)}</button></div>`;
   const facts = `<div class="dz-tiles">${s.owner ? `<div><span>Transfer value</span><b>${M(T.value(c, tid))}</b></div>` : `<div><span>Signing fee</span><b>${M(T.signFee(c, p, tid))}</b></div>`}<div><span>Asks</span><b>${M(ask)}</b></div><div><span>Head bonus</span><b>+${Math.round(T.headBonus(s.rating) * 100)}%</b></div><div><span>Experience</span><b>${s.xp} mo</b></div></div>
     <div class="dz-band">As department head</div><p class="dz-pass">${esc(role.hq)} <b>Leadership: +${M(T.headYpi(s.rating))} YPI a year</b> in the company they lead (Small ×0.6, Large ×1.5).</p>`;
   const step = (k, v, a) => `<div class="stepper"><button data-a="tStep" data-k="${k}" data-v="-1" aria-label="Less">−</button><output>${v}</output><button data-a="tStep" data-k="${k}" data-v="1" aria-label="More">+</button></div>`;
   const yearsSeg = `<div class="seg">${[1, 2, 3, 4].map((y) => `<button data-a="tYears" data-v="${y}" aria-pressed="${years === y}">${y} yr</button>`).join('')}</div>`;
+  const forSeg = !mine && coops.length && !(owner && owner.coop && c.holdings[owner.id].members[me0.id]) ? `<div class="set"><span class="cap">Sign for</span><div class="seg"><button data-a="tFor" data-v="" aria-pressed="${!p.coop}">You</button>${coops.map((h) => `<button data-a="tFor" data-v="${h.id}" aria-pressed="${p.id === h.id}">${esc(h.name)} · treasury ${M(h.treasury)}</button>`).join('')}</div></div>` : '';
   let actions = '';
   if (mine) {
     const a = p.assign && p.assign[t.kind], al = a ? E.listing(c, a.lid) : null, left = s.until - c.m;
-    actions = `<div class="tact"><p class="empty">${al ? `Heads ${esc(E.OPS.deptFor(al, a.dept).name)} at ${esc(TYPES[al.type].name)}, ${esc(al.district)}.` : 'Not leading a department. Open a company and make them head of their department.'}${s.leave != null ? ' On leave right now.' : ''}${s.notice != null ? ` <b class="down">Leaves in ${dur(msUntilMonth(s.notice))} unless things improve.</b>` : ''}</p>
-      <div class="set"><span class="cap">Salary per year (asks ${M(ask)})</span><div class="btns">${step('salary', M(sal))}<button class="btn sm gold" data-a="tSalary" data-tid="${tid}" data-v="${sal}" ${Math.abs(sal - s.salary) < 0.005 ? 'disabled' : ''}>${sal >= s.salary ? 'Give raise' : 'Cut salary'}</button></div></div>
-      <div class="btns"><button class="btn" data-a="tVacation" data-tid="${tid}" ${c.m - s.vac < R.vacationCooldown || s.leave != null ? 'disabled' : ''}>Vacation · stress −45</button><button class="btn" data-a="tChallenge" data-tid="${tid}" ${c.m - s.chal < R.challengeCooldown ? 'disabled' : ''}>New challenge · ${M(s.salary * 0.2)}</button><button class="btn" data-a="tBonus" data-tid="${tid}">Bonus · ${M(s.salary * 0.25)}</button></div>
-      ${left <= 12 ? `<div class="tnote"><b>Contract ends in ${yrs(left)}.</b> ${esc(t.name.split(' ')[0])} asks ${M(T.renewAsk(c, tid))}/yr to stay.<div class="btns">${yearsSeg}<button class="btn gold" data-a="tRenew" data-tid="${tid}" data-v="${sal}" data-y="${years}">Renew at ${M(sal)}/yr</button></div></div>` : ''}
-      <div class="btns">${s.listed != null ? `<button class="btn" data-a="tList" data-tid="${tid}" data-v="0">Take off transfer list</button>` : `<button class="btn" data-a="tList" data-tid="${tid}" data-v="${T.value(c, tid)}">Transfer list at ${M(T.value(c, tid))}</button>`}<button class="btn danger" data-a="fire" data-tid="${tid}">Release · severance ${M(s.salary * Math.min(1, T.yearsLeft(c, tid)) * 0.5)}</button></div></div>`;
+    actions = `<div class="tact"><p class="empty">${al ? `Heads ${esc(E.OPS.deptFor(al, a.dept).name)} at ${esc(TYPES[al.type].name)}, ${esc(al.district)}.` : (p.coop ? 'Not leading a department. Make them head of a department in one of the coop\'s companies.' : 'Not leading a department. Open a company and make them head of their department.')}${s.leave != null ? ' On leave right now.' : ''}${s.notice != null ? ` <b class="down">Leaves in ${dur(msUntilMonth(s.notice))} unless things improve.</b>` : ''}</p>
+      <div class="set"><span class="cap">Salary per year (asks ${M(ask)})</span><div class="btns">${step('salary', M(sal))}<button class="btn sm gold" data-a="tSalary" data-tid="${tid}"${cd} data-v="${sal}" ${Math.abs(sal - s.salary) < 0.005 ? 'disabled' : ''}>${sal >= s.salary ? 'Give raise' : 'Cut salary'}</button></div></div>
+      <div class="btns"><button class="btn" data-a="tVacation" data-tid="${tid}"${cd} ${c.m - s.vac < R.vacationCooldown || s.leave != null ? 'disabled' : ''}>Vacation · stress −45</button><button class="btn" data-a="tChallenge" data-tid="${tid}"${cd} ${c.m - s.chal < R.challengeCooldown ? 'disabled' : ''}>New challenge · ${M(s.salary * 0.2)}</button><button class="btn" data-a="tBonus" data-tid="${tid}"${cd}>Bonus · ${M(s.salary * 0.25)}</button></div>
+      ${left <= 12 ? `<div class="tnote"><b>Contract ends in ${yrs(left)}.</b> ${esc(t.name.split(' ')[0])} asks ${M(T.renewAsk(c, tid))}/yr to stay.<div class="btns">${yearsSeg}<button class="btn gold" data-a="tRenew" data-tid="${tid}"${cd} data-v="${sal}" data-y="${years}">Renew at ${M(sal)}/yr</button></div></div>` : ''}
+      <div class="btns">${s.listed != null ? `<button class="btn" data-a="tList" data-tid="${tid}"${cd} data-v="0">Take off transfer list</button>` : `<button class="btn" data-a="tList" data-tid="${tid}"${cd} data-v="${T.value(c, tid)}">Transfer list at ${M(T.value(c, tid))}</button>`}<button class="btn danger" data-a="fire" data-tid="${tid}"${cd}>Release · severance ${M(s.salary * Math.min(1, T.yearsLeft(c, tid)) * 0.5)}</button></div></div>`;
   } else if (!owner) {
-    actions = `<div class="tact"><div class="set"><span class="cap">Offer salary per year</span>${step('salary', M(sal))}</div><div class="set"><span class="cap">Contract length</span>${yearsSeg}</div>
-      <button class="btn gold" data-a="hire" data-tid="${tid}" data-v="${sal}" data-y="${years}" ${p.team[t.kind] ? 'disabled' : ''}>Sign · fee ${M(T.signFee(c, p, tid))}</button>${p.team[t.kind] ? `<p class="empty">You already have a ${esc(role.role.replace(/^(Junior|Senior) /, ''))}. Release or sell them first.</p>` : ''}</div>`;
+    actions = `<div class="tact">${forSeg}<div class="set"><span class="cap">Offer salary per year</span>${step('salary', M(sal))}</div><div class="set"><span class="cap">Contract length</span>${yearsSeg}</div>
+      <button class="btn gold" data-a="hire" data-tid="${tid}"${cd} data-v="${sal}" data-y="${years}" ${p.team[t.kind] ? 'disabled' : ''}>Sign · fee ${M(T.signFee(c, p, tid))}</button>${p.team[t.kind] ? `<p class="empty">${p.coop ? 'The coop already has' : 'You already have'} a ${esc(role.role.replace(/^(Junior|Senior) /, ''))}. Release or sell them first.</p>` : ''}</div>`;
   } else {
     const open = (c.tOffers || []).find((o) => o.tid === tid && o.from === p.id && o.status === 'open');
-    actions = `<div class="tact">${open ? `<div class="tnote">Your offer of ${M(open.fee)} is waiting for ${esc(owner.name)}.</div>` : `<div class="set"><span class="cap">Transfer fee to ${esc(owner.name)}</span>${step('fee', M(fee))}</div><div class="set"><span class="cap">Salary you offer per year</span>${step('salary', M(sal))}</div><div class="set"><span class="cap">Contract length</span>${yearsSeg}</div>
-      <button class="btn gold" data-a="tOffer" data-tid="${tid}" data-f="${fee}" data-v="${sal}" data-y="${years}" ${p.team[t.kind] ? 'disabled' : ''}>Make offer</button>${p.team[t.kind] ? `<p class="empty">You already have someone in this role.</p>` : `<p class="empty">${owner.bot ? 'Rivals answer right away.' : `${esc(owner.name)} has two months to answer. If they are away and ${esc(t.name.split(' ')[0])} is unhappy, the specialist can leave anyway.`} Happy specialists want a higher salary to move.</p>`}`}</div>`;
+    actions = `<div class="tact">${forSeg}${open ? `<div class="tnote">Your offer of ${M(open.fee)} is waiting for ${esc(owner.name)}.</div>` : `<div class="set"><span class="cap">Transfer fee to ${esc(owner.name)}</span>${step('fee', M(fee))}</div><div class="set"><span class="cap">Salary you offer per year</span>${step('salary', M(sal))}</div><div class="set"><span class="cap">Contract length</span>${yearsSeg}</div>
+      <button class="btn gold" data-a="tOffer" data-tid="${tid}"${cd} data-f="${fee}" data-v="${sal}" data-y="${years}" ${p.team[t.kind] ? 'disabled' : ''}>Make offer</button>${p.team[t.kind] ? `<p class="empty">${p.coop ? 'The coop already has' : 'You already have'} someone in this role.</p>` : `<p class="empty">${owner.bot ? 'Rivals answer right away.' : owner.coop ? `The co-owners of ${esc(owner.name)} have two months to answer.` : `${esc(owner.name)} has two months to answer. If they are away and ${esc(t.name.split(' ')[0])} is unhappy, the specialist can leave anyway.`} Happy specialists want a higher salary to move.</p>`}`}</div>`;
   }
   return `<article class="sheet talent dz dzt">${head}${stats}${facts}${actions}</div></article>`;
 }
 export function talentStep(st, k, dir) {
   const c = city(), s = c.talent[st.id], ask = T.ask(c, st.id);
-  if (k === 'salary') { const cur = st.salary ?? (s.owner === meId() ? s.salary : ask * (s.owner ? 1.15 : 1)); st.salary = Math.max(0.05, Math.round((cur + dir * Math.max(0.01, ask * 0.05)) * 100) / 100); }
+  if (k === 'salary') { const cur = st.salary ?? (s.owner && T.who(c, s.owner) && (s.owner === meId() || (c.holdings[s.owner] && c.holdings[s.owner].members[meId()])) ? s.salary : ask * (s.owner ? 1.15 : 1)); st.salary = Math.max(0.05, Math.round((cur + dir * Math.max(0.01, ask * 0.05)) * 100) / 100); }
   if (k === 'fee') { const v = T.value(c, st.id) || 1, cur = st.fee ?? v; st.fee = Math.max(0, Math.round((cur + dir * Math.max(0.05, v * 0.1)) * 100) / 100); }
 }
 
@@ -76,8 +90,8 @@ export function talentStep(st, k, dir) {
 export function apexSite(u, go) {
   const c = city(), p = me(), page = u.path[0] || '';
   const nav = `<div class="ap-head"><div class="ap-logo">APEX<span>talent</span></div><nav>${go('apextalent.ab', 'Free agents', page === '' ? 'on' : '')}${go('apextalent.ab/market', 'Transfer market', page === 'market' || page === 'role' ? 'on' : '')}${go('apextalent.ab/expiring', 'Expiring', page === 'expiring' ? 'on' : '')}${go('apextalent.ab/offers', 'My offers', page === 'offers' ? 'on' : '')}</nav></div>`;
-  const card = (tid) => { const t = T.PERSON[tid], s = c.talent[tid], owner = s.owner ? c.players[s.owner] : null, seen = T.scouted(c, p, tid);
-    return `<button class="ap-card" data-a="staff" data-id="${tid}">${portrait(tid, 'lg')}<div class="grow"><b>${esc(t.name)}</b><span class="stars">${stars(s.rating)}</span><span>${esc(T.title(c, tid))}</span><span>${owner ? (owner.id === p.id ? 'Your team' : esc(owner.name)) : 'Free agent'}${s.owner ? ` · ${yrs(s.until - c.m)} left` : ''}</span>${seen || !owner ? moodChip(s) : ''}</div><div class="right"><b>${owner ? M(T.value(c, tid)) : M(T.signFee(c, p, tid))}</b><span>${owner ? 'value' : 'fee'}</span><span>${M(T.ask(c, tid))}/yr</span>${s.listed != null ? '<span class="chip warn">Listed</span>' : ''}</div></button>`; };
+  const card = (tid) => { const t = T.PERSON[tid], s = c.talent[tid], owner = s.owner ? T.who(c, s.owner) : null, seen = T.scouted(c, p, tid);
+    return `<button class="ap-card" data-a="staff" data-id="${tid}">${portrait(tid, 'lg')}<div class="grow"><b>${esc(t.name)}</b><span class="stars">${stars(s.rating)}</span><span>${esc(T.title(c, tid))}</span><span>${owner ? (owner.id === p.id ? 'Your team' : owner.coop && c.holdings[owner.id].members[p.id] ? `${esc(owner.name)} (your coop)` : esc(owner.name)) : 'Free agent'}${s.owner ? ` · ${yrs(s.until - c.m)} left` : ''}</span>${seen || !owner ? moodChip(s) : ''}</div><div class="right"><b>${owner ? M(T.value(c, tid)) : M(T.signFee(c, p, tid))}</b><span>${owner ? 'value' : 'fee'}</span><span>${M(T.ask(c, tid))}/yr</span>${s.listed != null ? '<span class="chip warn">Listed</span>' : ''}</div></button>`; };
   const byRating = (a, b) => c.talent[b].rating - c.talent[a].rating;
   let body = '';
   if (page === '') { const free = TALENT.filter((t) => !c.talent[t.id].owner).map((t) => t.id).sort(byRating);
@@ -87,8 +101,8 @@ export function apexSite(u, go) {
     body = `<div class="ap-body">${role ? `<p>${go('apextalent.ab/market', '‹ All roles')}</p>` : ''}${groups}</div>`; }
   else if (page === 'expiring') { const ex = TALENT.filter((t) => { const s = c.talent[t.id]; return s.owner && s.owner !== p.id && s.until - c.m <= 12; }).map((t) => t.id).sort((a, b) => c.talent[a].until - c.talent[b].until);
     body = `<div class="ap-body"><h3>Contracts ending within a year</h3><p class="ap-small">Cheaper to buy now, or wait and sign them for free if their club does not renew.</p><div class="ap-list">${ex.map(card).join('') || '<p>No contracts end soon.</p>'}</div></div>`; }
-  else { const mineOut = (c.tOffers || []).filter((o) => o.from === p.id).slice(-12).reverse(), mineIn = (c.tOffers || []).filter((o) => o.to === p.id).slice(-12).reverse();
-    const row = (o, out) => `<div class="ap-off"><b>${esc(T.PERSON[o.tid].name)}</b><span>${out ? `to ${esc(c.players[o.to].name)}` : `from ${esc(c.players[o.from].name)}`} · fee ${M(o.fee)} · ${M(o.salary)}/yr · ${o.years} yr</span><em class="${o.status === 'accepted' || o.status === 'forced' ? 'up' : o.status === 'open' ? '' : 'down'}">${o.status}</em></div>`;
+  else { const ids = [p.id, ...myCoops(c, p).map((h) => h.id)], mineOut = (c.tOffers || []).filter((o) => ids.includes(o.from)).slice(-12).reverse(), mineIn = (c.tOffers || []).filter((o) => ids.includes(o.to)).slice(-12).reverse();
+    const row = (o, out) => `<div class="ap-off"><b>${esc(T.PERSON[o.tid].name)}</b><span>${out ? `${o.from !== p.id ? `${esc(whoName(c, p, o.from))} ` : ''}to ${esc(whoName(c, p, o.to))}` : `${o.to !== p.id ? `for ${esc(whoName(c, p, o.to))} ` : ''}from ${esc(whoName(c, p, o.from))}`} · fee ${M(o.fee)} · ${M(o.salary)}/yr · ${o.years} yr</span><em class="${o.status === 'accepted' || o.status === 'forced' ? 'up' : o.status === 'open' ? '' : 'down'}">${o.status}</em></div>`;
     body = `<div class="ap-body"><h3>Offers you made</h3>${mineOut.map((o) => row(o, true)).join('') || '<p class="ap-small">None yet.</p>'}<h3>Offers for your people</h3>${mineIn.map((o) => row(o, false)).join('') || '<p class="ap-small">None yet.</p>'}</div>`; }
   return nav + body;
 }

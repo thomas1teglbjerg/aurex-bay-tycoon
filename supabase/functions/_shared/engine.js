@@ -25,6 +25,12 @@ function unassign(city, p, spec) {
   delete p.assign[spec];
 }
 const credit = (city, owner, v) => { if (!owner) return; if (owner.k === 'p') { const p = city.players[owner.id]; if (p) p.cash += v; } else { const h = city.holdings[owner.id]; if (h) { h.treasury += v; if (v > 0) h.accrued += v; } } };
+// whoever leads this department now (the owner, the coop or a co-owner lending a specialist) steps down
+function dropHead(city, l, dept, spec) {
+  const h = l.owner && l.owner.k === 'h' ? city.holdings[l.owner.id] : null;
+  const cands = h ? [city.talent ? TAL.coopEmp(city, h) : null, ...Object.keys(h.members).map((id) => city.players[id])] : [l.owner && city.players[l.owner.id]];
+  cands.forEach((x) => { const a = x && x.assign && x.assign[spec]; if (a && a.lid === l.id && a.dept === dept) unassign(city, x, spec); });
+}
 const debit = (city, owner, v) => credit(city, owner, -v);
 const CTX = { listingYield: (...a) => listingYield(...a), credit, debit, notify: (city, l, t, x, k) => notifyOwner(city, l, t, x, k), news: (city, m, t, x, k) => news(city, m, t, x, k),
   onTheWay: (city, l, g) => (city.shipments ? LOG.onTheWay(city, l, g) : 0),
@@ -34,8 +40,8 @@ const CTX = { listingYield: (...a) => listingYield(...a), credit, debit, notify:
 const LCTX = { feed: (p, m, t, x, k) => feed(p, m, t, x, k), news: (city, m, t, x, k) => news(city, m, t, x, k),
   credit, notify: (city, l, t, x, k) => notifyOwner(city, l, t, x, k), clientsBoost: (city0, n) => 0 };
 // a tycoon who has not done anything for a while is "away": their specialists drift and unprotected companies can be taken over
-export function inactive(city, p) { return !!p && !p.bot && !p.admin && city.m - (p.lastAct ?? city.m) >= TAKEOVER.inactiveMonths; }
-const TCTX = { feed: (p, m, t, x, k) => feed(p, m, t, x, k), news: (city, m, t, x, k) => news(city, m, t, x, k), unassign: (city, p, k) => unassign(city, p, k),
+export function inactive(city, p) { if (p && p.coop) { const hs = p.people.filter((x) => !x.bot); return !hs.length || hs.every((x) => inactive(city, x)); } return !!p && !p.bot && !p.admin && city.m - (p.lastAct ?? city.m) >= TAKEOVER.inactiveMonths; }
+const TCTX = { feed: (p, m, t, x, k) => (p.coop ? p.people.filter((q) => !q.bot).forEach((q) => feed(q, m, `${p.name}: ${t}`, x, k)) : feed(p, m, t, x, k)), news: (city, m, t, x, k) => news(city, m, t, x, k), unassign: (city, p, k) => unassign(city, p, k),
   listing: (city, id) => listing(city, id), automationWithout: (l, dept) => { const d = l.ops && l.ops.depts[dept]; return d ? d.w / OPS.needWorkers(l, dept) : 0; } };
 const coopPartners = (city, a, b) => Object.values(city.holdings || {}).some((h) => h.members[a] && h.members[b]);
 // a coop with at least one human owner is run by its owners like a player's own company; bot coops stay on autopilot
@@ -52,6 +58,8 @@ function coopRunMode(city) {
     OPS.takeOverOps(l); l.ops.pending = l.ops.pending || []; l.ops.fg = l.ops.fg || 0; l.ops.board = l.ops.board || []; } });
 }
 // a specialist works for one company: humans assign them to a department, bots simply employ them
+// the employer whose specialists lead this company: its owner, or the coop that holds it
+export function bossOf(city, owner) { if (!owner) return null; if (owner.k === 'p') return city.players[owner.id] || null; const h = city.holdings && city.holdings[owner.id]; return h && city.talent ? TAL.coopEmp(city, h) : null; }
 export function hasHead(city, l, p, spec) { if (!p) return false; if (p.bot) return hasStaff(p, spec); const a = p.assign && p.assign[spec]; return !!(a && a.lid === l.id); }
 function assignOwner(city, l, owner, m) {
   const prevOps = l.ops; l.owner = owner; l.boughtM = m; l.upgrade = l.upgrade && prevOps ? l.upgrade : null;
@@ -230,10 +238,10 @@ export function listingYield(city, l, owner) {
   if (l.type === 'data') { const h = city.stocks.ai.h, n = h.length, t = n > 1 ? Math.sign(h[n - 1] - h[n - 2]) : 0; if (t) { ypi += t * s; notes.push(`AI trend ${t > 0 ? '+' : '−'}${r2(s)}`); } }
   if (l.type === 'finance' && econ === 'Recession') { ypi = 0; notes.push('Recession: no YPI'); }
   if (l.type === 'restaurant' && owner) { const n = Math.min(3, city.listings.filter((x) => x.id !== l.id && x.d === l.d && x.owner && x.owner.k === owner.k && x.owner.id === owner.id).length); if (n) { ypi += 0.2 * n; notes.push(`Neighbourhood +${r2(0.2 * n)}`); } }
-  if (owner && owner.k === 'p') {
-    const p = city.players[owner.id];
+  {
+    const p = bossOf(city, owner);
     if (p) {
-      if (l.type === 'finance' && econ !== 'Recession' && Object.keys(p.shares).filter((k) => p.shares[k] > 0).length >= 2) { ypi += s; notes.push(`Stock portfolio +${r2(s)}`); }
+      if (l.type === 'finance' && econ !== 'Recession' && p.shares && Object.keys(p.shares).filter((k) => p.shares[k] > 0).length >= 2) { ypi += s; notes.push(`Stock portfolio +${r2(s)}`); }
       if (l.type === 'fashion' && hasHead(city, l, p, 'sofia')) { ypi += s; notes.push(`Influencer marketing +${r2(s)}`); }
       if (def.group === 'media' && hasHead(city, l, p, 'sofia')) { ypi += s; notes.push(`Sofia +${r2(s)}`); }
       if ((def.group === 'industry' || l.type === 'chip') && hasHead(city, l, p, 'carlos')) { ypi += s; notes.push(`Logistics +${r2(s)}`); }
@@ -251,7 +259,7 @@ export function listingYield(city, l, owner) {
 export function monthLines(city, l) {
   const y = listingYield(city, l, l.owner), eff = l.ops ? l.ops.eff : 1, s = SIZES[l.size].mult;
   let heads = 0;
-  const p = l.owner && l.owner.k === 'p' ? city.players[l.owner.id] : null;
+  const p = bossOf(city, l.owner);
   if (p && !p.bot && city.talent) Object.entries(p.assign || {}).forEach(([spec, a]) => { if (a && a.lid === l.id) { const t = city.talent[p.team && p.team[spec]]; if (t) heads += t.salary / 12; } });
   return { ypi: Math.max(0, y.ypi) * eff / 12, maint: l.type === 'metal' ? 2 * s / 12 : 0, heads };
 }
@@ -262,6 +270,7 @@ export function rates(city, k, id) {
   const running = lines.reduce((a, x) => a + x.run, 0);
   const maint = ls.filter((l) => l.type === 'metal').reduce((a, l) => a + 2 * SIZES[l.size].mult, 0);
   let upkeep = 0, interest = 0;
+  if (k === 'h' && city.talent && city.holdings[id]) upkeep = TAL.salaries(city, TAL.coopEmp(city, city.holdings[id]));
   if (k === 'p') {
     const p = city.players[id];
     upkeep = (city.talent ? TAL.salaries(city, p) : p.staff.reduce((a, s) => a + staffDef(s).upkeep, 0)) + (city.warehouses ? LOG.upkeep(city, id) : 0) + (!p.bot && p.life ? p.life.salary : 0);
@@ -400,13 +409,13 @@ function planWeek(city, wk) {
 export const harvestWeek = (l) => VINTAGE.harvest + hashId(l.id) % 6;
 // the specialists leading a department in this company (ratings), the ones who make a better vintage
 function leadRatings(city, l) {
-  const p = l.owner && l.owner.k === 'p' ? city.players[l.owner.id] : null; if (!p || p.bot || !city.talent) return [];
+  const p = bossOf(city, l.owner); if (!p || p.bot || !city.talent) return [];
   return Object.entries(p.assign || {}).filter(([, a]) => a && a.lid === l.id).map(([spec]) => city.talent[p.team && p.team[spec]]).filter((t) => t && t.leave == null).map((t) => t.rating);
 }
 // sommeliers (SOMMELIER) heading a department of a hotel, restaurant or vineyard
 export function sommeliers(city, l) {
-  if (!SOMMELIER.types.includes(l.type) || !l.owner || l.owner.k !== 'p' || !city.talent) return [];
-  const p = city.players[l.owner.id]; if (!p || !p.team) return [];
+  if (!SOMMELIER.types.includes(l.type) || !l.owner || !city.talent) return [];
+  const p = bossOf(city, l.owner); if (!p || !p.team) return [];
   return Object.keys(SOMMELIER).filter((tid) => tid !== 'types' && TAL.PERSON[tid] && p.team[TAL.PERSON[tid].kind] === tid && hasHead(city, l, p, TAL.PERSON[tid].kind) && city.talent[tid] && city.talent[tid].leave == null);
 }
 function vintageExtra(city, l) { return sommeliers(city, l).reduce((a, tid) => ({ chance: a.chance + SOMMELIER[tid].chance, bump: a.bump + SOMMELIER[tid].bump }), { chance: 0, bump: 0 }); }
@@ -554,7 +563,7 @@ function solvency(city, p, m) {
   if (p.cash < 0) { const l = ownedBy(city, 'p', p.id).sort((a, b) => listingValue(a) - listingValue(b))[0]; if (l) { const v = r2(listingValue(l) * 0.7); p.cash += v; releaseListing(city, l); feed(p, m, `Forced sale: ${TYPES[l.type].name} in ${l.district}`, `Sold for ${v} M to cover your debts.`, 'bad'); } }
 }
 function releaseListing(city, l) {
-  if (l.owner && l.owner.k === 'p') { const p = city.players[l.owner.id]; if (p && p.assign) Object.keys(p.assign).forEach((k) => { if (p.assign[k].lid === l.id) delete p.assign[k]; }); }
+  if (l.owner) { const p = l.owner.k === 'p' ? city.players[l.owner.id] : city.holdings[l.owner.id]; if (p && p.assign) Object.keys(p.assign).forEach((k) => { if (p.assign[k].lid === l.id) delete p.assign[k]; }); }
   city.book = (city.book || []).filter((o) => o.lid !== l.id);
   l.owner = null; l.upgrade = null; l.boughtM = null; l.ops = null; city.contracts = city.contracts.filter((c) => c.a !== l.id && c.b !== l.id);
 }
@@ -832,7 +841,9 @@ function applyAs(city, pid, p, action, a, now) {
   if (action === 'hire' || action === 'fire' || /^t[A-Z]/.test(action)) {
     if (a.oid && !a.tid) { const o = (city.tOffers || []).find((x) => x.id === a.oid); if (o) a.tid = o.tid; }
     if (!a.tid && a.id) a.tid = a.id;
-    const r = TAL.act(city, p, action, a, { ...TCTX, inactive: (x) => inactive(city, x) }); if (r) return r;
+    // a.coop: the co-owner acts for their coop, paid from the coop treasury
+    let emp = p; if (a.coop) { const h = city.holdings[a.coop]; if (!h || !h.members[pid] || !humanCoop(city, h)) return err('Not your coop.'); emp = TAL.coopEmp(city, h); }
+    const r = TAL.act(city, emp, action, a, { ...TCTX, inactive: (x) => inactive(city, x) }); if (r) return r;
   }
   if (action === 'hostileBid') return hostileBid(city, p, a);
   if (/^(life|home|item|bid|trade|host|bank)/.test(action)) {
@@ -895,7 +906,7 @@ function applyAs(city, pid, p, action, a, now) {
       const payer = hq ? { get cash() { return hq.treasury; }, set cash(v) { hq.treasury = v; } } : p;
       const o = l.ops, d = a.dept ? OPS.deptFor(l, a.dept) : null;
       if (action === 'deptOpen') { if (!d) return err('Unknown department.'); if (o.depts[a.dept]) return err('Already open.'); const c = OPS.deptOpenCost(l, a.dept); if (payer.cash < c) return err(`Opening costs ${c} M.`); payer.cash -= c; o.depts[a.dept] = { w: 0, set: { ...DEPT_DEFAULTS[a.dept] }, head: null }; return ok(`${d.name} is open. Hire workers to automate it, or run it yourself.`); }
-      if (action === 'deptClose') { if (!d || a.dept === 'ops' || !o.depts[a.dept]) return err('Cannot close this department.'); const dd = o.depts[a.dept]; if (dd.head) unassign(city, p, dd.head); payer.cash -= dd.w * WORKER.salary * 0.25; delete o.depts[a.dept]; return ok(`${d.name} closed.`); }
+      if (action === 'deptClose') { if (!d || a.dept === 'ops' || !o.depts[a.dept]) return err('Cannot close this department.'); const dd = o.depts[a.dept]; if (dd.head) dropHead(city, l, a.dept, dd.head); payer.cash -= dd.w * WORKER.salary * 0.25; delete o.depts[a.dept]; return ok(`${d.name} closed.`); }
       if (action === 'workers') {
         const dd = o.depts[a.dept]; if (!dd) return err('Open the department first.'); const n = Math.trunc(Number(a.delta)) || 0, max = OPS.needWorkers(l, a.dept) * 3;
         if (n > 0) { if (dd.w + n > max) return err(`This department has room for ${max} workers.`); const fee = n * WORKER.hireFee * (o.depts.hr && o.depts.hr.head === 'emily' ? 0.5 : 1); if (payer.cash < fee) return err('Not enough cash.'); payer.cash -= fee; dd.w += n; return ok(); }
@@ -909,14 +920,16 @@ function applyAs(city, pid, p, action, a, now) {
       if (action === 'listGoods') { const g = a.g; if (!GOODS[g]) return err('Unknown supply.'); const qty = Math.min(Number(a.qty) || o.inv[g] || 0, o.inv[g] || 0); if (qty < 1) return err('Nothing in stock.'); const price = Number(a.price) || city.market[g].p; OPS.listGoods(city, l, g, qty, price, false); return ok(`Listed ${Math.round(qty)} ${GOODS[g].unit} of ${GOODS[g].name.toLowerCase()} at ${(price * 1000).toFixed(1)} k each.`); }
       if (action === 'exportGoods') { const g = a.g; if (!GOODS[g]) return err('Unknown supply.'); const cid = LOG.CARRIER[a.carrier] ? a.carrier : OPS.setting(l, 'procurement', 'carrier'); const r = OPS.exportGoods(city, CTX, l, g, Number(a.qty) || o.inv[g] || 0, cid); if (!r) return err('Nothing in stock.'); return ok(`Export booked with ${LOG.CARRIER[cid].name}. ${r.value} M arrives on delivery in about ${Math.round(r.days)} days (freight $${Math.round(r.freight * 1000)}k).`); }
       if (action === 'assignHead') {
-        const spec = a.spec; if (!hasStaff(p, spec)) return err('Recruit this specialist first.'); if (!d || d.head !== spec) return err('This specialist cannot lead that department.'); if (!o.depts[a.dept]) return err('Open the department first.');
-        const moved = !p.assign[spec] || p.assign[spec].lid !== l.id; unassign(city, p, spec); o.depts[a.dept].head = spec; o.depts[a.dept].who = p.team && p.team[spec]; p.assign[spec] = { lid: l.id, dept: a.dept };
-        const tid = p.team && p.team[spec]; if (tid && city.talent) { const t = city.talent[tid]; o.depts[a.dept].hb = TAL.headBonus(t.rating); if (moved) { t.boredom = Math.max(0, t.boredom - 30); t.chal = m; } }
-        return ok(`${(p.team && p.team[spec] ? TAL.PERSON[p.team[spec]].name : staffDef(spec).name)} now leads ${d.name} at ${TYPES[l.type].name}.`);
+        // a coop's own specialists lead only that coop's companies; a co-owner may also lend a personal specialist
+        const boss = a.coop ? (hq && a.coop === hq.id ? TAL.coopEmp(city, hq) : null) : p; if (!boss) return err('Coop specialists lead only that coop\'s companies.');
+        const spec = a.spec; if (!hasStaff(boss, spec)) return err('Recruit this specialist first.'); if (!d || d.head !== spec) return err('This specialist cannot lead that department.'); if (!o.depts[a.dept]) return err('Open the department first.');
+        const moved = !boss.assign[spec] || boss.assign[spec].lid !== l.id; dropHead(city, l, a.dept, spec); unassign(city, boss, spec); o.depts[a.dept].head = spec; o.depts[a.dept].who = boss.team && boss.team[spec]; boss.assign[spec] = { lid: l.id, dept: a.dept };
+        const tid = boss.team && boss.team[spec]; if (tid && city.talent) { const t = city.talent[tid]; o.depts[a.dept].hb = TAL.headBonus(t.rating); if (moved) { t.boredom = Math.max(0, t.boredom - 30); t.chal = m; } }
+        return ok(`${(boss.team && boss.team[spec] ? TAL.PERSON[boss.team[spec]].name : staffDef(spec).name)} now leads ${d.name} at ${TYPES[l.type].name}.`);
       }
       return err('Unknown action.');
     }
-    case 'unassignHead': unassign(city, p, a.spec); return ok();
+    case 'unassignHead': { if (a.coop) { const h = city.holdings[a.coop]; if (!h || !h.members[pid]) return err('Not your coop.'); unassign(city, TAL.coopEmp(city, h), a.spec); } else unassign(city, p, a.spec); return ok(); }
     case 'post': { const l = listing(city, a.lid); if (!l || !canSeeCompany(city, pid, l)) return err('Only the owner and their coop partners can post here.'); if (!l.ops) return err('This company is not running yet.'); return OPS.post(l, p, a.text, now); }
     case 'whBuy': { LOG.ensureWarehouses(city); return LOG.buy(city, p, a.wid); }
     case 'whSell': case 'whImport': case 'whDispatch': case 'whExport': case 'whUpgrade': case 'whAuto': {
@@ -1019,7 +1032,7 @@ function applyAs(city, pid, p, action, a, now) {
       const h = city.holdings[a.hid]; if (!h || !h.members[pid]) return err('Not your coop.');
       const stake = holdingStake(city, h, pid), value = r2(holdingNav(city, h) * stake * 0.9);
       const dropParent = () => { if (p.co && p.co.hid === h.id) p.co = null; }; // the player then founds or joins a new parent company
-      if (Object.keys(h.members).length === 1) { ownedBy(city, 'h', h.id).forEach((l) => { h.treasury += listingValue(l) * 0.8; releaseListing(city, l); }); p.cash += h.treasury; delete city.holdings[h.id]; dropParent(); return ok('The coop is dissolved and its assets sold.'); }
+      if (Object.keys(h.members).length === 1) { ownedBy(city, 'h', h.id).forEach((l) => { h.treasury += listingValue(l) * 0.8; releaseListing(city, l); }); if (city.talent) TAL.releaseAll(city, TAL.coopEmp(city, h), TCTX); p.cash += h.treasury; delete city.holdings[h.id]; dropParent(); return ok('The coop is dissolved and its assets sold.'); }
       if (h.treasury < value) return err(`The treasury has ${r2(h.treasury)} M. Your stake is worth ${value} M. Propose a sale first.`);
       h.treasury -= value; p.cash += value; delete h.members[pid]; dropParent(); return ok(`You sold your stake for ${value} M.`);
     }

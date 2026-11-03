@@ -15,6 +15,19 @@ let seq = 0; const uid = (p) => p + Date.now().toString(36).slice(-4) + (seq++).
 export const PERSON = Object.fromEntries(TALENT.map((t) => [t.id, t]));
 export const ROLE = Object.fromEntries(STAFF.map((s) => [s.id, s]));
 const DEPT_OF = Object.fromEntries(DEPTS.filter((d) => d.head).map((d) => [d.head, d.id]));
+// a coop hires specialists too: this wraps a holding so it acts like an employer (its cash is the coop treasury).
+// The coop's team lives on the holding (h.team, h.staff, h.assign); the wrapper itself is never saved.
+export function coopEmp(city, h) {
+  if (!h.team) h.team = {}; if (!h.staff) h.staff = []; if (!h.assign) h.assign = {};
+  return { id: h.id, name: h.name, coop: true, bot: false,
+    get cash() { return h.treasury; }, set cash(v) { h.treasury = v; },
+    get team() { return h.team; }, set team(v) { h.team = v; },
+    get staff() { return h.staff; }, set staff(v) { h.staff = v; },
+    get assign() { return h.assign; }, set assign(v) { h.assign = v; },
+    get people() { return Object.keys(h.members).map((id) => city.players[id]).filter(Boolean); } };
+}
+// the employer behind an id: a tycoon or a coop
+export const who = (city, id) => (id == null ? null : city.players[id] || (city.holdings && city.holdings[id] ? coopEmp(city, city.holdings[id]) : null));
 
 // ---------------------------------------------------------------- state
 export function ensure(city) {
@@ -68,14 +81,16 @@ function sign(city, p, tid, salary, years, m, quiet) {
   city.tOffers = (city.tOffers || []).filter((o) => o.tid !== tid || o.status !== 'open');
 }
 function release(city, tid, ctx, why) {
-  const t = PERSON[tid], s = st(city, tid), p = city.players[s.owner];
+  const t = PERSON[tid], s = st(city, tid), p = who(city, s.owner);
   if (p) { ctx.unassign(city, p, t.kind); if (p.team[t.kind] === tid) delete p.team[t.kind]; p.staff = p.staff.filter((k) => k !== t.kind); }
   Object.assign(s, { owner: null, salary: 0, since: null, until: null, leave: null, notice: null, listed: null, stress: Math.max(10, s.stress - 30), boredom: 20 });
   city.tOffers = (city.tOffers || []).filter((o) => o.tid !== tid || o.status !== 'open');
   if (p && why && !p.bot) ctx.feed(p, city.m, `${t.name} has left`, why, 'bad');
 }
+// every specialist of an employer becomes a free agent (a coop that is dissolved)
+export function releaseAll(city, emp, ctx) { ensure(city); TALENT.forEach((t) => { if (st(city, t.id).owner === emp.id) release(city, t.id, ctx, null); }); }
 function transfer(city, tid, buyer, fee, salary, years, ctx) {
-  const t = PERSON[tid], s = st(city, tid), seller = city.players[s.owner];
+  const t = PERSON[tid], s = st(city, tid), seller = who(city, s.owner);
   if (buyer.team[t.kind] && buyer.team[t.kind] !== tid) return err(`You already have a ${ROLE[t.kind].role}. Release them first.`);
   if (buyer.cash < fee) return err(`${buyer.name} cannot pay the ${fee} M transfer fee.`);
   buyer.cash -= fee; if (seller) seller.cash += fee;
@@ -89,7 +104,7 @@ function transfer(city, tid, buyer, fee, salary, years, ctx) {
 export function monthStep(city, m, ctx) {
   ensure(city);
   TALENT.forEach((t) => {
-    const s = st(city, t.id), p = s.owner ? city.players[s.owner] : null;
+    const s = st(city, t.id), p = s.owner ? who(city, s.owner) : null;
     if (!p) { s.stress = Math.max(5, s.stress - 10); s.boredom = Math.min(60, s.boredom + 2); s.sat = 70; return; }
     const human = !p.bot, away = human && ctx.inactive(p);
     // back from burnout leave
@@ -137,7 +152,7 @@ export function monthStep(city, m, ctx) {
   // transfer offers to human owners that nobody answered
   (city.tOffers || []).forEach((o) => {
     if (o.status !== 'open' || m - o.m < R.offerMonths) return;
-    const s = st(city, o.tid), owner = city.players[o.to], buyer = city.players[o.from], t = PERSON[o.tid];
+    const s = st(city, o.tid), owner = who(city, o.to), buyer = who(city, o.from), t = PERSON[o.tid];
     if (!owner || s.owner !== owner.id || !buyer) { o.status = 'void'; return; }
     // an absent owner cannot keep an unhappy specialist: they use the release clause
     if (ctx.inactive(owner) && s.sat < 55 && (s.until - m) < 24) {
@@ -161,14 +176,14 @@ export function botStep(city, p, m, ctx) {
   if (rand() < 0.2) TALENT.forEach((t) => { const s = st(city, t.id); if (s.listed != null && s.owner !== p.id && !p.team[t.kind] && s.listed <= value(city, t.id) * 1.15 && p.cash > s.listed + 5 && rand() < 0.4) transfer(city, t.id, p, s.listed, Math.max(ask(city, t.id), s.salary), 2, ctx); });
   // poach: bid for a human's specialist when it is unhappy or the owner is away
   if (rand() < 0.05) {
-    const targets = TALENT.filter((t) => { const s = st(city, t.id), o = s.owner && city.players[s.owner]; return o && !o.bot && !p.team[t.kind] && (s.sat < 50 || ctx.inactive(o)) && !city.tOffers.some((x) => x.tid === t.id && x.status === 'open'); });
+    const targets = TALENT.filter((t) => { const s = st(city, t.id), o = s.owner && who(city, s.owner); return o && !o.bot && !p.team[t.kind] && (s.sat < 50 || ctx.inactive(o)) && !city.tOffers.some((x) => x.tid === t.id && x.status === 'open'); });
     if (targets.length) { const t = pick(targets), fee = r2(value(city, t.id) * (0.85 + rand() * 0.3)), salary = r2(ask(city, t.id) * 1.1); if (p.cash > fee + 5) offer(city, p, t.id, fee, salary, 2, ctx); }
   }
 }
 
 // ---------------------------------------------------------------- transfer offers
 function offer(city, p, tid, fee, salary, years, ctx) {
-  const t = PERSON[tid], s = st(city, tid), owner = city.players[s.owner];
+  const t = PERSON[tid], s = st(city, tid), owner = who(city, s.owner);
   if (!owner) return err('This specialist is a free agent. Sign them directly.');
   if (owner.id === p.id) return err('They already work for you.');
   if (p.team[t.kind]) return err(`You already have a ${ROLE[t.kind].role}. Release or sell them first.`);
@@ -243,7 +258,7 @@ export function act(city, p, action, a, ctx) {
     case 'tOffer': return offer(city, p, tid, r2(Number(a.fee) || 0), salary, years, ctx);
     case 'tOfferAccept': case 'tOfferDecline': {
       const o = city.tOffers.find((x) => x.id === a.oid && x.to === p.id && x.status === 'open'); if (!o) return err('This offer is no longer open.');
-      const buyer = city.players[o.from];
+      const buyer = who(city, o.from); if (!buyer) { o.status = 'void'; return err('The bidder is gone.'); }
       if (action === 'tOfferDecline') { o.status = 'declined'; s.sat = clamp(s.sat - (o.salary > s.salary * 1.15 ? 8 : 2)); if (!buyer.bot) ctx.feed(buyer, m, `${p.name} kept ${t.name}`, 'Your transfer offer was declined.', 'info'); return ok(`You keep ${t.name}.${o.salary > s.salary * 1.15 ? ' They are disappointed: the offer paid much better.' : ''}`); }
       o.status = 'accepted'; return transfer(city, tid, buyer, o.fee, o.salary, o.years, ctx);
     }
