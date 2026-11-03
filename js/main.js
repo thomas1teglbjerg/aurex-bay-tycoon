@@ -9,7 +9,7 @@ import { stocksHTML, stockModal, livePrice, liveH, PX } from './stocks.js';
 import { deliveryHTML, warehouseHTML, MODE_LABEL } from './interact.js';
 import { taskButton } from './company.js';
 import { SCENES, startScene, endScene, scenesHTML, sceneFor, tickScenes, sceneTitle } from './scenes.js';
-import { WAREHOUSE_SITES, INTERACTIONS, HOMES, TAKEOVER as GC_T } from '../supabase/functions/_shared/content.js';
+import { WAREHOUSE_SITES, HOMES, TAKEOVER as GC_T } from '../supabase/functions/_shared/content.js';
 import { webHTML, parseUrl, HOME_URL } from './web.js';
 import { teamBoxHTML, talentModal, talentStep } from './team.js';
 import { lifeHTML, lifeModal, newDinner, startDinner, dinnerHTML, money, bidBase } from './life.js';
@@ -455,7 +455,7 @@ function staffCard(s) {
     <div class="sc-band">Passive ability</div><div class="sc-txt"><b>${esc(s.passive[0])}</b>${esc(s.passive[1])}</div>
     <div class="sc-band">As department head</div><div class="sc-txt">${esc(s.hq)}</div>
     <div class="sc-tags">${esc(s.tags)}</div>
-    <div class="act">${hired ? `${p.assign && p.assign[s.id] ? `<p class="empty" style="font-size:13.5px">Heads ${esc(E.OPS.DEPT[p.assign[s.id].dept].name)} at ${esc(TYPES[E.listing(city(), p.assign[s.id].lid).type].name)}.</p>` : '<p class="empty" style="font-size:13.5px">Not assigned yet. Open one of your companies and make them head of their department.</p>'}<button class="btn danger" data-a="fire" data-id="${s.id}">Let go</button>` : `<button class="btn gold" data-a="hire" data-id="${s.id}" ${p.cash < cost ? 'disabled' : ''}>Recruit for ${M(cost)}</button>`}</div>
+    <div class="act">${hired ? `${p.assign && p.assign[s.id] ? `<p class="empty" style="font-size:13.5px">Heads ${esc(E.OPS.deptFor(E.listing(city(), p.assign[s.id].lid), p.assign[s.id].dept).name)} at ${esc(TYPES[E.listing(city(), p.assign[s.id].lid).type].name)}.</p>` : '<p class="empty" style="font-size:13.5px">Not assigned yet. Open one of your companies and make them head of their department.</p>'}<button class="btn danger" data-a="fire" data-id="${s.id}">Let go</button>` : `<button class="btn gold" data-a="hire" data-id="${s.id}" ${p.cash < cost ? 'disabled' : ''}>Recruit for ${M(cost)}</button>`}</div>
   </article>`;
 }
 
@@ -504,7 +504,7 @@ function empireHTML() {
   const allTasks = mine.flatMap((l) => E.OPS.tasks(c, l).map((t) => ({ ...t, l })));
   const orderValue = mine.reduce((a, l) => a + (l.ops ? l.ops.pending.reduce((x, o) => x + o.value, 0) : 0), 0);
   const specs = STAFF.map((s) => { const hired = E.hasStaff(p, s.id), a = p.assign && p.assign[s.id], al = a ? E.listing(c, a.lid) : null;
-    return `<button class="row" style="width:100%;text-align:left" data-a="staff" data-id="${s.id}"><span class="thumb" style="background-image:url(img/s-${s.id}.jpg);background-position:center 20%"></span><div class="grow"><b>${esc(s.name)}</b><span>${esc(s.role)} · leads ${esc(E.OPS.DEPT[deptOfSpec(s.id)].name)}</span>${hired ? `<span class="${al ? 'up' : 'down'}">${al ? `Heads ${esc(E.OPS.DEPT[a.dept].name)} at ${esc(TYPES[al.type].name)}, ${esc(al.district)}` : 'Hired, not assigned: open a company and make them head of a department'}</span>` : ''}</div>${hired ? '<span class="chip good">Hired</span>' : `<span class="chip num">${M(E.staffCost(p, s.id))}</span>`}</button>`; }).join('');
+    return `<button class="row" style="width:100%;text-align:left" data-a="staff" data-id="${s.id}"><span class="thumb" style="background-image:url(img/s-${s.id}.jpg);background-position:center 20%"></span><div class="grow"><b>${esc(s.name)}</b><span>${esc(s.role)} · leads ${esc(E.OPS.DEPT[deptOfSpec(s.id)].name)}</span>${hired ? `<span class="${al ? 'up' : 'down'}">${al ? `Heads ${esc(E.OPS.deptFor(al, a.dept).name)} at ${esc(TYPES[al.type].name)}, ${esc(al.district)}` : 'Hired, not assigned: open a company and make them head of a department'}</span>` : ''}</div>${hired ? '<span class="chip good">Hired</span>' : `<span class="chip num">${M(E.staffCost(p, s.id))}</span>`}</button>`; }).join('');
   return `<div class="grid"><div class="col">
       ${parentBox(c, p)}
       <div class="box"><h2>${esc(p.name)}'s empire<small>LIVE</small></h2><div class="in">

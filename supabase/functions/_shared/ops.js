@@ -3,18 +3,27 @@
 // output, sells to customers and puts surplus supplies on the city market.
 // Bots and coops run in "managed" mode (fully staffed); human-owned companies run
 // exactly as well as their departments are staffed — or as attentive as the owner is.
-import { TYPES, SIZES, GOODS, RECIPES, DEPTS, DEPT_DEFAULTS, WORKER, MARKET_KIND, CLIENT_RULES, CLIENT_NAMES, DISTRICTS } from './content.js';
+import { TYPES, SIZES, GOODS, RECIPES, DEPTS, DEPT_DEFAULTS, WORKER, MARKET_KIND, CLIENT_RULES, CLIENT_NAMES, DISTRICTS, VIP_GUESTS, DEPT_LOOK, SCENE_LOOK, INTERACTIONS } from './content.js';
 
 const r2 = (v) => Math.round(v * 100) / 100;
 const r4 = (v) => Math.round(v * 10000) / 10000;
 const rand = Math.random;
 const uid = (p) => p + Math.random().toString(36).slice(2, 9);
 export const DEPT = Object.fromEntries(DEPTS.map((d) => [d.id, d]));
+// a department as this company shows it: a hotel has a front desk, not a production line. The rules stay the same.
+export function deptFor(l, id) {
+  const b = DEPT[id], x = l && DEPT_LOOK[l.type] && DEPT_LOOK[l.type][id]; if (!b || !x) return b;
+  return { ...b, ...x, manual: b.manual && { ...b.manual, ...(x.manual || {}) }, settings: b.settings.map((st) => ({ ...st, ...((x.settings || {})[st.k] || {}) })) };
+}
+export const deptsFor = (l) => DEPTS.map((d) => deptFor(l, d.id));
+export function interactionFor(l, task) { const b = INTERACTIONS[task], x = l && SCENE_LOOK[l.type] && SCENE_LOOK[l.type][task]; return b && x ? { ...b, ...x } : b; }
 const ECON_DEMAND = { Boom: 1.15, Stable: 1, Recession: 0.85, Crisis: 0.75 };
 const PRICE = { budget: { mult: 0.85, demand: 1.25 }, standard: { mult: 1, demand: 1 }, premium: { mult: 1.25, demand: 0.75 } };
 const B2B = { undercut: 0.92, market: 1, premium: 1.08 };
 
 // ---------------------------------------------------------------- basics
+// hotels host guests instead of making finished stock: bookings come in, guests check in and use supplies during their stay
+export const hosts = (l) => !!(RECIPES[l.type] && RECIPES[l.type].guests);
 export const lvMult = (l) => 1 + 0.35 * (l.level - 1);
 export const scale = (l) => SIZES[l.size].mult * lvMult(l);
 export const baseCap = (l) => RECIPES[l.type].cap * scale(l);
@@ -172,17 +181,22 @@ export function restock(city, ctx, l, months) {
 export function produce(city, ctx, l, m) {
   const o = l.ops, rec = RECIPES[l.type], y = ctx.listingYield(city, l, l.owner);
   o.curM = m;
-  const cap = capacity(l), dem = demand(city, l), hasOut = Object.keys(rec.out).length > 0;
-  const target = hasOut ? cap : o.managed ? Math.min(cap, dem * 1.05) : Math.max(0, Math.min(cap, dem * 1.1 - (o.fg || 0) * 0.6));
+  const cap = capacity(l), dem = demand(city, l), hasOut = Object.keys(rec.out).length > 0, guests = hosts(l) && !o.managed;
+  const target = hasOut ? cap : o.managed || guests ? Math.min(cap, dem * 1.05) : Math.max(0, Math.min(cap, dem * 1.1 - (o.fg || 0) * 0.6));
   let possible = target;
   Object.entries(rec.in).forEach(([g, q]) => { possible = Math.min(possible, (o.inv[g] || 0) / q); });
-  const units = Math.max(0, Math.min(target, possible));
-  Object.entries(rec.in).forEach(([g, q]) => { o.inv[g] = Math.max(0, (o.inv[g] || 0) - q * units); });
-  Object.entries(rec.out).forEach(([g, q]) => { o.inv[g] = (o.inv[g] || 0) + q * units; });
-  o.eff = target > 0.01 ? units / target : 1;
+  let units = Math.max(0, Math.min(target, possible));
+  // guests use supplies when they check in, not here; units is how many stayed last month
+  if (guests) { const prev = o.rooms && o.rooms.m === m - 1 ? o.rooms.used : null; if (prev != null) units = prev; o.fg = 0; o.line = null; o.rooms = { m, cap: r2(cap), used: 0 }; }
+  else {
+    Object.entries(rec.in).forEach(([g, q]) => { o.inv[g] = Math.max(0, (o.inv[g] || 0) - q * units); });
+    Object.entries(rec.out).forEach(([g, q]) => { o.inv[g] = (o.inv[g] || 0) + q * units; });
+  }
+  o.eff = target > 0.01 ? Math.min(1, possible / target) : 1;
   const price = unitPrice(l, Math.max(0, y.trade));
   let sold;
-  if (o.managed) { sold = Math.min(units, dem); const revenue = sold * price; if (revenue > 0) { ctx.credit(city, l.owner, revenue); o.cur.b2c += revenue; o.cur.sold = (o.cur.sold || 0) + sold; } }
+  if (guests) { orderMonth(city, ctx, l, m, dem, price); sold = checkIn(city, ctx, l, m); }
+  else if (o.managed) { sold = Math.min(units, dem); const revenue = sold * price; if (revenue > 0) { ctx.credit(city, l.owner, revenue); o.cur.b2c += revenue; o.cur.sold = (o.cur.sold || 0) + sold; } }
   else {
     // finished goods come off the line week by week: a quarter now, the rest over the coming weeks
     if (o.line && o.line.left > 0) o.fg = (o.fg || 0) + o.line.per * o.line.left;
@@ -213,7 +227,7 @@ export function produce(city, ctx, l, m) {
     o.morale += hr > 0 ? (tgt - o.morale) * 0.3 * hr : (tgt - 15 - o.morale) * 0.15;
     if (o.overtimeM === m) o.morale -= 8;
     o.morale = Math.max(0, Math.min(100, o.morale));
-    if (o.morale < 30 && rand() < 0.4) { const k = Object.keys(o.depts).sort((a, b) => o.depts[b].w - o.depts[a].w)[0]; if (o.depts[k].w > 0) { o.depts[k].w--; ctx.notify(city, l, `A worker quit ${TYPES[l.type].name} (${DEPT[k].name})`, 'Morale is low. Raise wages, train or hold a team meeting.', 'bad'); } }
+    if (o.morale < 30 && rand() < 0.4) { const k = Object.keys(o.depts).sort((a, b) => o.depts[b].w - o.depts[a].w)[0]; if (o.depts[k].w > 0) { o.depts[k].w--; ctx.notify(city, l, `A worker quit ${TYPES[l.type].name} (${deptFor(l, k).name})`, 'Morale is low. Raise wages, train or hold a team meeting.', 'bad'); } }
   } else o.morale = 70;
   // research
   if (o.depts.rnd && !o.managed) { const b = { off: 0, low: 10, high: 25 }[setting(l, 'rnd', 'budget')]; o.rp += b * (0.5 + 0.5 * automation(l, 'rnd')) * (o.depts.rnd.head ? 1.5 : 1); }
@@ -285,7 +299,7 @@ export function ensureClients(l) {
   o.clients = []; o.orders = []; o.done = []; o.board = o.board || [];
   for (let i = 0; i < CLIENT_RULES[kindOf(l)].start; i++) newClient(l, o);
 }
-function recalc(city, l, od) { od.value = r2(od.units * od.unit); od.cost = r2(od.units * costUnit(city, l)); od.earning = r2(od.value - od.cost); }
+function recalc(city, l, od) { od.value = r2(od.units * od.unit); od.cost = r2(od.units * costUnit(city, l) * (od.need || 1)); od.earning = r2(od.value - od.cost); }
 export const activeClients = (o) => (o.clients || []).filter((c) => c.status === 'active');
 function orderMonth(city, ctx, l, m, dem, price) {
   ensureClients(l);
@@ -300,8 +314,8 @@ function orderMonth(city, ctx, l, m, dem, price) {
   // orders nobody answered, and deliveries that came too late
   o.orders.forEach((od) => {
     const c = clientById(o, od.cid);
-    if (od.status === 'new' && m - od.m >= R.expire) { od.status = 'cancelled'; od.reason = 'Nobody answered in time.'; c.mood -= 15; o.rep = Math.max(0, o.rep - 2); }
-    else if (od.status === 'accepted' && od.due < m) { od.status = 'cancelled'; od.reason = 'Not delivered in time. The client cancelled.'; c.mood -= 10; o.rep = Math.max(0, o.rep - 2); }
+    if (od.status === 'new' && m - od.m >= R.expire) { od.status = 'cancelled'; od.reason = 'Nobody answered in time.'; c.mood -= 15; o.rep = Math.max(0, o.rep - 2); if (od.vip) vipLost(city, ctx, l, od, c); }
+    else if (od.status === 'accepted' && od.due < m) { od.status = 'cancelled'; od.reason = hosts(l) ? `No free room or supplies when the guests came (${od.wait === 'rooms' ? 'fully booked' : 'out of supplies'}). They went elsewhere.` : 'Not delivered in time. The client cancelled.'; c.mood -= 10; o.rep = Math.max(0, o.rep - 2); if (od.vip) vipLost(city, ctx, l, od, c); }
   });
   // unhappy clients leave; the rest slowly calm down
   o.clients.forEach((c) => {
@@ -338,7 +352,7 @@ function orderMonth(city, ctx, l, m, dem, price) {
   let shipped = 0;
   if (a > 0) {
     fresh.forEach((od) => autoAnswer(o, od, a, m));
-    o.orders.filter((od) => od.status === 'accepted' && (od.auto || a >= 1)).forEach((od) => { if (rand() < a && (o.fg || 0) >= od.units) { shipped += od.units; deliverOrder(city, ctx, l, od, m); } });
+    if (!hosts(l)) o.orders.filter((od) => od.status === 'accepted' && (od.auto || a >= 1)).forEach((od) => { if (rand() < a && (o.fg || 0) >= od.units) { shipped += od.units; deliverOrder(city, ctx, l, od, m); } });
     if (a >= 1) o.orders = o.orders.filter((od) => od.status !== 'cancelled');
   }
   o.orders = o.orders.slice(-30);
@@ -348,7 +362,8 @@ function autoAnswer(o, od, a, m) { if (rand() < a) { od.auto = true; if (od.earn
 // weekly: queued orders arrive one by one
 export function weekStep(city, ctx, l, wk) {
   const o = l.ops; if (!o) return;
-  if (o.line && o.line.left > 0) {
+  if (hosts(l) && !o.managed) checkIn(city, ctx, l, Math.floor(wk / 4));
+  else if (o.line && o.line.left > 0) {
     o.fg = (o.fg || 0) + o.line.per; o.line.left--;
     // a staffed sales team ships accepted orders as soon as the stock is there
     const a0 = automation(l, 'sales'), m0 = Math.floor(wk / 4);
@@ -366,7 +381,56 @@ export function releaseQueue(city, l, g, m = city.m) {
   due.forEach((q) => { const c = clientById(o, q.od.cid); if (!c || c.status !== 'active') return; recalc(city, l, q.od); o.orders.push(q.od); if (a > 0) autoAnswer(o, q.od, a, m); });
   o.orders = o.orders.slice(-30);
 }
-function accept(o, od, m) { const c = clientById(o, od.cid); od.status = 'accepted'; od.due = m + (od.tag === 'rush' ? 1 : 2); if (c) c.mood = Math.min(100, c.mood + 3); }
+function accept(o, od, m) { const c = clientById(o, od.cid); od.status = 'accepted'; od.due = m + (od.tag === 'rush' || od.vip ? 1 : 2); if (c) c.mood = Math.min(100, c.mood + 3); }
+// ---------------------------------------------------------------- guests (hotels)
+// confirmed bookings check in when the month still has rooms and the stores hold the supplies their stay needs; VIPs go first
+export function checkIn(city, ctx, l, m) {
+  const o = l.ops; if (!o || o.managed || !hosts(l)) return 0;
+  if (!o.rooms || o.rooms.m !== m) o.rooms = { m, cap: r2(capacity(l)), used: 0 };
+  const rec = RECIPES[l.type]; let n = 0;
+  const waiting = (o.orders || []).filter((od) => od.status === 'accepted').sort((a, b) => (b.vip ? 1 : 0) - (a.vip ? 1 : 0) || a.due - b.due);
+  for (const od of waiting) {
+    // an empty hotel squeezes in even a group bigger than its rooms
+    if (o.rooms.used > 0 && o.rooms.used + od.units > o.rooms.cap + 1e-9) { od.wait = 'rooms'; continue; }
+    const per = od.need || 1;
+    if (Object.entries(rec.in).some(([g, q]) => (o.inv[g] || 0) < q * od.units * per - 1e-9)) { od.wait = 'supplies'; continue; }
+    Object.entries(rec.in).forEach(([g, q]) => { o.inv[g] = Math.max(0, (o.inv[g] || 0) - q * od.units * per); });
+    o.rooms.used = r2(o.rooms.used + od.units); n += od.units; delete od.wait;
+    deliverOrder(city, ctx, l, od, m);
+    if (od.vip) vipStayed(city, ctx, l, od);
+  }
+  return n;
+}
+const vipDef = (od) => VIP_GUESTS.find((v) => v.id === od.vip);
+function vipStayed(city, ctx, l, od) {
+  const o = l.ops, v = vipDef(od); if (!v) return; const name = l.title || TYPES[l.type].name;
+  o.rep = Math.min(100, o.rep + v.rep); o.customers = Math.min(400, o.customers * (1 + v.cust));
+  ctx.notify(city, l, `${v.name} checked in at ${name}`, `+${r2(od.value)} M. Word gets around: reputation +${v.rep}, customers +${Math.round(v.cust * 100)}%.`, 'good');
+  if (v.news && ctx.news) ctx.news(city, city.m, `${v.name} stays at ${name}`, `The ${l.district} hotel is the talk of Aurex Bay.`, 'info');
+}
+function vipLost(city, ctx, l, od, c) {
+  const o = l.ops, v = vipDef(od); if (!v) return;
+  o.rep = Math.max(0, o.rep - 3);
+  ctx.notify(city, l, `${v.name} went to another hotel`, `${od.reason} Reputation −3.`, 'bad');
+}
+// a rare VIP booking: few rooms, a high price and extra supplies per stay. Answer within the month and keep the stores full.
+export function vipBooking(city, ctx, l, pick) {
+  const o = l.ops; if (!o || o.managed || !hosts(l)) return null;
+  ensureClients(l);
+  if ((o.orders || []).some((od) => od.vip && od.status !== 'cancelled')) return null; // one VIP at a time
+  const v = pick ? VIP_GUESTS.find((x) => x.id === pick) : VIP_GUESTS[Math.floor(rand() * VIP_GUESTS.length)]; if (!v) return null;
+  const m = city.m, price = unitPrice(l, Math.max(0, ctx.listingYield(city, l, l.owner).trade));
+  const keep = new Set([...(o.orders || []), ...(o.done || [])].map((od) => od.cid));
+  o.clients = o.clients.filter((c) => c.status !== 'vip' || keep.has(c.id));
+  const d = DISTRICTS[Math.floor(rand() * DISTRICTS.length)];
+  const c = { id: uid('k'), name: v.name, kind: 'b2c', vip: v.id, district: d.name, x: Math.round(d.box.x + 0.5 * d.box.w), y: Math.round(d.box.y + 0.5 * d.box.h), weight: 0, mood: 70, terms: 1, since: m, orders: 0, revenue: 0, status: 'vip' };
+  o.clients.push(c);
+  const od = { id: uid('o'), cid: c.id, units: Math.max(1, Math.round(baseCap(l) * v.share)), unit: r4(price * v.mult), need: v.sup, m, tag: 'vip', vip: v.id, status: 'new' };
+  recalc(city, l, od); o.orders.push(od);
+  ctx.notify(city, l, `VIP booking at ${l.title || TYPES[l.type].name}: ${v.name}`, `${v.name} ${v.text}. ${od.units} stays for ${r2(od.value)} M. VIP guests use ${v.sup}× the usual supplies and arrive within a month.`, 'good');
+  const a = automation(l, 'sales'); if (a > 0) autoAnswer(o, od, a, m);
+  return od;
+}
 function deliverOrder(city, ctx, l, od, m) {
   const o = l.ops, c = clientById(o, od.cid);
   o.fg -= od.units; ctx.credit(city, l.owner, od.value); o.cur.b2c += od.value; o.cur.orders = (o.cur.orders || 0) + 1; o.cur.sold = (o.cur.sold || 0) + od.units;
@@ -380,7 +444,7 @@ export function orderAction(city, ctx, l, action, a = {}) {
   if (!od) return { ok: false, msg: 'This order is no longer open.' };
   const c = clientById(o, od.cid), R = CLIENT_RULES[kindOf(l)];
   if (action === 'archive') { if (od.status !== 'cancelled') return { ok: false, msg: 'Only cancelled orders can be archived.' }; o.orders = o.orders.filter((x) => x !== od); return { ok: true }; }
-  if (action === 'accept') { if (od.status !== 'new') return { ok: false, msg: 'This order is not waiting for an answer.' }; accept(o, od, m); return { ok: true, msg: `Accepted. Deliver to ${c.name} ${od.due === m + 1 ? 'by next month' : 'within two months'}.` }; }
+  if (action === 'accept') { if (od.status !== 'new') return { ok: false, msg: 'This order is not waiting for an answer.' }; accept(o, od, m); return { ok: true, msg: hosts(l) ? `Confirmed. ${c.name} checks in when a room and supplies are free, ${od.due === m + 1 ? 'by next month' : 'within two months'}.` : `Accepted. Deliver to ${c.name} ${od.due === m + 1 ? 'by next month' : 'within two months'}.` }; }
   if (action === 'reject') { if (od.status !== 'new') return { ok: false, msg: 'This order is not waiting for an answer.' }; c.mood -= R.rejectHit; o.orders = o.orders.filter((x) => x !== od); return { ok: true, msg: `Order rejected. ${c.name} is less happy with you.` }; }
   if (action === 'renegotiate') {
     if (od.status !== 'new') return { ok: false, msg: 'You can only renegotiate new orders.' };
@@ -389,6 +453,7 @@ export function orderAction(city, ctx, l, action, a = {}) {
     return { ok: true, msg: `Counter-offer sent: +${Math.round((ask - 1) * 100)}%. ${c.name} answers next month and may walk away.` };
   }
   if (action === 'deliver') {
+    if (hosts(l)) return { ok: false, msg: 'Guests check in by themselves when a room and supplies are free.' };
     if (od.status !== 'accepted') return { ok: false, msg: 'Accept the order before delivering.' };
     if (a.cid !== od.cid) { const wrong = clientById(o, a.cid); c.mood -= 2; return { ok: false, wrong: true, msg: `Wrong address. That is ${wrong ? wrong.name : 'somewhere else'}. This order goes to ${c.name}.` }; }
     if ((o.fg || 0) < od.units) return { ok: false, msg: `Not enough finished stock: ${Math.floor(o.fg || 0)} of ${od.units} units. Production adds more every month.` };
@@ -433,14 +498,15 @@ export function tasks(city, l) {
   const o = l.ops; if (!o || o.managed) return [];
   const m = city.m, out = [], ords = o.orders || [], R = CLIENT_RULES[kindOf(l)];
   const fresh = ords.filter((x) => x.status === 'new'), ready = ords.filter((x) => x.status === 'accepted'), gone = ords.filter((x) => x.status === 'cancelled');
-  if (fresh.length) out.push({ id: 'orders', dept: 'sales', label: `${fresh.length} new order${fresh.length > 1 ? 's' : ''} need an answer`, value: r2(fresh.reduce((a, x) => a + x.value, 0)), urgent: fresh.some((x) => m - x.m >= R.expire - 1) });
-  if (ready.length) out.push({ id: 'deliver', dept: 'sales', label: `${ready.length} order${ready.length > 1 ? 's' : ''} ready to deliver`, value: r2(ready.reduce((a, x) => a + x.value, 0)), urgent: ready.some((x) => x.due <= m) });
-  if (gone.length) out.push({ id: 'archive', dept: 'sales', label: `${gone.length} cancelled order${gone.length > 1 ? 's' : ''} to archive` });
-  if (automation(l, 'ops') === 0 && !(o.boost && o.boost.m === m + 1)) out.push({ id: 'runShift', dept: 'ops', label: 'No production staff: run the line yourself this month', urgent: true });
+  const hotel = hosts(l), word = hotel ? 'booking' : 'order';
+  if (fresh.length) out.push({ id: 'orders', dept: 'sales', label: `${fresh.length} new ${word}${fresh.length > 1 ? 's' : ''} need${fresh.length > 1 ? '' : 's'} an answer`, value: r2(fresh.reduce((a, x) => a + x.value, 0)), urgent: fresh.some((x) => m - x.m >= R.expire - 1) });
+  if (ready.length && !hotel) out.push({ id: 'deliver', dept: 'sales', label: `${ready.length} order${ready.length > 1 ? 's' : ''} ready to deliver`, value: r2(ready.reduce((a, x) => a + x.value, 0)), urgent: ready.some((x) => x.due <= m) });
+  if (gone.length) out.push({ id: 'archive', dept: 'sales', label: `${gone.length} cancelled ${word}${gone.length > 1 ? 's' : ''} to archive` });
+  if (automation(l, 'ops') === 0 && !(o.boost && o.boost.m === m + 1)) out.push({ id: 'runShift', dept: 'ops', label: hotel ? 'No front-desk staff: run reception yourself this month' : 'No production staff: run the line yourself this month', urgent: true });
   if (automation(l, 'procurement') < 1 && coverMonths(l) < 1.05) out.push({ id: 'restock', dept: 'procurement', label: coverMonths(l) < 0.05 ? 'Production is stopped: buy supplies' : `Supplies last ${coverMonths(l).toFixed(1)} months: restock`, urgent: coverMonths(l) < 0.5 });
   const outs = Object.keys(RECIPES[l.type].out).filter((g) => (o.inv[g] || 0) >= 1);
   if (automation(l, 'sales') < 1 && outs.length) out.push({ id: 'sellSurplus', dept: 'sales', label: `Sell surplus ${outs.map((g) => GOODS[g].name.toLowerCase()).join(' and ')}` });
-  if (automation(l, 'sales') < 1 && o.cd.findCustomers !== m) out.push({ id: 'findCustomers', dept: 'sales', label: 'Find new clients', interactive: true });
+  if (automation(l, 'sales') < 1 && o.cd.findCustomers !== m) out.push({ id: 'findCustomers', dept: 'sales', label: hotel ? 'Find new booking partners' : 'Find new clients', interactive: true });
   if (o.depts.social && automation(l, 'social') === 0 && o.cd.postCampaign !== m) out.push({ id: 'postCampaign', dept: 'social', label: 'Shoot a social media campaign', interactive: true });
   if (automation(l, 'hr') === 0 && o.morale < 70 && o.cd.teamMeeting !== m) out.push({ id: 'teamMeeting', dept: 'hr', label: `Morale is ${Math.round(o.morale)}: hold a team meeting`, urgent: o.morale < 35, interactive: true });
   if (o.depts.finance && automation(l, 'finance') === 0 && o.booksM !== m) out.push({ id: 'reviewBooks', dept: 'finance', label: 'Close the monthly books', interactive: true });
@@ -455,7 +521,7 @@ export function doTask(city, ctx, l, task, a = {}) {
   switch (task) {
     case 'restock': { if (automation(l, 'procurement') < 1) return { ok: false, msg: 'Order each supply by hand below, or fully staff Procurement to restock automatically.' }; const r = restock(city, ctx, l, Number(a.months) || (o.depts.procurement ? setting(l, 'procurement', 'stock') : 1)); return { ok: true, msg: r.cost > 0 ? `Bought supplies for ${r2(r.cost)} M${r.imported > 0 ? ` (${Math.round(r.imported)} units imported)` : ''}.` : 'Stock is already full.' }; }
     case 'sellSurplus': { let v = 0; Object.keys(RECIPES[l.type].out).forEach((g) => { const mk = city.market[g]; const q = o.inv[g] || 0; if (q >= 1) { listGoods(city, l, g, q, mk.p * B2B[setting(l, 'sales', 'b2b')], false); v += q * mk.p; } }); return { ok: true, msg: `Listed on the city market for about ${r2(v)} M. Buyers pay when they buy.` }; }
-    case 'runShift': { if (o.boost && o.boost.m === m + 1) return { ok: false, msg: 'You already worked the line this month.' }; o.boost = { m: m + 1, mult: 2 }; return { ok: true, msg: 'You run the line yourself. Output this month is doubled. Hire Operations staff to automate it.' }; }
+    case 'runShift': { if (o.boost && o.boost.m === m + 1) return { ok: false, msg: 'You already worked the line this month.' }; o.boost = { m: m + 1, mult: 2 }; return { ok: true, msg: hosts(l) ? 'You run reception yourself. Rooms next month are doubled. Hire Operations staff to automate it.' : 'You run the line yourself. Output this month is doubled. Hire Operations staff to automate it.' }; }
     case 'teamMeeting': {
       if (!once('teamMeeting')) return { ok: false, msg: 'Already held this month.' };
       if (ch === 'bonus') { const c = r2(0.05 * Math.max(1, workers)); ctx.debit(city, l.owner, c); o.morale = Math.min(100, o.morale + 18); return { ok: true, msg: `Bonus paid (${c} M). Morale +18.` }; }

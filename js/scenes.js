@@ -23,7 +23,7 @@ export function startScene(lid, task, from) {
 export function endScene(key) { delete SCENES[key]; }
 
 export function sceneInline(st, showCompany) {
-  const l = E.listing(city(), st.lid), it = INTERACTIONS[st.task]; if (!l || !it) return '';
+  const l = E.listing(city(), st.lid), it = E.OPS.interactionFor(l, st.task); if (!l || !it) return '';
   const t = Math.min(1, (Date.now() - st.start) / (it.seconds * 1000)), lines = it.lines[st.level];
   const shown = Math.min(st.speakers.length, Math.floor(t * (st.speakers.length + 1))), first = Math.max(0, shown - 2);
   const bubbles = st.speakers.slice(first, shown).map((sp, j) => { const i = first + j; return `<div class="bub ${i % 2 ? 'r' : ''}"><span class="av" style="background:${sp.color};--avc:${sp.color}">${esc(sp.name[0])}</span><div><b>${esc(sp.name)}</b><p>${esc(lines[i % lines.length])}</p></div></div>`; }).join('');
@@ -50,4 +50,4 @@ export function tickScenes(onPhase) {
   if (now - last < 450) return; last = now;
   Object.values(SCENES).forEach((st) => { if (st.phase !== 'run') return; document.querySelectorAll(`[data-scene="${st.key}"]`).forEach((el) => { el.outerHTML = sceneInline(st, el.dataset.co === '1'); }); });
 }
-export const sceneTitle = (st) => `${INTERACTIONS[st.task].title} · ${lname(E.listing(city(), st.lid))}`;
+export const sceneTitle = (st) => { const l = E.listing(city(), st.lid); return `${E.OPS.interactionFor(l, st.task).title} · ${lname(l)}`; };

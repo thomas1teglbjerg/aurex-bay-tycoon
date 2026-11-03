@@ -1,7 +1,7 @@
 // Aurex Bay Tycoon — game engine.
 // Pure functions over one plain "city" object, so the exact same rules run in the browser demo
 // and server-side in the Supabase Edge Function. Time is real time: 1 game year = 1 real week (speed 1).
-import { DISTRICTS, TYPES, SYNERGY, SIZES, LISTINGS, STAFF, STOCKS, WORLD, DECISIONS, HAPPENINGS, BOTS, CONFIG, VINTAGE, DEPT_DEFAULTS, WORKER, GOODS, TAKEOVER } from './content.js';
+import { DISTRICTS, TYPES, SYNERGY, SIZES, LISTINGS, STAFF, STOCKS, WORLD, DECISIONS, HAPPENINGS, BOTS, CONFIG, VINTAGE, VIP, DEPT_DEFAULTS, WORKER, GOODS, TAKEOVER } from './content.js';
 import * as OPS from './ops.js';
 import * as LOG from './logistics.js';
 import * as LIFE from './life.js';
@@ -26,7 +26,7 @@ function unassign(city, p, spec) {
 }
 const credit = (city, owner, v) => { if (!owner) return; if (owner.k === 'p') { const p = city.players[owner.id]; if (p) p.cash += v; } else { const h = city.holdings[owner.id]; if (h) { h.treasury += v; if (v > 0) h.accrued += v; } } };
 const debit = (city, owner, v) => credit(city, owner, -v);
-const CTX = { listingYield: (...a) => listingYield(...a), credit, debit, notify: (city, l, t, x, k) => notifyOwner(city, l, t, x, k),
+const CTX = { listingYield: (...a) => listingYield(...a), credit, debit, notify: (city, l, t, x, k) => notifyOwner(city, l, t, x, k), news: (city, m, t, x, k) => news(city, m, t, x, k),
   onTheWay: (city, l, g) => (city.shipments ? LOG.onTheWay(city, l, g) : 0),
   carrierMode: (cid) => (LOG.CARRIER[cid] || LOG.CARRIER.ridge).mode,
   book: (city, l, o) => { LOG.ensureWarehouses(city); return LOG.book(city, { from: { k: 'import', id: (LOG.CARRIER[o.carrier] || LOG.CARRIER.ridge).mode }, to: { k: 'l', id: l.id }, ...o, owner: l.owner.id, gNow: city.g }); },
@@ -241,7 +241,7 @@ export function listingYield(city, l, owner) {
       if ((l.type === 'autorepair' || l.type === 'car' || l.type === 'dealer') && hasHead(city, l, p, 'marco')) { ypi += s; notes.push(`Workshop +${r2(s)}`); }
       if (def.group === 'tech' && hasHead(city, l, p, 'anika')) { ypi += s; notes.push(`Anika +${r2(s)}`); }
       // every specialist leading a department here adds leadership value, more the better they are
-      if (!p.bot && city.talent) Object.entries(p.assign || {}).forEach(([spec, a]) => { if (!a || a.lid !== l.id) return; const tid = p.team && p.team[spec], t = tid && city.talent[tid]; if (!t || t.leave != null) return; const v = TAL.headYpi(t.rating) * s; ypi += v; notes.push(`${TAL.PERSON[tid].name.split(' ')[0]} leads ${OPS.DEPT[a.dept].name} +${r2(v)}`); });
+      if (!p.bot && city.talent) Object.entries(p.assign || {}).forEach(([spec, a]) => { if (!a || a.lid !== l.id) return; const tid = p.team && p.team[spec], t = tid && city.talent[tid]; if (!t || t.leave != null) return; const v = TAL.headYpi(t.rating) * s; ypi += v; notes.push(`${TAL.PERSON[tid].name.split(' ')[0]} leads ${OPS.deptFor(l, a.dept).name} +${r2(v)}`); });
     }
   }
   return { ypi: r2(ypi), trade: r2(trade), total: r2(ypi + trade), notes };
@@ -388,6 +388,8 @@ function planWeek(city, wk) {
     if (!l.ops || l.ops.managed || !humanOwned(city, l)) return;
     if (rand() < 0.33) plan(city, inWeek(wk), 'happening', { lid: l.id });
     if ((l.type === 'film' || l.type === 'music') && rand() < 1 / 130) plan(city, inWeek(wk), 'hit', { lid: l.id });
+    // a rare VIP guest books a hotel; a better reputation draws them more often
+    if (OPS.hosts(l) && rand() < VIP.week * (0.5 + l.ops.rep / 100)) plan(city, inWeek(wk), 'vip', { lid: l.id });
   });
   // vineyards harvest once a year, each in its own week of the autumn
   city.listings.forEach((l) => { if (l.type === 'vineyard' && l.owner && wk % 48 === harvestWeek(l)) plan(city, inWeek(wk), 'vintage', { lid: l.id }); });
@@ -420,6 +422,7 @@ const AGENDA = {
     const d = pick(pool); p.inbox.push({ id: uid('d'), def: d.id, m, dueM: m + 2 });
     feed(p, m, `New decision: ${d.title}`, 'Answer it in your inbox within two months.', 'info');
   },
+  vip: (city, e) => { const l = listing(city, e.lid); if (l && l.ops && !l.ops.managed && humanOwned(city, l)) OPS.vipBooking(city, CTX, l); },
   happening: (city, e) => {
     const l = listing(city, e.lid); if (!l || !l.ops || l.ops.managed || !humanOwned(city, l)) return;
     happening(city, l, pick(HAPPENINGS));
@@ -878,7 +881,7 @@ function applyAs(city, pid, p, action, a, now) {
       // a coop's company is paid for from the coop treasury, not the pocket of the owner pressing the button
       const hq = l.owner.k === 'h' ? city.holdings[l.owner.id] : null;
       const payer = hq ? { get cash() { return hq.treasury; }, set cash(v) { hq.treasury = v; } } : p;
-      const o = l.ops, d = a.dept ? OPS.DEPT[a.dept] : null;
+      const o = l.ops, d = a.dept ? OPS.deptFor(l, a.dept) : null;
       if (action === 'deptOpen') { if (!d) return err('Unknown department.'); if (o.depts[a.dept]) return err('Already open.'); const c = OPS.deptOpenCost(l, a.dept); if (payer.cash < c) return err(`Opening costs ${c} M.`); payer.cash -= c; o.depts[a.dept] = { w: 0, set: { ...DEPT_DEFAULTS[a.dept] }, head: null }; return ok(`${d.name} is open. Hire workers to automate it, or run it yourself.`); }
       if (action === 'deptClose') { if (!d || a.dept === 'ops' || !o.depts[a.dept]) return err('Cannot close this department.'); const dd = o.depts[a.dept]; if (dd.head) unassign(city, p, dd.head); payer.cash -= dd.w * WORKER.salary * 0.25; delete o.depts[a.dept]; return ok(`${d.name} closed.`); }
       if (action === 'workers') {
