@@ -1,6 +1,6 @@
 // Company dashboard: one page per company with production, supplies, orders and departments
 import * as E from '../supabase/functions/_shared/engine.js';
-import { TYPES, SIZES, GOODS, RECIPES, DEPTS, STAFF, WORKER, MARKET_KIND, CLIENT_RULES, LIFE as LC, VINTAGE } from '../supabase/functions/_shared/content.js';
+import { TYPES, SIZES, GOODS, RECIPES, DEPTS, STAFF, WORKER, MARKET_KIND, CLIENT_RULES, LIFE as LC, CRAFT } from '../supabase/functions/_shared/content.js';
 import { carrierPicker, deliveriesBox } from './freight.js';
 import { money, cardHTML } from './life.js';
 import { scenesHTML, sceneFor } from './scenes.js';
@@ -179,22 +179,26 @@ export function companyHTML(lid, ui = {}) {
     </div>
   </div>`;
 }
-// vineyards: the yearly harvest and the estate's own wine cellar
+// companies that make a collectible once a year (CRAFT): vineyard wine in the estate cellar, tuner cars in the workshop garage
 function cellarBox(c, l, ro) {
-  if (l.type !== 'vineyard') return '';
+  if (!E.makes(l)) return '';
+  const cf = CRAFT[l.type], w = cf.words, wine = cf.cat === 'wine', U = (k) => (k === 1 ? w.unit : w.units), Cap = (t) => t[0].toUpperCase() + t.slice(1);
   const od = E.vintageOdds(c, l), hw = E.harvestWeek(l), yr = Math.floor(c.m / 12), done = l.vintY === yr || c.wk % 48 > hw;
   const when = `${E.monthName(Math.floor(hw / 4))}, Year ${yr + (done ? 2 : 1)}`;
   const groups = {}; (l.cellar || []).forEach((x) => (groups[x.cid] = groups[x.cid] || []).push(x));
   const solo = l.owner.k === 'p';
   const rows = Object.entries(groups).filter(([cid]) => E.LIFE.ITEM[cid]).map(([cid, xs]) => {
     const v = E.LIFE.itemValue(c, cid), free = xs.filter((x) => !x.lot), lots = xs.filter((x) => x.lot), b = (how, uid, label, cls = '') => `<button class="btn sm ${cls}" data-a="cellar" data-lid="${l.id}" data-uid="${uid}" data-v="${how}">${label}</button>`;
-    const acts = ro ? '' : `<div class="btns" style="margin-top:6px">${free.length ? b('dealer', free[0].uid, `Sell 1 to Cellar Door · ${money(v * LC.dealerBuyback)}`) + (free.length > 1 ? b('dealerAll', free[0].uid, `Sell all ${free.length} · ${money(v * LC.dealerBuyback * free.length)}`) : '') + b('auction', free[0].uid, `Auction 1 case · est. ${money(v)}`, 'gold') + (solo ? b('take', free[0].uid, 'Move 1 to my own cellar') : '') : ''}${lots.map((x) => b('withdraw', x.uid, 'Withdraw from auction')).join('')}</div>`;
-    return `<div class="row" style="align-items:flex-start;gap:12px">${cardHTML(cid, { cls: 'sm', noDelta: true })}<div class="grow"><b>${free.length} case${free.length === 1 ? '' : 's'} in the cellar${lots.length ? ` · ${lots.length} at auction` : ''}</b><span>${money(v)} per case · ${esc(E.LIFE.wineWindow(E.LIFE.ITEM[cid], c.m / 12) || '')}</span>${acts}</div></div>`;
+    const acts = ro ? '' : `<div class="btns" style="margin-top:6px">${free.length ? b('dealer', free[0].uid, `Sell 1 to ${w.dealer} · ${money(v * LC.dealerBuyback)}`) + (free.length > 1 ? b('dealerAll', free[0].uid, `Sell all ${free.length} · ${money(v * LC.dealerBuyback * free.length)}`) : '') + b('auction', free[0].uid, `Auction 1 ${w.unit} · est. ${money(v)}`, 'gold') + (solo ? b('take', free[0].uid, `Move 1 to my ${w.home}`) : '') : ''}${lots.map((x) => b('withdraw', x.uid, 'Withdraw from auction')).join('')}</div>`;
+    const it = E.LIFE.ITEM[cid], note = wine ? E.LIFE.wineWindow(it, c.m / 12) || '' : it.medium || '';
+    return `<div class="row" style="align-items:flex-start;gap:12px">${cardHTML(cid, { cls: 'sm', noDelta: true })}<div class="grow"><b>${free.length} ${U(free.length)} in the ${wine ? 'cellar' : 'garage'}${lots.length ? ` · ${lots.length} at auction` : ''}</b><span>${money(v)} per ${w.unit} · ${esc(note)}</span>${acts}</div></div>`;
   }).join('');
-  return `<div class="box"><h2>Harvest & wine cellar<small>${(l.cellar || []).length} CASES</small></h2><div class="in">
-    <p style="margin:0 0 8px">Next harvest: <b>${when}</b> · ${Math.round(od.chance * 100)}% chance of a collectible vintage${od.heads ? ` (${od.heads} specialist${od.heads > 1 ? 's' : ''} leading: +${Math.round((od.chance - VINTAGE.chance) * 100)}% chance, ${Math.round(od.bump * 100)}% chance of a rarer wine${od.somm.length ? `, with sommelier ${od.somm.map((t) => esc(E.TAL.PERSON[t].name)).join(' and ')}` : ''})` : ''}. Best this estate can make: ${od.top}.</p>
-    ${rows ? `<div class="rows">${rows}</div>` : '<p class="empty">The cellar is empty. Wine you bottle lands here, ready to sell to the wine merchant, put up at the auction house or keep.</p>'}
-    <p class="empty" style="font-size:13px">Specialists who lead a department here raise the chance and the rarity; a sommelier raises them most. Sales go to the company${solo ? '. Wine moved to your own cellar can be traded with other players from the Life tab' : ''}.</p>
+  const n = (l.cellar || []).length;
+  return `<div class="box"><h2>${w.box}<small>${n} ${U(n).toUpperCase()}</small></h2><div class="in">
+    <p style="margin:0 0 8px">Next ${w.event}: <b>${when}</b> · ${Math.round(od.chance * 100)}% chance of a collectible ${w.item}${od.heads ? ` (${od.heads} specialist${od.heads > 1 ? 's' : ''} leading: +${Math.round((od.chance - od.base) * 100)}% chance, ${Math.round(od.bump * 100)}% chance of a rarer ${wine ? 'wine' : 'build'}${od.somm.length ? `, with sommelier ${od.somm.map((t) => esc(E.TAL.PERSON[t].name)).join(' and ')}` : ''})` : ''}. Best this ${w.who} can make: ${od.top}.</p>
+    ${!wine && cf.spec.models ? `<p class="empty" style="font-size:13px;margin:0 0 8px">Cars this ${w.who} can build: ${cf.spec.models.map((m) => `${esc(m.name)} (${m.rar.join(' / ')})`).join(', ')}.</p>` : ''}
+    ${rows ? `<div class="rows">${rows}</div>` : `<p class="empty">The ${wine ? 'cellar' : 'garage'} is empty. ${wine ? 'Wine you bottle' : 'Tuner cars you build'} land${wine ? 's' : ''} here, ready to sell to the ${w.dealerKind}, put up at the auction house or keep.</p>`}
+    <p class="empty" style="font-size:13px">Specialists who lead a department here raise the chance and the rarity${wine ? '; a sommelier raises them most' : ''}. Sales go to the company${solo ? `. ${Cap(w.units)} moved to your ${w.home} can be traded with other players from the Life tab` : ''}.</p>
   </div></div>`;
 }
 function deptCardRO(l, d) {

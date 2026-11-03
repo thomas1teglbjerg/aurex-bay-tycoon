@@ -501,6 +501,29 @@ export const VINTAGE = {
   value: { Common: [0.012, 0.02], Rare: [0.025, 0.05], Epic: [0.08, 0.12], Legendary: [0.2, 0.3] },
   styles: { Common: [['Table Red', 'red'], ['Rosé', 'rosé'], ['Coastal White', 'white']], Rare: [['Reserve', 'red'], ['Pinot Noir', 'red'], ['Brut', 'sparkling']], Epic: [['Grand Reserve', 'red'], ['Single Vineyard', 'red'], ['Blanc de Blancs', 'sparkling']], Legendary: [['Grand Cru', 'red'], ['Cuvée Héritage', 'red']] }
 };
+// Auto repair shops build a collectible tuner car once a year for the Aurex Bay Tuner Show. Same odds model as VINTAGE;
+// the rarity picks the model (each model has the rarities it can come in) and a trim. builds = how many cars of one run.
+export const TUNER = {
+  chance: 0.5, perHead: 0.08, maxChance: 0.85, bump: 0.04, maxBump: 0.6, harvest: 14,
+  odds: VINTAGE.odds, top: VINTAGE.top,
+  cases: { Common: 4, Rare: 3, Epic: 2, Legendary: 1 },
+  value: { Common: [0.05, 0.09], Rare: [0.12, 0.2], Epic: [0.3, 0.5], Legendary: [0.8, 1.2] },
+  models: [
+    { id: 'trailhawk', name: 'Rivermore Trailhawk', body: 'Lifted off-road SUV', pic: 'x-tuner-trailhawk', rar: ['Common', 'Rare', 'Epic'] },
+    { id: 'takemi', name: 'Takemi VTEC', body: 'Tuned sport sedan', pic: 'x-tuner-takemi', rar: ['Common', 'Rare', 'Epic'] },
+    { id: 'gtrs', name: 'Valtor GT-RS', body: 'Widebody turbo coupé', pic: 'x-tuner-gtrs', rar: ['Rare', 'Epic', 'Legendary'] }
+  ],
+  trims: { Common: ['Street', 'Daily Driver'], Rare: ['Stage 2', 'Sport'], Epic: ['Stage 3', 'Track Spec'], Legendary: ['Time Attack', 'One-Off'] }
+};
+// Car dealerships get their own collectible cars on the same model. No cars yet: the output stays off until models are added.
+export const DEALER_CARS = { ...TUNER, harvest: 22, models: [], trims: { Common: ['Edition'], Rare: ['Signature'], Epic: ['Launch Edition'], Legendary: ['Founders Edition'] } };
+// Companies that make a collectible once a year. spec = the odds table above; cat = the collection it joins.
+// words = what the UI and the notes call things (the output, one unit, where it waits, the shop that buys it, the yearly event).
+export const CRAFT = {
+  vineyard: { spec: VINTAGE, cat: 'wine', words: { item: 'vintage', unit: 'case', units: 'cases', store: 'estate cellar', home: 'own cellar', dealer: 'Cellar Door', dealerKind: 'wine merchant', event: 'harvest', box: 'Harvest & wine cellar', made: 'bottled', who: 'estate' } },
+  autorepair: { spec: TUNER, cat: 'car', words: { item: 'tuner car', unit: 'car', units: 'cars', store: 'workshop garage', home: 'own garage', dealer: 'Coastline Classics', dealerKind: 'classic car dealer', event: 'tuner show', box: 'Tuner builds & garage', made: 'built', who: 'shop' } },
+  dealer: { spec: DEALER_CARS, cat: 'car', words: { item: 'collector car', unit: 'car', units: 'cars', store: 'showroom', home: 'own garage', dealer: 'Coastline Classics', dealerKind: 'classic car dealer', event: 'launch event', box: 'Collector cars & showroom', made: 'unveiled', who: 'dealership' } }
+};
 export const SETS = {
   kestrel: { name: 'The Kestrel Harbors', bonus: 0.12, prestige: 40 },
   crowns: { name: 'Okafor-Lind Crowns', bonus: 0.15, prestige: 40 },
