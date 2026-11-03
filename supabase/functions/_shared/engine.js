@@ -472,7 +472,7 @@ const AGENDA = {
     const w = CRAFT[l.type].words, wine = CRAFT[l.type].cat === 'wine';
     const r = LIFE.vintage(city, l, { heads: leadRatings(city, l), extra: vintageExtra(city, l), name: l.title || TYPES[l.type].name });
     const co = `${l.title || TYPES[l.type].name} in ${l.district}`;
-    if (!r.def) { notifyOwner(city, l, wine ? `Harvest at ${co}` : `Tuner show season at ${co}`, wine ? `A good year for drinking wine, but nothing worth laying down. Next harvest in a year (chance ${Math.round(r.chance * 100)}%).` : `The team worked on customer cars all season, but no build was good enough for the show. Next ${w.event} in a year (chance ${Math.round(r.chance * 100)}%).`, 'info'); return; }
+    if (!r.def) { notifyOwner(city, l, wine ? `Harvest at ${co}` : `${w.event[0].toUpperCase() + w.event.slice(1)} at ${co}`, wine ? `A good year for drinking wine, but nothing worth laying down. Next harvest in a year (chance ${Math.round(r.chance * 100)}%).` : `${w.none} Next ${w.event} in a year (chance ${Math.round(r.chance * 100)}%).`, 'info'); return; }
     const d = r.def, n = (k) => `${k} ${k > 1 ? w.units : w.unit}`;
     // run by bots or an autopilot coop: everything goes straight to the dealer
     if (isManaged(city, l)) { const v = LIFE.cellarSellAll(city, l, d.id); credit(city, l.owner, v); return; }

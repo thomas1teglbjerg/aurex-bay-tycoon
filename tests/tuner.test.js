@@ -1,13 +1,14 @@
 // Auto repair shops build a collectible tuner car once a year (same model as vineyard wine, CRAFT in content.js)
 import * as E from '../supabase/functions/_shared/engine.js';
-import { TUNER, CRAFT } from '../supabase/functions/_shared/content.js';
+import { TUNER, DEALER_CARS, CRAFT } from '../supabase/functions/_shared/content.js';
 const assert = (c, m) => { if (!c) { console.error('FAIL', m); process.exit(1); } console.log('ok ', m); };
 const L = E.LIFE;
 let now = 1_700_000_000_000;
 
 assert(TUNER.models.map((m) => m.name).join('|') === 'Rivermore Trailhawk|Takemi VTEC|Valtor GT-RS', 'the first three tuner cars');
 assert(E.makes({ type: 'autorepair' }) && E.makes({ type: 'vineyard' }), 'auto repair and vineyards make collectibles');
-assert(!E.makes({ type: 'dealer' }) && CRAFT.dealer && CRAFT.dealer.cat === 'car', 'dealerships share the model but make nothing until they get their own cars');
+assert(E.makes({ type: 'dealer' }) && CRAFT.dealer.cat === 'car', 'dealerships share the model with their own cars');
+assert(DEALER_CARS.models.every((m) => m.name.startsWith('Bergwald')) && !DEALER_CARS.models.some((m) => TUNER.models.includes(m)), 'dealerships get Bergwald cars, never tuner cars');
 assert(!E.makes({ type: 'car' }) && !E.makes({ type: 'bank' }), 'other companies make no collectibles');
 
 let city; do { city = E.createCity(now, { speed: 2016 }); } while (!city.listings.some((x) => x.type === 'autorepair' && !x.owner));
@@ -20,7 +21,9 @@ assert(s.rate > 0.45 && s.rate < 0.55, `about 50% of years make a tuner car (${s
 assert(!s.rar.Legendary, 'a small shop never builds a Legendary');
 assert(!s.bad.length && !big.bad.length, 'every build is a car of a model that comes in that rarity, with its picture');
 assert((big.rar.Legendary || 0) > 0, `a large shop can build a Legendary (${JSON.stringify(big.rar)})`);
-assert(L.vintage(city, { id: 'D', type: 'dealer', size: 'M' }, { heads: [], name: 'X' }).def === null, 'a dealership without cars builds nothing');
+const dl = (() => { const l = { id: 'DM', type: 'dealer', size: 'M', level: 1 }; const bad = [], rare = {}; let n = 0; for (let i = 0; i < 2000; i++) { const r = L.vintage(city, l, { heads: [], name: 'Kazen Motors' }); if (r.def) { n++; rare[r.def.rarity] = 1; const mo = DEALER_CARS.models.find((m) => m.id === r.def.model); if (!mo || !mo.rar.includes(r.def.rarity) || r.def.cat !== 'car') bad.push(r.def); delete city.life.made[r.def.id]; delete city.life.items[r.def.id]; } } return { n, bad, rare }; })();
+assert(dl.n > 800 && !dl.bad.length, `a dealership gets Bergwald collector cars in the rarities each model comes in (${dl.n}/2000)`);
+assert(!dl.rare.Common, 'Bergwald cars are exclusive: never Common');
 
 // buy the shop and let a year pass: the tuner show happens on its own
 const l = city.listings.find((x) => x.type === 'autorepair' && !x.owner);
@@ -28,7 +31,7 @@ assert(E.apply(city, 'u', 'buy', { lid: l.id }, now).ok, 'buy the auto repair sh
 const weekMs = E.realMsPerMonth(city) / 4;
 for (let i = 0; i < 50; i++) { now += weekMs; E.apply(city, 'u', 'ping', {}, now); }
 assert(l.vintY != null, 'the shop had its tuner show this year');
-assert(p.feed.some((f) => /Tuner show season|built a/.test(f.title)), 'the owner hears about it');
+assert(p.feed.some((f) => /Tuner show at|built a/.test(f.title)), 'the owner hears about it');
 
 // build one by hand to test the garage
 let r; do { r = L.vintage(city, l, { heads: [], name: l.title }); } while (!r.def);

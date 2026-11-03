@@ -158,6 +158,7 @@ const BOXES = {
   company: h('Company', 'Upgrade the company to the next level or sell it. Upgrading raises capacity, income and how many workers each department needs.'),
   'harvest & wine cellar': h('Vineyard', 'Once a year the vineyard harvests and may bottle a collectible wine. Cases wait in the cellar until you sell, auction or take them home.'),
   'tuner builds & garage': h('Tuner cars', 'Once a year, before the Aurex Bay Tuner Show, the workshop may build a collectible tuner car: Rivermore Trailhawk, Takemi VTEC or Valtor GT-RS. Cars wait in the garage until you sell, auction or take them home.'),
+  'bergwald cars & showroom': h('Bergwald cars', 'Once a year at the Bergwald launch event the dealership may get a collectible car: Bergwald X7, S7, GT or the Crown Hills limousine. Cars wait in the showroom until you sell, auction or take them home.'),
   deliveries: h('Logistics', 'Shipments to and from this company and where they are now.'),
   'your shipments': h('Logistics', 'Everything you have on the road, at sea or in the air.'),
   rates: h('Logistics', 'What each carrier charges and how long it takes.'),
