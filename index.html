@@ -748,8 +748,6 @@ em.s { color: #b07a10; font-style: normal; font-weight: 700; } em.m { color: var
 .mn-hint { padding: 8px 12px; font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
 .mp.mv { cursor: grab; touch-action: none; } .mp.mv.held { cursor: grabbing; z-index: 4; transition: none; transform: translate(-50%, -50%) scale(calc(var(--inv) * 1.35)); }
 .mn-step { display: flex; gap: 4px; } .mn-step button { width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--line); font-size: 17px; line-height: 1; background: rgba(255,255,255,0.7); }
-.mn-legend { display: flex; gap: 10px; padding: 8px 12px; font-size: 12px; font-weight: 600; flex-wrap: wrap; color: var(--ink-2); }
-.mn-legend i { display: inline-block; width: 11px; height: 11px; border-radius: 50%; background: var(--c); margin-right: 5px; vertical-align: -1px; border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.25); } .mn-legend i.sq { border-radius: 3px; }
 #mapcard { position: absolute; z-index: 12; width: 272px; background: #fff; border-radius: 14px; overflow: hidden; box-shadow: 0 18px 44px rgba(10,20,35,0.38); animation: pop .14s ease-out; }
 .mc-img { height: 118px; background-size: cover; background-position: center; background-color: #dfe5ec; }
 .mc-b { padding: 11px 14px 12px; } .mc-k { font-size: 10.5px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-2); }
@@ -757,7 +755,7 @@ em.s { color: #b07a10; font-style: normal; font-weight: 700; } em.m { color: var
 .mc-r { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-top: 1px solid var(--line); font-size: 13.5px; } .mc-r span { color: var(--ink-2); } .mc-r b { text-align: right; }
 .mc-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
 .mc-foot { margin-top: 8px; font-size: 12px; color: var(--ink-2); font-weight: 600; }
-@media (max-width: 520px) { .mn-legend { font-size: 11px; gap: 8px; padding: 6px 10px; } #mapcard { width: 250px; } .mc-img { height: 100px; } }
+@media (max-width: 520px) { #mapcard { width: 250px; } .mc-img { height: 100px; } }
 
 /* ---------------- dossier cards: companies and specialists (dark, photo-led) */
 .sheet.dz { --panel: #181c22; --panel-2: #11151a; --ink: #e7eaee; --ink-2: #93a0ad; --line: #2a3038; --band: #2c3a4a; --acc: #6fc3d6; --good: #74d39b; --bad: #ef8f7c;
