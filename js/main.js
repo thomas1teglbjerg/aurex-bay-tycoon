@@ -1046,7 +1046,7 @@ async function boot(hot) {
   // any click or key press in the game counts as activity for the online bar (game actions do too, in B.act)
   const touch = () => { if (B.touch && me()) B.touch(); };
   document.addEventListener('pointerdown', touch, true); document.addEventListener('keydown', touch, true);
-  initChat({ B, toast, renderWho: () => { renderWho(); measureTop(); }, navBack, setTab, initials });
+  initChat({ B, toast, renderWho: () => { renderWho(); measureTop(); }, navBack, setTab, initials, where: () => ({ tab: UI.tab, company: UI.company, modal: UI.modal }) });
   setInterval(renderWho, 20 * 1000); // players turn inactive without any event
 }
 window.claude?.hot?.snapshot?.(() => ({ ...(B && B.snapshot ? B.snapshot() : {}), tab: UI.tab }));
