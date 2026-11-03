@@ -585,7 +585,7 @@ export function proposalLabel(city, pr) {
   const l = pr.lid ? listing(city, pr.lid) : null;
   if (pr.kind === 'buy') return `Buy ${TYPES[l.type].name} in ${l.district} (${listingPrice(l)} M)`;
   if (pr.kind === 'upgrade') return `Upgrade ${TYPES[l.type].name} in ${l.district} to level ${l.level + 1} (${upgradeCost(l)} M)`;
-  if (pr.kind === 'sell') return `Sell ${TYPES[l.type].name} in ${l.district}`;
+  if (pr.kind === 'sell') return `Sell ${TYPES[l.type].name} in ${l.district}${l.owner ? ` (${r2(listingValue(l) * 0.8)} M to the treasury)` : ''}`;
   if (pr.kind === 'payout') return `Set dividend payout to ${Math.round(pr.pct * 100)}%`;
   return pr.kind;
 }
@@ -858,7 +858,11 @@ function applyAs(city, pid, p, action, a, now) {
     }
     case 'offerAccept': { const o = city.offers.find((x) => x.id === a.id && x.to === pid && x.status === 'open'); if (!o) return err('The offer is no longer open.'); completeOffer(city, o, m); return ok(); }
     case 'offerDecline': { const o = city.offers.find((x) => x.id === a.id && x.to === pid && x.status === 'open'); if (o) { o.status = 'declined'; feed(city.players[o.from], m, `${p.name} turned down your offer`, '', 'info'); } return ok(); }
-    case 'sell': { const l = listing(city, a.lid); if (!l || !ownerIs(l, 'p', pid)) return err('You do not own this company.'); const v = r2(listingValue(l) * 0.8); p.cash += v; releaseListing(city, l); return ok(`Sold for ${v} M.`); }
+    case 'sell': { const l = listing(city, a.lid);
+      // a coop's company is sold by a vote of its owners (by stake); the money goes to the coop treasury
+      if (l && l.owner && l.owner.k === 'h') { const h = city.holdings[l.owner.id]; if (!h || !h.members[pid]) return err('Not your coop.'); if (h.proposals.some((x) => x.status === 'open' && x.kind === 'sell' && x.lid === l.id)) return err('A sale vote is already running.');
+        const pr = { id: uid('p'), by: pid, kind: 'sell', lid: l.id, votes: { [pid]: true }, m, dueM: m + 1, status: 'open' }; h.proposals.push(pr); botVotes(city, h, pr); closeProposal(city, h, pr, false); return ok(pr.status === 'passed' ? 'Sold. The money is in the coop treasury.' : 'Sale proposed to your co-owners.'); }
+      if (!l || !ownerIs(l, 'p', pid)) return err('You do not own this company.'); const v = r2(listingValue(l) * 0.8); p.cash += v; releaseListing(city, l); return ok(`Sold for ${v} M.`); }
     case 'upgrade': {
       const l = listing(city, a.lid); if (!l) return err('Unknown company.');
       if (l.owner && l.owner.k === 'h') { const h = city.holdings[l.owner.id]; if (!h.members[pid]) return err('Not your coop.'); const pr = { id: uid('p'), by: pid, kind: 'upgrade', lid: l.id, votes: { [pid]: true }, m, dueM: m + 1, status: 'open' }; h.proposals.push(pr); botVotes(city, h, pr); closeProposal(city, h, pr, false); return ok(pr.status === 'passed' ? 'Upgrade started.' : 'Proposal sent to your co-owners.'); }
@@ -1000,7 +1004,8 @@ function applyAs(city, pid, p, action, a, now) {
       return ok(h.open ? `Anyone can buy in from ${h.buyIn || BR.MIN_STAKE} M.` : 'Only invited players can buy in.');
     }
     case 'holdingPropose': { const h = city.holdings[a.hid]; if (!h || !h.members[pid]) return err('Not your coop.'); const pr = { id: uid('p'), by: pid, kind: a.kind, lid: a.lid || null, pct: a.pct, votes: { [pid]: true }, m, dueM: m + 1, status: 'open' };
-      if (!['buy', 'upgrade', 'sell', 'payout'].includes(pr.kind)) return err('Unknown proposal.'); h.proposals.push(pr); botVotes(city, h, pr); closeProposal(city, h, pr, false); return ok(pr.status === 'open' ? 'Proposal sent to your co-owners.' : `Proposal ${pr.status}.`); }
+      if (!['buy', 'upgrade', 'sell', 'payout'].includes(pr.kind)) return err('Unknown proposal.');
+      if (pr.kind === 'sell') { const l = listing(city, pr.lid); if (!l || !ownerIs(l, 'h', h.id)) return err('The coop does not own that company.'); if (h.proposals.some((x) => x.status === 'open' && x.kind === 'sell' && x.lid === l.id)) return err('A sale vote is already running.'); } h.proposals.push(pr); botVotes(city, h, pr); closeProposal(city, h, pr, false); return ok(pr.status === 'open' ? 'Proposal sent to your co-owners.' : `Proposal ${pr.status}.`); }
     case 'holdingVote': { const h = city.holdings[a.hid]; if (!h || !h.members[pid]) return err('Not your coop.'); const pr = h.proposals.find((x) => x.id === a.prid && x.status === 'open'); if (!pr) return err('Voting has closed.'); pr.votes[pid] = !!a.yes; closeProposal(city, h, pr, false); return ok(); }
     case 'holdingLeave': {
       const h = city.holdings[a.hid]; if (!h || !h.members[pid]) return err('Not your coop.');
