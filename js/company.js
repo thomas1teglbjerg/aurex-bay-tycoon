@@ -4,7 +4,7 @@ import { TYPES, SIZES, GOODS, RECIPES, DEPTS, STAFF, WORKER, MARKET_KIND, CLIENT
 import { carrierPicker, deliveriesBox } from './freight.js';
 import { money, cardHTML } from './life.js';
 import { scenesHTML, sceneFor } from './scenes.js';
-import { city, me, esc, lname, coImg, dollars, M, K, N, P, dateLabel, shortDate, deptIcon, spark, barChart, seg } from './util.js';
+import { city, me, esc, lname, coImg, faceUrl, dollars, M, K, N, P, dateLabel, shortDate, deptIcon, spark, barChart, seg } from './util.js';
 
 const O = E.OPS;
 const STAFF_BY = Object.fromEntries(STAFF.map((s) => [s.id, s]));
@@ -206,7 +206,7 @@ function deptCard(l, d) {
   if (!dd) return `<article class="dept">${deptHeader(l, d, 'closed', true)}<div class="dept-in"><p>${esc(d.desc)}</p><p class="muted" style="font-size:13px">Without it: ${esc(d.without)}</p><button class="btn navy" data-a="deptOpen" data-lid="${l.id}" data-dept="${d.id}" ${p.cash < O.deptOpenCost(l, d.id) ? 'disabled' : ''}>Open department · ${M(O.deptOpenCost(l, d.id))}</button></div></article>`;
   const need = O.needWorkers(l, d.id), a = O.automation(l, d.id);
   const tid = p.team && p.team[d.head], tp = tid ? E.TAL.PERSON[tid] : null, ts = tid ? city().talent[tid] : null, hb = Math.round((dd.hb ?? 0.5) * 100);
-  const face = (id) => (E.TAL.PERSON[id] && E.TAL.PERSON[id].img ? `background-image:url(img/s-${id}.jpg);background-position:center 20%` : 'background:#2c4a78');
+  const face = (id) => (E.TAL.PERSON[id] && E.TAL.PERSON[id].img ? `background-image:url(${faceUrl(id)});background-position:center 20%` : 'background:#2c4a78');
   const heads = d.head ? (dd.head && tp ? `<div class="head"><span class="thumb" style="${face(tid)}"></span><div class="grow"><b>${esc(tp.name)}</b><span>Head of ${esc(d.name)} · +${hb}% automation${ts && ts.leave != null ? ' · on leave' : ''}${ts && ts.stress > 70 ? ' · stressed' : ''}</span></div><button class="btn sm" data-a="staff" data-id="${tid}">Manage</button><button class="btn sm" data-a="unassignHead" data-spec="${d.head}">Remove</button></div>`
     : tp ? `<button class="btn sm" data-a="assignHead" data-lid="${l.id}" data-dept="${d.id}" data-spec="${d.head}">Make ${esc(tp.name)} head of ${esc(d.name)}${p.assign && p.assign[d.head] ? ' (moves from another company)' : ''}</button>`
     : `<p class="muted" style="font-size:13px">Head: sign a ${esc(STAFF_BY[d.head].role.replace(/^(Junior|Senior) /, ''))} to lead this department. <button class="linkbtn" data-a="web" data-u="apextalent.ab/role/${d.head}">Find one on Apex Talent</button></p>`) : '';
