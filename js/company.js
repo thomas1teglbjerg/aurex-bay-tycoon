@@ -38,17 +38,19 @@ export function taskButton(l, t) {
 }
 const MOOD = (m) => (m >= 75 ? ['Loyal', 'good'] : m >= 50 ? ['Satisfied', 'info'] : m >= 35 ? ['Unhappy', 'warn'] : ['About to leave', 'bad']);
 const STATUS = { new: ['Needs an answer', 'warn'], renegotiating: ['Counter-offer sent', 'info'], accepted: ['Accepted · deliver', 'good'], cancelled: ['Cancelled', 'bad'] };
+const STAY = { ...STATUS, accepted: ['Confirmed · arriving', 'good'] };
+const TAG = (od, cl) => od.vip ? `VIP · ${N(od.need || 1)}× supplies` : od.tag === 'rush' ? 'Rush +15%' : 'Bulk −8%';
 function orderCard(c, l, od, ro) {
-  const o = l.ops, cl = O.clientById(o, od.cid), [sl, sc] = STATUS[od.status] || [od.status, ''];
+  const o = l.ops, cl = O.clientById(o, od.cid), hotel = O.hosts(l), [sl, sc] = (hotel ? STAY : STATUS)[od.status] || [od.status, ''];
   let acts = '';
   if (!ro) {
     if (od.status === 'new') acts = `<button class="btn sm gold" data-a="order" data-op="accept" data-lid="${l.id}" data-oid="${od.id}">Accept</button><button class="btn sm" data-a="order" data-op="renegotiate" data-ask="1.1" data-lid="${l.id}" data-oid="${od.id}">Ask +10%</button><button class="btn sm" data-a="order" data-op="renegotiate" data-ask="1.2" data-lid="${l.id}" data-oid="${od.id}">Ask +20%</button><button class="btn sm danger" data-a="order" data-op="reject" data-lid="${l.id}" data-oid="${od.id}">Reject</button>`;
-    else if (od.status === 'accepted') acts = `<button class="btn sm navy" data-a="deliverOpen" data-lid="${l.id}" data-oid="${od.id}">Deliver on the map</button>`;
+    else if (od.status === 'accepted' && !hotel) acts = `<button class="btn sm navy" data-a="deliverOpen" data-lid="${l.id}" data-oid="${od.id}">Deliver on the map</button>`;
     else if (od.status === 'cancelled') acts = `<button class="btn sm" data-a="order" data-op="archive" data-lid="${l.id}" data-oid="${od.id}">Archive</button>`;
   }
-  const expires = od.status === 'new' ? `answer within ${Math.max(0, od.m + (cl && cl.kind === 'b2b' ? 3 : 2) - c.m)} mo` : od.status === 'accepted' ? (od.due <= c.m ? 'deliver this month' : 'deliver by next month') : od.status === 'renegotiating' ? `asked +${Math.round((od.ask - 1) * 100)}%, answer next month` : esc(od.reason || '');
-  return `<div class="ocard ${od.status}"><div class="ohead"><div><b>${esc(cl ? cl.name : 'Client')}</b><span>${cl ? (cl.kind === 'b2b' ? 'B2B' : 'B2C') + ' · ' + esc(cl.district) : ''}${od.tag ? ` · <em class="tag-${od.tag}">${od.tag === 'rush' ? 'Rush +15%' : 'Bulk −8%'}</em>` : ''}</span></div><span class="chip ${sc}">${sl}</span></div>
-    <div class="ofigs"><div><small>Units</small><b class="num">${N(od.units)}</b></div><div><small>Revenue</small><b class="num">${M(od.value)}</b></div><div><small>Supply cost</small><b class="num">${M(od.cost)}</b></div><div><small>Earning</small><b class="num ${od.earning >= 0 ? 'up' : 'down'}">${M(od.earning, true)}</b></div></div>
+  const expires = od.status === 'new' ? `answer within ${Math.max(0, od.m + (cl && cl.kind === 'b2b' ? 3 : 2) - c.m)} mo` : od.status === 'accepted' ? (hotel ? (od.wait === 'rooms' ? 'waiting for a free room' : od.wait === 'supplies' ? 'waiting for supplies' : 'checks in this week') + (od.due <= c.m ? ' · last chance this month' : '') : od.due <= c.m ? 'deliver this month' : 'deliver by next month') : od.status === 'renegotiating' ? `asked +${Math.round((od.ask - 1) * 100)}%, answer next month` : esc(od.reason || '');
+  return `<div class="ocard ${od.status}${od.vip ? ' vip' : ''}"><div class="ohead"><div><b>${esc(cl ? cl.name : 'Client')}</b><span>${cl ? (od.vip ? 'VIP guest' : hotel ? 'Booking' : cl.kind === 'b2b' ? 'B2B' : 'B2C') + ' · ' + esc(cl.district) : ''}${od.tag ? ` · <em class="tag-${od.tag}">${TAG(od, cl)}</em>` : ''}</span></div><span class="chip ${sc}">${sl}</span></div>
+    <div class="ofigs"><div><small>${hotel ? 'Guest stays' : 'Units'}</small><b class="num">${N(od.units)}</b></div><div><small>Revenue</small><b class="num">${M(od.value)}</b></div><div><small>Supply cost</small><b class="num">${M(od.cost)}</b></div><div><small>Earning</small><b class="num ${od.earning >= 0 ? 'up' : 'down'}">${M(od.earning, true)}</b></div></div>
     <div class="ofoot"><span class="muted">${expires}</span><div class="btns">${acts}</div></div></div>`;
 }
 function boardHTML(l, ro) {
@@ -106,10 +108,10 @@ export function companyHTML(lid, ui = {}) {
   const h = o.hist[o.hist.length - 1] || { b2c: 0, goods: 0, sup: 0, run: rc.total / 12 }, last = o.last || { cap: O.capacity(l), dem: O.demand(c, l), units: 0, price: O.unitPrice(l, Math.max(0, y.trade)) };
   const monthProfit = o.hist.length ? acctMonth(l, h, y).profit : 0;
   const tasks = ro ? [] : O.tasks(c, l), need = O.needsPerMonth(l);
-  const kind = MARKET_KIND[l.type], R = CLIENT_RULES[kind];
+  const kind = MARKET_KIND[l.type], R = CLIENT_RULES[kind], hotel = O.hosts(l);
 
   const todoScenes = ro ? '' : scenesHTML((st) => st.lid === l.id && st.from !== 'clients');
-  const taskHTML = todoScenes + (tasks.filter((t) => !(t.interactive && sceneFor(l.id, t.id))).length ? tasks.filter((t) => !(t.interactive && sceneFor(l.id, t.id))).map((t) => `<div class="task ${t.urgent ? 'urgent' : ''}"><span class="ti" style="background:${DEPT_TINT[t.dept]}">${deptIcon(t.dept, 18)}</span><div class="grow"><b>${esc(t.label)}</b><span>${esc(O.DEPT[t.dept].name)}${t.value ? ` · ${M(t.value)}` : ''}${t.interactive ? ' · takes about 20 seconds' : ''}</span></div>${taskButton(l, t)}</div>`).join('')
+  const taskHTML = todoScenes + (tasks.filter((t) => !(t.interactive && sceneFor(l.id, t.id))).length ? tasks.filter((t) => !(t.interactive && sceneFor(l.id, t.id))).map((t) => `<div class="task ${t.urgent ? 'urgent' : ''}"><span class="ti" style="background:${DEPT_TINT[t.dept]}">${deptIcon(t.dept, 18)}</span><div class="grow"><b>${esc(t.label)}</b><span>${esc(O.deptFor(l, t.dept).name)}${t.value ? ` · ${M(t.value)}` : ''}${t.interactive ? ' · takes about 20 seconds' : ''}</span></div>${taskButton(l, t)}</div>`).join('')
     : (todoScenes ? '' : '<p class="empty">Nothing needs you. Your departments handle the daily work.</p>'));
 
   const inputs = Object.entries(rec.in).map(([g]) => { const mk = c.market[g], stock = o.inv[g] || 0, n = need[g] || 0, cover = n ? stock / n : 99, way = E.LOG.onTheWay(c, l, g);
@@ -122,7 +124,7 @@ export function companyHTML(lid, ui = {}) {
   const ords = (o.orders || []).slice().sort((a, b) => ['new', 'accepted', 'renegotiating', 'cancelled'].indexOf(a.status) - ['new', 'accepted', 'renegotiating', 'cancelled'].indexOf(b.status));
   const clients = (o.clients || []).filter((x) => x.status === 'active').sort((a, b) => b.weight - a.weight);
   const left = (o.clients || []).filter((x) => x.status === 'left').length;
-  const depts = DEPTS.map((d) => ro ? deptCardRO(l, d) : deptCard(l, d)).join('');
+  const depts = O.deptsFor(l).map((d) => ro ? deptCardRO(l, d) : deptCard(l, d)).join('');
   const ready = ords.filter((x) => x.status === 'accepted').length;
 
   return `<div class="crumbs"><button class="btn sm" data-a="back">‹ ${ro ? 'Coop' : 'Empire'}</button><span class="muted">${coop ? `${esc(coop.name)} · co-owned · costs come out of the coop treasury` : ro ? `${esc(owner.name)}'s company` : 'Company dashboard'}</span></div>
@@ -136,9 +138,11 @@ export function companyHTML(lid, ui = {}) {
     <div class="stat"><small>Sales last month</small><b class="num">${M(h.b2c + h.goods)}</b></div>
     <div class="stat"><small>Supplies bought</small><b class="num">${M(h.sup)}</b></div>
     <div class="stat"><small>Wages & budgets / mo</small><b class="num">${M(rc.total / 12)}</b></div>
-    <div class="stat"><small>Output</small><b class="num">${N(last.units)} / ${N(last.cap)}</b><span class="sub">${esc(rec.unit)}</span></div>
-    <div class="stat"><small>Finished stock</small><b class="num">${N(o.fg || 0)}</b><span class="sub">${o.line && o.line.left > 0 ? `+${N(o.line.per)} a week · ${o.line.left} wk left` : 'ready to deliver'}</span></div>
-    <div class="stat"><small>Clients</small><b class="num">${clients.length}</b><span class="sub">${left ? `${left} left you` : R.label.toLowerCase() + 's'}</span></div>
+    ${hotel ? `<div class="stat"><small>Guests last month</small><b class="num">${N(last.units)}</b><span class="sub">${esc(rec.unit)}</span></div>
+    <div class="stat"><small>Rooms this month</small><b class="num">${N(o.rooms ? o.rooms.used : 0)} / ${N(o.rooms ? o.rooms.cap : O.capacity(l))}</b><span class="sub">stays checked in</span></div>`
+    : `<div class="stat"><small>Output</small><b class="num">${N(last.units)} / ${N(last.cap)}</b><span class="sub">${esc(rec.unit)}</span></div>
+    <div class="stat"><small>Finished stock</small><b class="num">${N(o.fg || 0)}</b><span class="sub">${o.line && o.line.left > 0 ? `+${N(o.line.per)} a week · ${o.line.left} wk left` : 'ready to deliver'}</span></div>`}
+    <div class="stat"><small>Clients</small><b class="num">${clients.length}</b><span class="sub">${left ? `${left} left you` : (hotel ? rec.guests.client : R.label).toLowerCase() + 's'}</span></div>
     <div class="stat"><small>Reputation</small><b class="num">${Math.round(o.rep)}</b><div class="bar"><i style="width:${o.rep}%"></i></div></div>
     <div class="stat"><small>Morale</small><b class="num ${o.morale < 35 ? 'down' : ''}">${Math.round(o.morale)}</b><div class="bar"><i style="width:${o.morale}%;background:${o.morale < 35 ? 'var(--bad)' : 'var(--gold)'}"></i></div></div>
     <div class="stat"><small>Staff</small><b class="num">${rc.workers}</b><span class="sub">${M(rc.salaries)} wages / yr</span></div>
@@ -147,19 +151,19 @@ export function companyHTML(lid, ui = {}) {
     <div class="col">
       ${ro ? '' : `<div class="box"><h2>To-do<small>${tasks.length}</small></h2><div class="in">${taskHTML}<p class="empty" style="font-size:13px">Tasks appear when a department has no staff. Hire workers to hand the work over.</p></div></div>`}
       ${cellarBox(c, l, ro)}
-      <div class="box" id="orders-box"><h2>Customer orders<small>${ords.length} OPEN</small></h2><div class="in">
-        ${!ro && ready ? `<button class="btn navy" data-a="deliverOpen" data-lid="${l.id}">Open delivery map · ${ready} ready</button>` : ''}
-        ${ords.length ? `<div class="orders">${ords.map((od) => orderCard(c, l, od, ro)).join('')}</div>` : `<p class="empty">${O.automation(l, 'sales') >= 1 ? 'Your sales team answers and ships every order.' : 'No open orders. New orders arrive every month from your clients.'}</p>`}
-        <p class="empty" style="font-size:13px">${kind === 'b2b' ? 'B2B clients order big and negotiate more, but give you 3 months to answer.' : 'Retail channels order often in smaller lots and expect an answer within 2 months.'} A counter-offer is answered next month, and the client may walk away. Rejected, late or ignored orders upset clients until they leave.</p>
-        ${o.done && o.done.length ? `<details><summary>Recently delivered (${o.done.length})</summary><div class="rows">${o.done.slice(0, 8).map((x) => { const cl = O.clientById(o, x.cid); return `<div class="row"><div class="grow"><b>${esc(cl ? cl.name : '')}</b><span>${N(x.units)} units · ${esc(shortDate(x.dm))}${x.auto ? ' · handled by Sales' : ''}</span></div><b class="num up">${M(x.value)}</b></div>`; }).join('')}</div></details>` : ''}
+      <div class="box" id="orders-box"><h2>${hotel ? 'Bookings' : 'Customer orders'}<small>${ords.length} OPEN</small></h2><div class="in">
+        ${!ro && ready && !hotel ? `<button class="btn navy" data-a="deliverOpen" data-lid="${l.id}">Open delivery map · ${ready} ready</button>` : ''}
+        ${ords.length ? `<div class="orders">${ords.map((od) => orderCard(c, l, od, ro)).join('')}</div>` : `<p class="empty">${hotel ? (O.automation(l, 'sales') >= 1 ? 'Reservations confirms every booking. Guests check in by themselves.' : 'No open bookings. Travel agents and tour operators book every month.') : O.automation(l, 'sales') >= 1 ? 'Your sales team answers and ships every order.' : 'No open orders. New orders arrive every month from your clients.'}</p>`}
+        <p class="empty" style="font-size:13px">${hotel ? 'Confirm a booking and the guests check in on their own as soon as a room is free and the stores hold what their stay needs: food, linen, energy and media. If they wait too long, they book elsewhere. Now and then a VIP asks for rooms: they pay far more, use extra supplies and lift your reputation.' : kind === 'b2b' ? 'B2B clients order big and negotiate more, but give you 3 months to answer.' : 'Retail channels order often in smaller lots and expect an answer within 2 months.'} A counter-offer is answered next month, and the client may walk away. Rejected, late or ignored orders upset clients until they leave.</p>
+        ${o.done && o.done.length ? `<details><summary>${hotel ? 'Recent guests' : 'Recently delivered'} (${o.done.length})</summary><div class="rows">${o.done.slice(0, 8).map((x) => { const cl = O.clientById(o, x.cid); return `<div class="row"><div class="grow"><b>${esc(cl ? cl.name : '')}</b><span>${N(x.units)} ${hotel ? 'stays' : 'units'} · ${esc(shortDate(x.dm))}${x.vip ? ' · VIP' : ''}${x.auto ? ` · handled by ${hotel ? 'Reservations' : 'Sales'}` : ''}</span></div><b class="num up">${M(x.value)}</b></div>`; }).join('')}</div></details>` : ''}
       </div></div>
       <div class="box"><h2>Clients<small>${kind === 'b2b' ? 'B2B' : 'B2C'}</small></h2><div class="in"><div class="rows">${clients.map((cl) => { const [ml, mc] = MOOD(cl.mood); return `<div class="row"><span class="av" style="background:${DEPT_TINT.sales};--avc:${DEPT_TINT.sales}">${esc(cl.name[0])}</span><div class="grow"><b>${esc(cl.name)}</b><span>${esc(cl.district)} · ${cl.weight >= 1.5 ? 'large' : cl.weight >= 0.8 ? 'medium' : 'small'} account · ${cl.orders} orders · ${M(cl.revenue)} bought</span><div class="bar" style="margin-top:4px"><i style="width:${cl.mood}%;background:${cl.mood < 35 ? 'var(--bad)' : cl.mood < 50 ? 'var(--gold)' : 'var(--good)'}"></i></div></div><span class="chip ${mc}">${ml}</span></div>`; }).join('')}</div>
-        ${ro ? '' : scenesHTML((st) => st.lid === l.id && st.from === 'clients')}${!ro && O.automation(l, 'sales') < 1 && o.cd.findCustomers !== c.m && !sceneFor(l.id, 'findCustomers') ? `<button class="btn" data-a="scene" data-from="clients" data-lid="${l.id}" data-task="findCustomers">Find new clients · takes 20 seconds</button>` : ''}</div></div>
-      <div class="box" id="supplies-box"><h2>Production & supplies<small>${Math.round(o.eff * 100)}% SUPPLIED</small></h2><div class="in">
+        ${ro ? '' : scenesHTML((st) => st.lid === l.id && st.from === 'clients')}${!ro && O.automation(l, 'sales') < 1 && o.cd.findCustomers !== c.m && !sceneFor(l.id, 'findCustomers') ? `<button class="btn" data-a="scene" data-from="clients" data-lid="${l.id}" data-task="findCustomers">${hotel ? 'Find new booking partners' : 'Find new clients'} · takes 20 seconds</button>` : ''}</div></div>
+      <div class="box" id="supplies-box"><h2>${hotel ? 'Guest supplies' : 'Production & supplies'}<small>${Math.round(o.eff * 100)}% SUPPLIED</small></h2><div class="in">
         ${ro ? '' : (() => { const cid0 = (ui.carrier && ui.carrier[l.id]) || O.setting(l, 'procurement', 'carrier'), g0 = Object.keys(rec.in)[0]; return `<div class="set"><span class="cap">Ship with</span>${carrierPicker('carrier', `data-lid="${l.id}"`, cid0, g0 ? (cid) => O.quote(c, l, g0, (ui.buyQty && ui.buyQty[g0]) || Math.max(10, Math.ceil((need[g0] || 0) / 10) * 10), 'cheapest', cid) : null)}<span class="muted" style="font-size:12.5px">Prices shown for ${g0 ? esc(GOODS[g0].name.toLowerCase()) : 'your cargo'}. Freight and delivery time apply to every order${o.depts.procurement ? '. Procurement restocks with the carrier set in its settings' : ''}.</span></div>`; })()}
         <div class="sups">${inputs}</div>
         ${ro || O.automation(l, 'procurement') < 1 ? '' : `<div class="btns"><span class="cap" style="align-self:center">Fill up now for</span>${[1, 2, 3].map((n) => `<button class="btn sm" data-a="restock" data-lid="${l.id}" data-v="${n}">${n} month${n > 1 ? 's' : ''}</button>`).join('')}</div>`}
-        <p class="empty" style="font-size:13px">Purchases take the cheapest offers from other players and your own companies first, then import the rest. Everything travels with the carrier you pick, so order before you run out. Own a warehouse to import cheaper and truck supplies here.${O.automation(l, 'procurement') >= 1 ? ' Your Procurement team restocks automatically with the carrier set in its settings.' : ` Ordering is manual until Procurement is fully staffed (now ${Math.round(O.automation(l, 'procurement') * 100)}%).`}</p>
+        <p class="empty" style="font-size:13px">Purchases take the cheapest offers from other players and your own companies first, then import the rest. Everything travels with the carrier you pick, so order before you run out. Own a warehouse to import cheaper and truck supplies here.${O.automation(l, 'procurement') >= 1 ? ` Your ${esc(O.deptFor(l, 'procurement').name)} team restocks automatically with the carrier set in its settings.` : ` Ordering is manual until ${esc(O.deptFor(l, 'procurement').name)} is fully staffed (now ${Math.round(O.automation(l, 'procurement') * 100)}%).`}</p>
         ${outs ? `<div class="cap" style="margin-top:6px">Supplies you produce</div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Product</th><th>Made / mo</th><th>In stock</th><th>Market</th><th></th></tr></thead><tbody>${outs}</tbody></table></div>` : ''}
         ${myOffers.length && !ro ? `<div class="cap">Your offers on the city market</div><div class="rows">${myOffers.map((x) => `<div class="row"><div class="grow"><b>${N(x.qty)} ${esc(GOODS[x.g].unit)} ${esc(GOODS[x.g].name.toLowerCase())}</b><span>${K(x.price)} each${x.auto ? ' · listed by Sales' : ''}</span></div><button class="btn sm" data-a="cancelOffer" data-id="${x.id}">Withdraw</button></div>`).join('')}</div>` : ''}
       </div></div>
@@ -170,7 +174,7 @@ export function companyHTML(lid, ui = {}) {
       <div class="box"><h2>Departments<small>${Object.keys(o.depts).length} OF ${DEPTS.length}</small></h2><div class="in"><div class="depts">${depts}</div></div></div>
       ${ro ? '' : `<div class="box"><h2>Company</h2><div class="in"><div class="btns">
         ${l.upgrade ? `<span class="chip">Upgrading to level ${l.upgrade.to}</span>` : l.level < 5 ? `<button class="btn ${coop ? 'coop' : 'navy'}" data-a="upgrade" data-lid="${l.id}" ${!coop && p.cash < E.upgradeCost(l) ? 'disabled' : ''}>${coop ? 'Propose upgrade' : 'Upgrade'} to level ${l.level + 1} · ${M(E.upgradeCost(l))}</button>` : ''}
-        ${coop ? '' : `<button class="btn danger" data-a="sell" data-lid="${l.id}">Sell for ${M(E.listingValue(l) * 0.8)}</button>`}</div>${coop ? `<p class="empty" style="font-size:13px">Treasury ${M(coop.treasury)}. Upgrades and sales are decided by a vote of the co-owners.</p>` : ''}
+        ${coop ? (coop.proposals.some((x) => x.status === 'open' && x.kind === 'sell' && x.lid === l.id) ? '<span class="chip">Sale vote running</span>' : `<button class="btn danger" data-a="sell" data-lid="${l.id}">Propose sale · ${M(E.listingValue(l) * 0.8)} to treasury</button>`) : `<button class="btn danger" data-a="sell" data-lid="${l.id}">Sell for ${M(E.listingValue(l) * 0.8)}</button>`}</div>${coop ? `<p class="empty" style="font-size:13px">Treasury ${M(coop.treasury)}. Upgrades and sales are decided by a vote of the co-owners.</p>` : ''}
         <p class="empty" style="font-size:13px">Upgrading raises capacity, steady income and the number of workers each department needs.</p></div></div>`}
     </div>
   </div>`;

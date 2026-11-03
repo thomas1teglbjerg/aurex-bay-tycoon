@@ -63,6 +63,13 @@ if (free.owner && free.owner.k === 'h') {
   const t0 = h2.treasury, c3 = city.players.u3.cash;
   r = E.apply(city, 'u3', 'workers', { lid: free.id, dept: 'ops', delta: 1 }, now);
   assert(r.ok && h2.treasury < t0 && city.players.u3.cash === c3, 'hiring is paid from the coop treasury: ' + (r.msg || 'ok'));
+  // selling a coop company is a vote of the owners; the money goes to the treasury
+  const t1 = h2.treasury, v = E.listingValue(free) * 0.8;
+  r = E.apply(city, 'u3', 'sell', { lid: free.id }, now);
+  assert(r.ok && (!free.owner || !E.apply(city, 'u3', 'sell', { lid: free.id }, now).ok), 'a co-owner can propose selling a coop company once: ' + r.msg);
+  h2.proposals.filter((x) => x.status === 'open' && x.kind === 'sell').forEach((x) => Object.keys(h2.members).forEach((pid) => E.apply(city, pid, 'holdingVote', { hid: h2.id, prid: x.id, yes: true }, now)));
+  assert(!free.owner && Math.abs(h2.treasury - t1 - v) < 0.02, 'a passed sale releases the company and pays the treasury');
+  assert(!E.apply(city, 'u1', 'sell', { lid: free.id }, now).ok, 'outsiders cannot sell it');
 } else console.log('skip: coop purchase pending a vote', r.msg);
 
 // buying a running company from a bot: no staff, only Operations

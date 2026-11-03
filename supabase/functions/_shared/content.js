@@ -212,7 +212,8 @@ export const RECIPES = {
   film: { cap: 12, unit: 'productions', in: { software: 1, energy: 1 }, out: { media: 1 } },
   clothing: { cap: 40, unit: 'garment drops', in: { textiles: 1, energy: 0.2 }, out: {} },
   fashion: { cap: 20, unit: 'collections', in: { textiles: 3, media: 0.3 }, out: {} },
-  hotel: { cap: 25, unit: 'room blocks', in: { food: 2, textiles: 0.5, energy: 1, media: 0.3 }, out: {} },
+  // guests: no finished stock and no deliveries. Bookings come in, guests check in when a room and supplies are free, and use the supplies during their stay.
+  hotel: { cap: 25, unit: 'guest stays', in: { food: 2, textiles: 0.5, energy: 1, media: 0.3 }, out: {}, guests: { client: 'Booking channel' } },
   finance: { cap: 20, unit: 'client accounts', in: { software: 0.5, energy: 0.5 }, out: {} },
   vineyard: { cap: 20, unit: 'barrels', in: { chemicals: 0.3, energy: 0.3, food: 0.2 }, out: {} }
 };
@@ -264,6 +265,17 @@ export const CLIENT_RULES = {
   b2b: { start: 4, weight: [1, 2.5], orderChance: 0.55, expire: 3, renegotiate: 0.6, rejectHit: 18, label: 'Corporate client' },
   b2c: { start: 6, weight: [0.4, 1.2], orderChance: 0.7, expire: 2, renegotiate: 0.42, rejectHit: 10, label: 'Retail channel' }
 };
+// rare VIP guests at a human-run hotel: share = rooms they take (of a month's capacity), mult = price per stay, sup = supplies per stay, rep = reputation after a good stay
+export const VIP_GUESTS = [
+  { id: 'prince', name: 'The Crown Prince of Valdoria', text: 'wants the whole top floor for a private state visit', share: 0.2, mult: 6, sup: 2.2, rep: 6, cust: 0.06, news: true },
+  { id: 'filmstar', name: 'Film star Mara Quinn', text: 'is shooting in Aurex Bay and needs suites for her and her crew', share: 0.25, mult: 4.5, sup: 1.8, rep: 5, cust: 0.08, news: true },
+  { id: 'founder', name: 'Tech founder Idris Kade', text: 'is closing a deal in the city and wants total discretion', share: 0.12, mult: 5, sup: 1.6, rep: 3, cust: 0.03 },
+  { id: 'orchestra', name: 'The Silverline Orchestra', text: 'is on tour and needs rooms for 80 musicians', share: 0.35, mult: 2.8, sup: 1.5, rep: 4, cust: 0.05 },
+  { id: 'delegation', name: 'A Gulf trade delegation', text: 'is in town for a week of meetings and banquets', share: 0.3, mult: 4, sup: 2.4, rep: 4, cust: 0.04 },
+  { id: 'sailing', name: 'The national sailing team', text: 'trains in the bay before the regatta', share: 0.3, mult: 3, sup: 2, rep: 3, cust: 0.05 },
+  { id: 'collector', name: 'A reclusive art collector', text: 'asks for the best suite and a private chef, price no object', share: 0.06, mult: 8, sup: 2.5, rep: 3, cust: 0.02 }
+];
+export const VIP = { week: 1 / 40 }; // chance per week for each human-run hotel, scaled by reputation
 export const CLIENT_NAMES = {
   bank: ['Ironport households', 'Old Grid shop owners', 'Harbor Row dock workers', 'Small business loans', 'First-time home buyers', 'Ironport Shipyards payroll', 'Student accounts', 'Local savings club'],
   dealer: ['Walk-in buyers', 'Ironport Couriers', 'Aurex Taxi Co', 'First-car buyers', 'Harbor Row Rentals', 'Family trade-ins', 'Online leads', 'City Fleet Services', 'Rideshare drivers'],
@@ -315,6 +327,64 @@ export const INTERACTIONS = {
     lines: { high: ['We can handle more volume.', 'Machines are running smoothly.', 'The crew is motivated.'], mid: ['Line 2 needs maintenance.', 'We are close to full capacity.', 'Some people want extra hours.'], low: ['Everyone is exhausted.', 'Another breakdown this morning.', 'Overtime again?'] },
     ask: 'How do you boost next month’s output?',
     options: [{ id: 'paid', label: 'Paid overtime', note: '+20% output, −4 morale, costs 0.03 M per worker' }, { id: 'volunteer', label: 'Ask for volunteers', note: '+10% output, −8 morale' }, { id: 'none', label: 'Keep normal hours', note: '+4 morale' }] }
+};
+// ---------------------------------------------------------------- how departments and tasks look in a business that works differently
+// Same rules and the same specialist heads, but the names, texts and scenes of a real hotel.
+export const DEPT_LOOK = {
+  hotel: {
+    ops: { name: 'Front Desk & Housekeeping', desc: 'Checks guests in and gets rooms ready. More staff means more rooms you can fill.',
+      settings: { shifts: { label: 'Staffing', opts: [[1, 'Day shift'], [2, 'Day and evening'], [3, 'Open 24/7']] } },
+      manual: { label: 'Plan next month’s occupancy', note: 'A 20-second round with housekeeping, then choose extra shifts' },
+      auto: 'Reception and housekeeping keep every room turned around.', without: 'Only 30% of the rooms are ready for guests.' },
+    procurement: { name: 'Purchasing', desc: 'Buys food for the kitchen, linen, energy and in-room media.',
+      manual: { label: 'Order supplies', note: 'Pick a carrier and order food, linen and the rest by hand' },
+      auto: 'Keeps the kitchen and linen room stocked every month.', without: 'You order by hand. Run out and guests are turned away.' },
+    sales: { name: 'Reservations & Events', desc: 'Takes bookings from travel agents, tour operators, conferences and VIPs.',
+      settings: { price: { label: 'Room rates', opts: [['budget', 'Value'], ['standard', 'Standard'], ['premium', 'Luxury']] }, b2b: { label: 'Resale pricing' } },
+      manual: { label: 'Call travel agents', note: '20 seconds, then pick which partner to sign' },
+      auto: 'Confirms bookings and keeps the calendar full.', without: 'You confirm every booking yourself. Unanswered guests book elsewhere.' },
+    social: { name: 'Marketing & Guest Relations', desc: 'Reviews, travel sites and social media bring more guests.',
+      settings: { intensity: { label: 'Campaigns' } },
+      manual: { label: 'Shoot a hotel campaign', note: '20 seconds by the pool, then choose how to launch' },
+      auto: 'Runs campaigns and answers reviews every month.', without: 'No campaigns and nobody answers reviews.' },
+    hr: { name: 'Human Resources', desc: 'Hires, trains and keeps the hotel staff happy.',
+      manual: { label: 'Hold a staff briefing', note: '20 seconds with the team, then decide what to offer' } },
+    finance: { name: 'Finance & Revenue', desc: 'Watches room rates, costs and the monthly books.',
+      manual: { label: 'Close the monthly books', note: 'Go through invoices and the night audit' } },
+    rnd: { name: 'Spa & Restaurant', desc: 'Upgrades the restaurant, spa and suites. Raises quality, room rates and demand.',
+      settings: { budget: { label: 'Investment' } },
+      manual: { label: 'Test a new menu or treatment', note: '20 seconds in the kitchen and spa, then choose the next step' },
+      auto: 'The chef and spa team improve the offer every month within budget.', without: 'Nothing new on the menu unless you test it yourself.' },
+    legal: { name: 'Licences & Safety', desc: 'Keeps the alcohol licence, fire safety and food hygiene in order.',
+      manual: { label: 'Run a safety inspection', note: 'Walk through kitchen, fire exits and the bar with your manager' },
+      auto: 'Strict compliance makes this hotel immune to inspection fines.', without: 'Fines hit unless you run the inspection yourself.' }
+  }
+};
+export const SCENE_LOOK = {
+  hotel: {
+    overtime: { title: 'Occupancy planning', scene: 'You walk the floors with the head of housekeeping.',
+      lines: { high: ['Every room is ready by noon.', 'We can take a full house.', 'The new linen cart is a dream.'], mid: ['The third floor needs a deep clean.', 'We are almost fully booked.', 'Some of the team want extra shifts.'], low: ['Everyone is exhausted.', 'Two rooms are out of order again.', 'Double shifts again?'] },
+      ask: 'How many extra rooms do you open next month?',
+      options: [{ id: 'paid', label: 'Paid extra shifts', note: '+20% rooms, −4 morale, costs 0.03 M per worker' }, { id: 'volunteer', label: 'Ask for volunteers', note: '+10% rooms, −8 morale' }, { id: 'none', label: 'Keep the normal rota', note: '+4 morale' }] },
+    findCustomers: { title: 'Calls to travel agents', scene: 'You call tour operators and conference planners.',
+      lines: { high: ['They want our rooms for their autumn tours!', 'Their clients loved the spa.', 'They already know our name.'], mid: ['Send them our rates.', 'They are comparing three hotels.', 'Call back after the season.'], low: ['They are fully contracted.', 'Price is the only question.', 'No conferences this quarter.'] },
+      ask: 'Three partners are interested. Which do you sign?',
+      options: [{ id: 'big', label: 'Chase one big tour operator', note: '55% chance of a large booking partner' }, { id: 'small', label: 'Sign two small travel agents', note: 'Two small partners, guaranteed' }, { id: 'discount', label: 'Win one with a group rate', note: 'One partner, guaranteed, pays 10% less' }] },
+    postCampaign: { title: 'Hotel campaign shoot', scene: 'The photographer is shooting at the pool and in the suites.',
+      lines: { high: ['The sunset over the pool is perfect.', 'Guests are already sharing it.', 'This suite sells itself.'], mid: ['One more take at the bar.', 'Is the logo in frame?', 'The reviews are steady.'], low: ['Nobody is sharing it.', 'A bad review is going around.', 'It rained all morning.'] } },
+    teamMeeting: { title: 'Staff briefing', scene: 'Reception, kitchen and housekeeping meet before the shift.',
+      lines: { high: ['Guests keep thanking us.', 'The new rota works.', 'Great reviews this week.'], mid: ['Evenings are getting long.', 'We need one more on reception.', 'Tips are down.'], low: ['People are thinking about leaving.', 'We are short on every shift.', 'Nobody listens to us.'] } },
+    reviewBooks: { title: 'Night audit and books', scene: 'You go through the night audit with the revenue manager.',
+      lines: { high: ['Every room is billed.', 'Revenue per room is up.', 'Margins look healthy.'], mid: ['Two minibar bills are missing.', 'Laundry costs went up.', 'This booking site fee looks high.'], low: ['We are losing money on food.', 'Three tour operators pay late.', 'The numbers do not add up.'] } },
+    runExperiment: { title: 'New menu and spa test', scene: 'The chef plates a tasting menu and the spa tries a new treatment.',
+      lines: { high: ['Guests asked for seconds!', 'The new treatment is booked out.', 'This could win a star.'], mid: ['The sauce needs more work.', 'Try it again with the new oil.', 'Promising, not there yet.'], low: ['The dish came back.', 'We are missing an ingredient.', 'Back to the old menu.'] },
+      ask: 'The tasting is over. What next?',
+      options: [{ id: 'push', label: 'Put it on the menu tonight', note: '70% chance of +30 research, else +5' }, { id: 'iterate', label: 'Refine it quietly', note: '+15 research' }, { id: 'share', label: 'Invite food critics', note: '+10 research, +3 reputation' }] },
+    reviewContracts: { title: 'Safety inspection', scene: 'You walk the kitchen, fire exits and bar with your manager.',
+      lines: { high: ['The kitchen is spotless.', 'Every fire door closes.', 'The licence is up to date.'], mid: ['One fire extinguisher is out of date.', 'The bar log has gaps.', 'The fridge runs a bit warm.'], low: ['This would fail an inspection.', 'Who signed this off?', 'There is no hygiene log.'] },
+      ask: 'How thorough do you want to be?',
+      options: [{ id: 'tight', label: 'Fix every issue now', note: 'Covered against fines for 4 months, costs 0.1 M' }, { id: 'standard', label: 'Standard inspection', note: 'Covered for 3 months' }, { id: 'skim', label: 'Quick walk-through', note: 'Covered for 1 month' }] }
+  }
 };
 export const COLLEAGUES = ['Maya', 'Tom', 'Aisha', 'Lukas', 'Jin', 'Sara', 'Omar', 'Elena', 'Viktor', 'Nora', 'Ben', 'Lea'];
 

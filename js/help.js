@@ -3,12 +3,14 @@
 // a department, a pin on the map, a box) and returns { t: title, k: kind, d: text, tip }. Pure UI copy:
 // numbers that come from the rules are read from content.js, never repeated here.
 import * as E from '../supabase/functions/_shared/engine.js';
-import { TYPES, SIZES, GOODS, RECIPES, DEPTS, STAFF, STOCKS, DISTRICT, WAREHOUSE_SITES, HOMES, SPEEDS, WORKER } from '../supabase/functions/_shared/content.js';
+import { TYPES, SIZES, GOODS, RECIPES, DEPTS, DEPT_LOOK, STAFF, STOCKS, DISTRICT, WAREHOUSE_SITES, HOMES, SPEEDS, WORKER } from '../supabase/functions/_shared/content.js';
 import { city, $, esc } from './util.js';
 
 const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
 const text = (el) => { if (!el) return ''; const c = el.cloneNode(true); c.querySelectorAll('small, .sub, svg, .dot, u').forEach((x) => x.remove()); return c.textContent.replace(/\s+/g, ' ').trim(); };
 const h = (k, d, tip) => ({ k, d, tip });
+// every department under every name it goes by (a hotel calls Operations its Front Desk & Housekeeping)
+const ALL_DEPTS = [...DEPTS, ...Object.keys(DEPT_LOOK).flatMap((t) => E.OPS.deptsFor({ type: t }))];
 
 // ---------------------------------------------------------------- numbers and words
 const TERMS = {
@@ -37,6 +39,9 @@ const TERMS = {
   'supplies bought': h('Company', 'What the company spent on supplies (raw materials and parts) last month.'),
   'wages & budgets / mo': h('Company', 'Monthly running cost of this company: worker wages plus department budgets such as marketing, research, training and compliance.'),
   output: h('Production', 'Units made last month out of the most the company can make (capacity). Capacity grows with size, level, Operations workers, shifts, morale and training.', 'Output falls when supplies run out or Operations is understaffed.'),
+  'guests last month': h('Hotel', 'Guest stays checked in last month. Hotels make no finished stock: guests come, use food, linen, energy and media during their stay, and pay at check-in.'),
+  'rooms this month': h('Hotel', 'Stays checked in this month out of the rooms you can fill. Front Desk & Housekeeping staff, shifts and morale decide how many rooms are ready.', 'When rooms run out, confirmed guests wait. If they wait too long, they book elsewhere.'),
+  'guest stays': h('Booking', 'How many stays the booking is for. Each stay uses supplies when the guests check in. VIP stays use more.'),
   'finished stock': h('Production', 'Finished products waiting in stock, ready to deliver to your customers. Each month\'s production comes off the line over the following weeks, so stock keeps growing between months.', 'You can only deliver an order when finished stock covers all its units. Unsold stock lowers how much the company produces next month.'),
   clients: h('Sales', 'Customers who buy from this company regularly. Each client sends orders. A client whose mood drops too low leaves.', 'Answer and deliver orders on time to keep them happy. Sales calls and Social Media find new ones.'),
   reputation: h('Company', 'How customers see the company, from 0 to 100. Higher reputation raises demand.', 'It grows slowly when you deliver, and drops when orders are cancelled or you cannot meet demand. Campaigns and research can lift it.'),
@@ -146,6 +151,7 @@ const BOXES = {
   'company board': h('Company', 'Notes for your team and coop partners. Everyone who runs this company can read them.'),
   accounts: h('Company', 'The company\'s income statement: revenue, costs and profit by month, 3 months or 12 months.'),
   'to-do': h('Company', 'Work that needs you because a department has no staff. Hire workers to hand it over.'),
+  bookings: h('Hotel', 'Bookings from travel agents, tour operators and the odd VIP. Confirm, reject or ask for a better rate. Confirmed guests check in by themselves when a room is free and the supplies are there.', 'Unanswered or waiting guests book elsewhere and the channel gets upset. A full Reservations team confirms bookings for you. A VIP who leaves happy lifts reputation and brings more guests.'),
   'customer orders': h('Company', 'Orders from your clients. Accept, reject or counter-offer, then deliver from finished stock before the deadline.', 'Late, rejected or ignored orders upset clients until they leave. A full Sales team handles orders for you.'),
   'production & supplies': h('Company', 'The supplies this company needs to produce, how long your stock lasts and what is on the way. The percentage shows how much of production was supplied.', 'Run out and production stops. A full Procurement team restocks for you.'),
   departments: h('Company', 'The teams that run the company. Each department has workers, settings and an optional specialist head. Fully staffed, it works on its own.'),
@@ -307,7 +313,7 @@ export function helpAt(el, where = {}) {
 
   // departments: a setting, the worker stepper, the head, or the department itself
   if ((x = q('.dept'))) {
-    const name = text(x.querySelector('.dh b')), d = DEPTS.find((y) => y.name === name);
+    const name = text(x.querySelector('.dh b')), d = ALL_DEPTS.find((y) => y.name === name);
     if (d) {
       const set = q('.set');
       if (set) { const lab = text(set.querySelector('.cap')), s = d.settings.find((y) => y.label === lab); if (s) return { t: s.label, k: `${d.name} setting`, d: SETTINGS[`${d.id}.${s.k}`] || '', tip: `Options: ${s.opts.map((o) => o[1]).join(', ')}.` }; }

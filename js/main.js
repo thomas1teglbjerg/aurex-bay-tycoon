@@ -9,7 +9,7 @@ import { stocksHTML, stockModal, livePrice, liveH, PX } from './stocks.js';
 import { deliveryHTML, warehouseHTML, MODE_LABEL } from './interact.js';
 import { taskButton } from './company.js';
 import { SCENES, startScene, endScene, scenesHTML, sceneFor, tickScenes, sceneTitle } from './scenes.js';
-import { WAREHOUSE_SITES, INTERACTIONS, HOMES, TAKEOVER as GC_T } from '../supabase/functions/_shared/content.js';
+import { WAREHOUSE_SITES, HOMES, TAKEOVER as GC_T } from '../supabase/functions/_shared/content.js';
 import { webHTML, parseUrl, HOME_URL } from './web.js';
 import { teamBoxHTML, talentModal, talentStep } from './team.js';
 import { lifeHTML, lifeModal, newDinner, startDinner, dinnerHTML, money, bidBase } from './life.js';
@@ -433,6 +433,9 @@ function listingActions(l) {
       if (E.canRun(c, p.id, l)) out.push(`<button class="btn gold" data-a="company" data-lid="${l.id}">Open company dashboard</button>`);
       if (l.upgrade) out.push(`<div class="cap">Upgrading · ready in <span data-live="until:${l.upgrade.doneM}">…</span></div>`);
       else if (l.level < 5) out.push(`<button class="btn coop" data-a="upgrade" data-lid="${l.id}">Propose upgrade to level ${l.level + 1} · ${M(E.upgradeCost(l))}</button>`);
+      const h = c.holdings[l.owner.id];
+      if (h && h.proposals.some((x) => x.status === 'open' && x.kind === 'sell' && x.lid === l.id)) out.push('<span class="chip">Sale vote running</span>');
+      else out.push(`<button class="btn danger" data-a="sell" data-lid="${l.id}">Propose sale to the market · ${M(E.listingValue(l) * 0.8)} to the treasury</button>`);
     } else out.push('<p class="empty">Owned by a coop. Coop companies can only change hands by a vote of their owners.</p>');
   } else {
     const prot = E.protection(c, l), tp = E.takeoverPrice(c, l), running = c.offers.find((x) => x.status === 'open' && x.lid === l.id && x.hostile);
@@ -455,7 +458,7 @@ function staffCard(s) {
     <div class="sc-band">Passive ability</div><div class="sc-txt"><b>${esc(s.passive[0])}</b>${esc(s.passive[1])}</div>
     <div class="sc-band">As department head</div><div class="sc-txt">${esc(s.hq)}</div>
     <div class="sc-tags">${esc(s.tags)}</div>
-    <div class="act">${hired ? `${p.assign && p.assign[s.id] ? `<p class="empty" style="font-size:13.5px">Heads ${esc(E.OPS.DEPT[p.assign[s.id].dept].name)} at ${esc(TYPES[E.listing(city(), p.assign[s.id].lid).type].name)}.</p>` : '<p class="empty" style="font-size:13.5px">Not assigned yet. Open one of your companies and make them head of their department.</p>'}<button class="btn danger" data-a="fire" data-id="${s.id}">Let go</button>` : `<button class="btn gold" data-a="hire" data-id="${s.id}" ${p.cash < cost ? 'disabled' : ''}>Recruit for ${M(cost)}</button>`}</div>
+    <div class="act">${hired ? `${p.assign && p.assign[s.id] ? `<p class="empty" style="font-size:13.5px">Heads ${esc(E.OPS.deptFor(E.listing(city(), p.assign[s.id].lid), p.assign[s.id].dept).name)} at ${esc(TYPES[E.listing(city(), p.assign[s.id].lid).type].name)}.</p>` : '<p class="empty" style="font-size:13.5px">Not assigned yet. Open one of your companies and make them head of their department.</p>'}<button class="btn danger" data-a="fire" data-id="${s.id}">Let go</button>` : `<button class="btn gold" data-a="hire" data-id="${s.id}" ${p.cash < cost ? 'disabled' : ''}>Recruit for ${M(cost)}</button>`}</div>
   </article>`;
 }
 
@@ -504,7 +507,7 @@ function empireHTML() {
   const allTasks = mine.flatMap((l) => E.OPS.tasks(c, l).map((t) => ({ ...t, l })));
   const orderValue = mine.reduce((a, l) => a + (l.ops ? l.ops.pending.reduce((x, o) => x + o.value, 0) : 0), 0);
   const specs = STAFF.map((s) => { const hired = E.hasStaff(p, s.id), a = p.assign && p.assign[s.id], al = a ? E.listing(c, a.lid) : null;
-    return `<button class="row" style="width:100%;text-align:left" data-a="staff" data-id="${s.id}"><span class="thumb" style="background-image:url(img/s-${s.id}.jpg);background-position:center 20%"></span><div class="grow"><b>${esc(s.name)}</b><span>${esc(s.role)} · leads ${esc(E.OPS.DEPT[deptOfSpec(s.id)].name)}</span>${hired ? `<span class="${al ? 'up' : 'down'}">${al ? `Heads ${esc(E.OPS.DEPT[a.dept].name)} at ${esc(TYPES[al.type].name)}, ${esc(al.district)}` : 'Hired, not assigned: open a company and make them head of a department'}</span>` : ''}</div>${hired ? '<span class="chip good">Hired</span>' : `<span class="chip num">${M(E.staffCost(p, s.id))}</span>`}</button>`; }).join('');
+    return `<button class="row" style="width:100%;text-align:left" data-a="staff" data-id="${s.id}"><span class="thumb" style="background-image:url(img/s-${s.id}.jpg);background-position:center 20%"></span><div class="grow"><b>${esc(s.name)}</b><span>${esc(s.role)} · leads ${esc(E.OPS.DEPT[deptOfSpec(s.id)].name)}</span>${hired ? `<span class="${al ? 'up' : 'down'}">${al ? `Heads ${esc(E.OPS.deptFor(al, a.dept).name)} at ${esc(TYPES[al.type].name)}, ${esc(al.district)}` : 'Hired, not assigned: open a company and make them head of a department'}</span>` : ''}</div>${hired ? '<span class="chip good">Hired</span>' : `<span class="chip num">${M(E.staffCost(p, s.id))}</span>`}</button>`; }).join('');
   return `<div class="grid"><div class="col">
       ${parentBox(c, p)}
       <div class="box"><h2>${esc(p.name)}'s empire<small>LIVE</small></h2><div class="in">
@@ -589,7 +592,8 @@ function coopHTML() {
       <div class="stats"><div class="stat"><small>Treasury</small><b class="num" data-live="treasury:${h.id}">…</b></div><div class="stat"><small>Value (NAV)</small><b class="num">${M(nav)}</b></div><div class="stat"><small>Income / yr</small><b class="num up">${M(r.net, true)}</b></div><div class="stat"><small>Dividend</small><b class="num">${Math.round(h.payout * 100)}% of profit</b></div></div>
       <div><div class="cap" style="margin-bottom:5px">Owners</div><div class="stake">${members.map((m) => `<i style="width:${m.sh / tot * 100}%;background:${m.p.id === p.id ? 'var(--good)' : m.p.color}" title="${esc(m.p.name)}"></i>`).join('')}</div>
         <div class="chips" style="margin-top:6px">${members.map((m) => `<span class="chip">${esc(m.p.id === p.id ? 'You' : m.p.name)} ${Math.round(m.sh / tot * 100)}%</span>`).join('')}${h.invites.map((i) => `<span class="chip muted">${esc(c.players[i.pid]?.name)} invited</span>`).join('')}</div></div>
-      <div><div class="cap" style="margin-bottom:4px">Companies</div>${ls.length ? `<div class="rows">${ls.map((l) => `<button class="row" style="width:100%;text-align:left" data-a="open" data-lid="${l.id}"><span class="thumb" style="background-image:url(${coImg(l)})"></span><div class="grow"><b>${esc(TYPES[l.type].name)}</b><span>${esc(l.district)} · Level ${l.level}${l.upgrade ? ' → ' + l.upgrade.to : ''}</span></div><b class="num up">${M(E.listingYield(c, l, l.owner).total, true)}</b></button>`).join('')}</div>` : '<p class="empty">No companies yet. Propose a purchase below.</p>'}</div>
+      <div><div class="cap" style="margin-bottom:4px">Companies</div>${ls.length ? `<div class="rows">${ls.map((l) => `<button class="row" style="width:100%;text-align:left" data-a="open" data-lid="${l.id}"><span class="thumb" style="background-image:url(${coImg(l)})"></span><div class="grow"><b>${esc(TYPES[l.type].name)}</b><span>${esc(l.district)} · Level ${l.level}${l.upgrade ? ' → ' + l.upgrade.to : ''}</span></div><b class="num up">${M(E.listingYield(c, l, l.owner).total, true)}</b></button>`).join('')}</div>
+        <div class="field" style="margin-top:8px"><label for="sell-${h.id}">Propose a sale</label><div class="btns" style="flex-wrap:nowrap"><select id="sell-${h.id}">${ls.map((l) => `<option value="${l.id}">${esc(TYPES[l.type].name)} · ${esc(l.district)} · ${M(E.listingValue(l) * 0.8)}</option>`).join('')}</select><button class="btn danger" data-a="hsell" data-hid="${h.id}">Propose sale</button></div></div>` : '<p class="empty">No companies yet. Propose a purchase below.</p>'}</div>
       ${partnerCos.length ? `<div><div class="cap" style="margin-bottom:4px">Your partners' own companies</div><div class="rows">${partnerCos.map((l) => `<button class="row" style="width:100%;text-align:left" data-a="viewCompany" data-lid="${l.id}"><span class="thumb" style="background-image:url(${coImg(l)})"></span><div class="grow"><b>${esc(TYPES[l.type].name)}</b><span>${esc(c.players[l.owner.id].name)} · ${esc(l.district)} · ${(l.ops && l.ops.board ? l.ops.board.length : 0)} board posts</span></div><span class="chip">View</span></button>`).join('')}</div></div>` : ''}
       ${props ? `<div class="cap">Open votes</div>${props}` : ''}
       <div class="field"><label for="buy-${h.id}">Propose a purchase</label><div class="btns" style="flex-wrap:nowrap"><select id="buy-${h.id}">${freeAff.length ? freeAff.map((l) => `<option value="${l.id}">${esc(TYPES[l.type].name)} · ${esc(l.district)} · ${M(E.listingPrice(l))}</option>`).join('') : '<option value="">Treasury too small for any company for sale</option>'}</select><button class="btn coop" data-a="hpropose" data-hid="${h.id}" ${freeAff.length ? '' : 'disabled'}>Propose</button></div></div>
@@ -600,7 +604,7 @@ function coopHTML() {
         <button class="btn danger" data-a="hleave" data-hid="${h.id}">${Object.keys(h.members).length === 1 ? 'Dissolve' : 'Sell my stake'}</button></div>
     </div></div>`;
   };
-  return `<h2 class="ph1">Coop parent companies</h2><p class="lede">Pool money with other players in a shared parent company. Every owner holds a stake in proportion to what they put in. Purchases, upgrades and dividends are decided by vote. Owners don't need to be online at the same time: open votes close after one game month.</p>
+  return `<h2 class="ph1">Coop parent companies</h2><p class="lede">Pool money with other players in a shared parent company. Every owner holds a stake in proportion to what they put in. Purchases, sales, upgrades and dividends are decided by vote: more than half of the stakes decides at once, otherwise the majority of votes cast after one game month. Sale money goes to the treasury. Owners don't need to be online at the same time: open votes close after one game month.</p>
     ${invites.length ? `<div class="box"><h2>Invitations<small>${invites.length}</small></h2><div class="in"><div class="rows">${invites.map((h) => `<div class="row"><div class="grow"><b>${esc(h.name)}</b><span>Value ${M(E.holdingNav(c, h))} · ${Object.keys(h.members).length} owners</span></div><button class="btn sm coop" data-a="hjoin" data-hid="${h.id}">Invest ${M(UI.coopAmt)}</button></div>`).join('')}</div></div></div>` : ''}
     <div class="grid"><div class="col">${mineH.map(card).join('') || '<div class="box"><div class="in"><p class="empty">You are not part of a coop yet. Found one to buy companies that are too expensive alone.</p></div></div>'}</div>
     <div class="col">
@@ -853,6 +857,7 @@ async function onClick(e) {
     case 'hinvite': await act('holdingInvite', { hid: d.hid, pid: $('inv-' + d.hid).value }); return;
     case 'hjoin': await act('holdingJoin', { hid: d.hid, amt: UI.coopAmt }); return;
     case 'hpropose': await act('holdingPropose', { hid: d.hid, kind: 'buy', lid: $('buy-' + d.hid).value }); return;
+    case 'hsell': await act('holdingPropose', { hid: d.hid, kind: 'sell', lid: $('sell-' + d.hid).value }); return;
     case 'hpayout': await act('holdingPropose', { hid: d.hid, kind: 'payout', pct: Number(d.v) }); return;
     case 'vote': await act('holdingVote', { hid: d.hid, prid: d.prid, yes: d.v === '1' }, 'Vote cast.'); return;
     case 'hleave': await act('holdingLeave', { hid: d.hid }); return;
