@@ -13,7 +13,7 @@ const err = (msg) => ({ ok: false, msg });
 export const coName = (l) => l.title || TYPES[l.type].name;
 export const cost = (l, weeks) => r4(AD.perWeek * SIZES[l.size].mult * weeks);
 export const TONES = AD.tones.map(([k]) => k);
-export const live = (city, g = city.g) => (city.ads || []).filter((a) => a.until > g + 1e-9);
+export const live = (city, g = city.g) => (city.ads || []).filter((a) => a.until > g + 1e-9 && !a.bot);
 export const running = (city, lid, g) => live(city, g).find((a) => a.lid === lid);
 export const strength = (l) => (l.ops && l.ops.depts.social && l.ops.depts.social.head ? AD.head : 1);
 
@@ -70,7 +70,7 @@ export function weekStep(city, g, ctx) {
   if (!city.ads || !city.ads.length) return;
   city.ads.forEach((ad) => {
     const l = city.listings.find((x) => x.id === ad.lid);
-    if (!l || !l.owner || !l.ops) { ad.until = 0; return; }
+    if (!l || !l.owner || !l.ops || ad.bot || (l.owner.k === 'p' && city.players[l.owner.id] && city.players[l.owner.id].bot)) { ad.until = 0; ad.bot = true; return; } // only players advertise
     if (ad.from >= g || ad.until < g - 1e-9) return;
     const k = strength(l), o = l.ops;
     ad.views += Math.round((600 + rand() * 500) * SIZES[l.size].mult * k);
@@ -78,18 +78,9 @@ export function weekStep(city, g, ctx) {
     else if (city.life && city.life.items[ad.cid]) { const st = city.life.items[ad.cid]; st.f = r4(st.f * (1 + AD.lift * k)); }
   });
   city.ads.filter((ad) => ad.until <= g + 1e-9).forEach((ad) => {
-    const l = city.listings.find((x) => x.id === ad.lid); if (!l || !l.owner || ad.bot) return;
+    const l = city.listings.find((x) => x.id === ad.lid); if (!l || !l.owner || ad.bot) return; // dropped campaigns and bots get no report
     const what = ad.kind === 'co' ? coName(l) : (LIFE.ITEM[ad.cid] || {}).name || 'your piece';
     ctx.notify(city, l, `Ad campaign for ${what} ended`, `${ad.weeks} weeks, about ${ad.views.toLocaleString('en-US')} views on the city's websites.${ad.kind === 'co' ? ' Customers and reputation grew every week it ran.' : ' The piece is worth a little more for the attention.'}`, 'info');
   });
   city.ads = city.ads.filter((ad) => ad.until > g + 1e-9);
-}
-
-// rival tycoons advertise now and then, so the websites never stand empty
-export function botMonth(city, isBot) {
-  const n = live(city).filter((a) => a.bot).length; if (n >= AD.botMax || rand() > 0.5) return;
-  const ls = city.listings.filter((l) => l.owner && l.owner.k === 'p' && l.ops && isBot(l.owner.id) && !running(city, l.id)); if (!ls.length) return;
-  const l = ls[Math.floor(rand() * ls.length)], p = city.players[l.owner.id], tone = TONES[Math.floor(rand() * TONES.length)], weeks = AD.weeks[Math.floor(rand() * AD.weeks.length)];
-  const t = copy(l, tone, Math.floor(rand() * 20), null, p && p.name);
-  (city.ads = city.ads || []).push({ id: uid(), lid: l.id, by: l.owner.id, bot: true, kind: 'co', cid: null, uid: null, tone, head: t.head, line: t.line, weeks, from: city.g, until: r4(city.g + weeks / 48), cost: 0, views: 0 });
 }

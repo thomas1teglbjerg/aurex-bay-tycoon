@@ -63,10 +63,13 @@ p.life.items.push({ uid: 'iTEST', cid: carId, m: city.m, cost: 1, lent: false })
 assert(A.products(city, p, { id: 'X', type: 'dealer' }).some((x) => x.uid === 'iTEST'), 'a dealership can advertise your car');
 assert(!A.products(city, p, { id: 'X', type: 'chip' }).some((x) => x.uid === 'iTEST'), 'a chip factory cannot');
 
-// rivals advertise too, so the websites never stand empty
-for (let i = 0; i < 40 && !A.live(city).some((a) => a.bot); i++) { now += weekMs * 4; act('ping'); }
-assert(A.live(city).some((a) => a.bot), 'rival tycoons run campaigns');
-assert(A.live(city).filter((a) => a.bot).length <= AD.botMax, 'but only a few at a time');
+// only players advertise: rival tycoons never do, and old bot ads are cleared
+for (let i = 0; i < 12; i++) { now += weekMs * 4; act('ping'); }
+assert(!(city.ads || []).some((a) => a.bot), 'rival tycoons run no campaigns');
+{ const bl = city.listings.find((x) => x.owner && x.owner.k === 'p' && city.players[x.owner.id].bot && x.ops);
+  city.ads.push({ id: 'adOld', lid: bl.id, bot: true, kind: 'co', tone: 'wink', head: 'x', line: 'y', weeks: 4, from: city.g, until: city.g + 0.08, views: 0 });
+  assert(!A.live(city).some((a) => a.id === 'adOld'), 'an old bot ad is never shown');
+  now += weekMs; act('ping'); assert(!city.ads.some((a) => a.id === 'adOld'), 'and is cleared at the next week'); }
 
 // survives a save and a reload
 const back = JSON.parse(JSON.stringify(city)); E.advance(back, now + weekMs);

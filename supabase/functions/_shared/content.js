@@ -620,7 +620,7 @@ export const CARRIERS = [
 // ---------------------------------------------------------------- Marketing: ad campaigns on the city's websites
 // A campaign runs for a few weeks and shows ads in the in-game browser. Cost per week = perWeek × company size.
 // Company campaigns grow customers and reputation every week; a product campaign lifts the market value of that one piece.
-export const AD = { perWeek: 0.04, weeks: [2, 4, 8], cust: 0.015, rep: 0.5, lift: 0.004, head: 1.5, botMax: 4,
+export const AD = { perWeek: 0.04, weeks: [2, 4, 8], cust: 0.015, rep: 0.5, lift: 0.004, head: 1.5,
   tones: [['irony', 'Ironic'], ['sarcasm', 'Sarcastic'], ['wink', 'Tongue-in-cheek']] };
 // what each business sells, for the ad copy
 export const AD_NOUN = { bank: 'banking', dealer: 'cars', restaurant: 'dinner', autorepair: 'repairs', clothing: 'clothes', fashion: 'fashion', hotel: 'hotel rooms', metal: 'steel', car: 'cars', finance: 'investments', chip: 'microchips', data: 'software', pharma: 'medicine', music: 'music', film: 'films', vineyard: 'wine' };
