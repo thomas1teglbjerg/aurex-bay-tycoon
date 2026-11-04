@@ -1,6 +1,6 @@
 // Aurex Bay Tycoon — web client
 import * as E from '../supabase/functions/_shared/engine.js';
-import { MAP, DISTRICT, TYPES, SIZES, DISTRICTS, STAFF, STOCKS, WORLD, DECISIONS, SPEEDS, GOODS, CONFIG as GC } from '../supabase/functions/_shared/content.js';
+import { MAP, DISTRICT, TYPES, SIZES, DISTRICTS, STAFF, STOCKS, WORLD, SPEEDS, GOODS, CONFIG as GC } from '../supabase/functions/_shared/content.js';
 import { CONFIG } from './config.js';
 import { createLocalBackend, createOnlineBackend } from './backends.js';
 import { S, city, me, meId, now, $, esc, kfix, lname, coImg, faceUrl, M, K, P, N, dollars, msUntilMonth, dur, dateLabel, ICON, spark, cropStyle } from './util.js';
@@ -15,6 +15,7 @@ import { teamBoxHTML, talentModal, talentStep } from './team.js';
 import { lifeHTML, lifeModal, newDinner, startDinner, dinnerHTML, money, bidBase } from './life.js';
 import { logoMark, logoFull, symbolIcon } from './brand.js';
 import { initChat, openChat, unreadFrom, inboxOf } from './chat.js';
+import { mailBoxHTML, mailPageHTML, mails, isRead as mailRead, markRead } from './mail.js';
 import { authHTML, avatarHTML, passwordHTML, secureHTML, foundHTML, foundPreview, newFound } from './onboard.js';
 
 const ECON_COL = { Boom: '#23905a', Stable: '#2f6fb0', Recession: '#d08a1e', Crisis: '#c0392b' };
@@ -394,7 +395,7 @@ function renderTop() {
     if (innerWidth <= 720) { const i = SPEEDS.findIndex((s) => s.id === c.clock.speed), cur = SPEEDS[i] || SPEEDS[2], nxt = SPEEDS[(i + 1) % SPEEDS.length]; sp.innerHTML = `<button data-speed="${nxt.id}" aria-pressed="true" title="Switch to ${nxt.label}: ${nxt.note}">${cur.label} ⟳</button>`; }
     else sp.innerHTML = SPEEDS.map((s) => `<button data-speed="${s.id}" aria-pressed="${c.clock.speed === s.id}" title="${s.note}">${s.label}</button>`).join('');
   }
-  const inbox = p.inbox.length + c.offers.filter((o) => o.status === 'open' && o.to === p.id).length + E.ownedBy(c, 'p', p.id).reduce((a, l) => a + E.OPS.tasks(c, l).length, 0);
+  const inbox = mails(p).filter((x) => E.MAIL.isOpen(x) || (!mailRead(x) && x.kind !== 'news')).length + c.offers.filter((o) => o.status === 'open' && o.to === p.id).length + E.ownedBy(c, 'p', p.id).reduce((a, l) => a + E.OPS.tasks(c, l).length, 0);
   const net = c.netReqs.filter((x) => x.status === 'open' && x.to === p.id).length + c.contracts.filter((x) => x.status === 'pending' && x.to === p.id).length;
   const coop = Object.values(c.holdings).filter((h) => h.invites.some((i) => i.pid === p.id)).length + E.myHoldings(c, p.id).reduce((a, h) => a + h.proposals.filter((x) => x.status === 'open' && !(p.id in x.votes)).length, 0);
   const lifeN = c.life && p.life ? c.life.trades.filter((t) => t.status === 'open' && t.to === p.id).length + (p.life.offer && p.life.offer.until >= c.m ? 1 : 0) : 0;
@@ -502,7 +503,7 @@ function renderPanel() {
   if (UI.tab === 'map' || !me()) return;
   const el = $('panel'), st = el.scrollTop, active = document.activeElement && el.contains(document.activeElement) && document.activeElement.tagName === 'INPUT';
   if (active) return; // never wipe a field someone is typing in
-  const html = (UI.tab === 'empire' || UI.tab === 'coop') && UI.company ? companyHTML(UI.company, UI) : { empire: empireHTML, market: marketHTML, stocks: () => stocksHTML(UI), network: networkHTML, coop: coopHTML, life: () => lifeHTML(UI) }[UI.tab]();
+  const html = UI.tab === 'empire' && String(UI.company || '').startsWith('mail') ? mailPageHTML(UI) : (UI.tab === 'empire' || UI.tab === 'coop') && UI.company ? companyHTML(UI.company, UI) : { empire: empireHTML, market: marketHTML, stocks: () => stocksHTML(UI), network: networkHTML, coop: coopHTML, life: () => lifeHTML(UI) }[UI.tab]();
   el.innerHTML = `<div class="panel-in">${html}</div>`;
   applyCollapsed(el);
   el.scrollTop = st; liveUpdate();
@@ -525,9 +526,6 @@ function feedHTML(items, max) {
 function empireHTML() {
   const c = city(), p = me(), r = E.rates(c, 'p', p.id), mine = E.ownedBy(c, 'p', p.id), hist = p.hist.map((h) => h[1]);
   const offers = c.offers.filter((o) => o.status === 'open' && o.to === p.id);
-  const decisions = p.inbox.map((d) => { const def = DECISIONS.find((x) => x.id === d.def);
-    return `<div class="decision">${def.needs ? `<div class="art" style="background-image:url(img/c-${def.needs}.jpg)"></div>` : ''}<div class="in"><span class="cap">Autopilot decides in <span data-live="until:${d.dueM}">…</span></span><h3>${esc(def.title)}</h3><p>${esc(def.text)}</p>
-      ${def.options.map((o, i) => `<button class="opt" data-a="decide" data-id="${d.id}" data-opt="${i}"><b>${esc(o.l)}</b><span>${esc(o.d)}</span></button>`).join('')}</div></div>`; }).join('');
   const offerHTML = offers.map((o) => { const l = E.listing(c, o.lid), b = c.players[o.from]; return `<div class="row ${o.hostile ? 'hostile' : ''}">${avatar(b)}<div class="grow"><b>${o.hostile ? `Hostile bid: ${esc(b.name)} wants your company for ${M(o.amount)}` : `${esc(b.name)} offers ${M(o.amount)}`}</b>${o.hostile ? `<span class="down">Goes through in <span data-live="until:${o.dueM}">…</span> unless you reject it</span>` : ''}<span>for your ${esc(TYPES[l.type].name)} in ${esc(l.district)} (value ${M(E.listingValue(l))})</span></div><div class="btns"><button class="btn sm gold" data-a="offerAccept" data-id="${o.id}">Sell</button><button class="btn sm" data-a="offerDecline" data-id="${o.id}">Decline</button></div></div>`; }).join('');
   const comps = mine.map(companyRow).join('');
   const allTasks = mine.flatMap((l) => E.OPS.tasks(c, l).map((t) => ({ ...t, l })));
@@ -541,11 +539,12 @@ function empireHTML() {
         <div class="stats"><div class="stat"><small>Profit / yr (est.)</small><b class="num ${E.annualEstimate(c, 'p', p.id) >= 0 ? 'up' : 'down'}">${M(E.annualEstimate(c, 'p', p.id), true)}</b></div><div class="stat"><small>Wages, budgets, interest</small><b class="num down">${M(-r.costs)}</b></div><div class="stat"><small>Net worth</small><b class="num">${M(E.netWorth(c, p.id))}</b></div><div class="stat"><small>Influence</small><b class="num">${p.inf}</b></div></div>
         ${hist.length > 1 ? `<div>${spark(hist, 320, 46)}<div class="cap" style="margin-top:2px">Net worth since you arrived</div></div>` : ''}
         <p class="empty" style="font-size:13.5px">Your companies keep earning while you are away. At live speed one game year lasts one real week.</p></div></div>
-      ${offers.length || decisions || allTasks.length || Object.keys(SCENES).length ? `<div class="box"><h2>Inbox<small>${p.inbox.length + offers.length + allTasks.length}</small></h2><div class="in">
+      ${mailBoxHTML()}
+      ${offers.length || allTasks.length || Object.keys(SCENES).length ? `<div class="box"><h2>To do<small>${offers.length + allTasks.length}</small></h2><div class="in">
         ${Object.keys(SCENES).length ? `<div class="cap">Running now</div>${scenesHTML(() => true, true)}` : ''}
         ${allTasks.filter((t) => !(t.interactive && sceneFor(t.l.id, t.id))).length ? `<div class="cap">Company to-dos</div><div class="rows">${allTasks.filter((t) => !(t.interactive && sceneFor(t.l.id, t.id))).slice(0, 6).map((t) => `<div class="row"><span class="thumb" style="background-image:url(${coImg(t.l)})"></span><div class="grow"><b>${esc(t.label)}</b><span>${esc(lname(t.l))} · ${esc(t.l.district)}${t.value ? ` · ${M(t.value)}` : ''}</span></div>${taskButton(t.l, t)}</div>`).join('')}</div>${allTasks.length > 6 ? `<p class="empty" style="font-size:13px">${allTasks.length - 6} more inside your companies.</p>` : ''}` : ''}
-        ${offerHTML ? `<div class="rows">${offerHTML}</div>` : ''}${decisions}</div></div>` : ''}
-      <div class="box"><h2>Autopilot</h2><div class="in"><p class="empty">When you don't answer a decision in time, your managers choose for you.</p>
+        ${offerHTML ? `<div class="rows">${offerHTML}</div>` : ''}</div></div>` : ''}
+      <div class="box"><h2>Autopilot</h2><div class="in"><p class="empty">When you don't answer a mail in time, your managers answer for you.</p>
         <div class="seg" role="group">${[['cautious', 'Cautious'], ['balanced', 'Balanced'], ['bold', 'Bold']].map(([k, l]) => `<button data-a="policy" data-v="${k}" aria-pressed="${p.policy === k}">${l}</button>`).join('')}</div></div></div>
       <div class="box"><h2>Your companies<small>${mine.length}</small></h2><div class="in">${mine.length ? `<div class="rows">${comps}</div><p class="empty" style="font-size:13px">Open a company to run its departments, supplies and orders.</p>` : '<p class="empty">You own no companies yet. Tap a gold pin on the map to buy your first one.</p>'}<button class="btn" data-a="tab" data-v="map">Find companies on the map</button></div></div>
       <div class="box"><h2>Warehouses<small>${E.LOG.ownedWarehouses(c, p.id).length} OWNED</small></h2><div class="in">${E.LOG.ownedWarehouses(c, p.id).length ? `<div class="rows">${E.LOG.ownedWarehouses(c, p.id).map((w) => { const site = E.LOG.SITE[w.id]; return `<button class="row" style="width:100%;text-align:left" data-a="wh" data-wid="${w.id}"><span class="thumb wthumb wh-${site.mode}">${WH_ICON[site.mode]}</span><div class="grow"><b>${esc(site.name)}</b><span>${N(E.LOG.stored(w))} / ${N(E.LOG.capacityOf(w))} units stored · ${N(E.LOG.inbound(c, w))} on the way${w.auto.supply ? ' · supplies your companies' : ''}</span></div></button>`; }).join('')}</div>` : '<p class="empty">Warehouses let you import cheaper, keep a buffer and truck supplies to your companies. Tap a warehouse on the map. The airport has the biggest one.</p>'}</div></div>
@@ -763,7 +762,11 @@ async function onClick(e) {
     case 'chat': openChat(d.id); return;
     // ---- the in-game browser
     case 'web': if (d.coop) UI.talentFor = d.coop; else if (!t.closest('#web')) UI.talentFor = null; openWeb(d.u || (UI.web && UI.web.url) || HOME_URL); return;
-    case 'webGo': navWeb(d.u); return;
+    case 'webGo': if (UI.web) navWeb(d.u); else openWeb(d.u); return;
+    // ---- mail
+    case 'mailOpen': closeModal(); if (UI.tab !== 'empire') setTab('empire'); UI.company = d.id ? 'mail:' + d.id : 'mail'; if (d.id) markRead(d.id); $('panel').scrollTop = 0; renderAll(); return;
+    case 'mailFolder': UI.mailF = d.v; UI.company = 'mail'; renderPanel(); return;
+    case 'mailAnswer': await act('mailAnswer', { id: d.id, opt: Number(d.opt) }); return;
     case 'adCo': closeWeb(); hideMapCard(); openListing(d.lid); return;
     // ---- Marketing: ad campaigns
     case 'adSet': adUI(d.lid)[d.k] = d.k === 'weeks' ? Number(d.v) : d.v; if (d.k === 'tone') adUI(d.lid).n = 0; renderPanel(); return;

@@ -128,8 +128,10 @@ const TERMS = {
 
 // ---------------------------------------------------------------- boxes (titles of panels)
 const BOXES = {
-  inbox: h('Empire', 'Things waiting for you: offers from other players, decisions to make and company to-dos.', 'Unanswered decisions are taken by your Autopilot.'),
-  autopilot: h('Empire', 'When you don\'t answer a decision in time, your managers choose for you. Cautious picks the safe option, Bold the risky one.'),
+  inbox: h('Empire', 'Things waiting for you: offers from other players and company to-dos.'),
+  'to do': h('Empire', 'Things waiting for you: offers from other players and company to-dos.'),
+  mail: h('Mail', 'Your staff, specialists, rivals and the Aurex Bay Gazette write to you here. Many mails ask for an answer.', 'A staff mail you leave for two weeks, or a decision you leave for two months, is answered by your Autopilot.'),
+  autopilot: h('Empire', 'When you don\'t answer a mail in time, your managers answer for you. Cautious picks the safe option, Bold the risky one.'),
   'your companies': h('Empire', 'Every company you own. Open one to run its departments, supplies and orders.'),
   warehouses: h('Logistics', 'Warehouses you own. They import cheaper, store supplies and truck them to your companies.'),
   'your activity': h('Empire', 'What happened to you and your companies lately.'),
@@ -207,6 +209,9 @@ const ACTIONS = {
   trade: h('Stocks', 'Buy or sell shares at today\'s price.'),
   policy: h('Autopilot', 'How your managers decide when you don\'t answer in time.'),
   decide: h('Decision', 'Pick this option. Its effect hits at once.'),
+  mailAnswer: h('Mail', 'Send this answer. Its effect hits at once. Mails you leave too long are answered by your autopilot.'),
+  mailOpen: h('Mail', 'Read this mail. Staff, specialists, rivals and the Gazette write to you here.'),
+  mailFolder: h('Mail', 'Show only these mails.'),
   scene: h('Task', 'Do this task yourself. It takes 20 seconds, then you choose what to do.'),
   task: h('Task', 'Handle this to-do now.'),
   gotoSupplies: h('Supplies', 'Jump to the supplies box to order by hand.'),
@@ -263,7 +268,7 @@ const SETTINGS = {
 
 const TABS = {
   map: h('Tab', 'The city map. Click a district to zoom in; pins show companies, warehouses and homes.', 'Gold pins are for sale.'),
-  empire: h('Tab', 'Your empire: cash, inbox, companies, warehouses and your team of specialists.'),
+  empire: h('Tab', 'Your empire: cash, mail, to-dos, companies, warehouses and your team of specialists.'),
   market: h('Tab', 'The economy, the supplies market, your offers and the Bank of Aurex.'),
   stocks: h('Tab', 'The Aurex Bay Stock Exchange: buy and sell shares.'),
   network: h('Tab', 'Other players: your network, supply contracts and the city ranking.'),

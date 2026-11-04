@@ -1,14 +1,15 @@
 // Aurex Bay Tycoon — game engine.
 // Pure functions over one plain "city" object, so the exact same rules run in the browser demo
 // and server-side in the Supabase Edge Function. Time is real time: 1 game year = 1 real week (speed 1).
-import { DISTRICTS, TYPES, SYNERGY, SIZES, LISTINGS, STAFF, STOCKS, WORLD, DECISIONS, HAPPENINGS, BOTS, CONFIG, VINTAGE, VIP, DEPT_DEFAULTS, WORKER, GOODS, TAKEOVER, SOMMELIER, CRAFT, placeOn } from './content.js';
+import { DISTRICTS, TYPES, SYNERGY, SIZES, LISTINGS, STAFF, STOCKS, WORLD, DECISIONS, HAPPENINGS, BOTS, CONFIG, VINTAGE, VIP, DEPT_DEFAULTS, WORKER, GOODS, TAKEOVER, SOMMELIER, CRAFT, MAIL_HAP, DEC_FROM, GAZETTE, placeOn } from './content.js';
 import * as OPS from './ops.js';
 import * as LOG from './logistics.js';
 import * as LIFE from './life.js';
 import * as TAL from './talent.js';
 import * as BR from './brand.js';
 import * as ADS from './ads.js';
-export { OPS, LOG, LIFE, TAL, BR, ADS };
+import * as MAIL from './mail.js';
+export { OPS, LOG, LIFE, TAL, BR, ADS, MAIL };
 OPS.setFreightQuote((cid, v, q, route) => LOG.freight(cid, v, q, route));
 
 const TRADE_MULT = { Boom: 1.3, Stable: 1, Recession: 0.6, Crisis: 0.4 };
@@ -42,7 +43,7 @@ const LCTX = { feed: (p, m, t, x, k) => feed(p, m, t, x, k), news: (city, m, t, 
   credit, notify: (city, l, t, x, k) => notifyOwner(city, l, t, x, k), clientsBoost: (city0, n) => 0 };
 // a tycoon who has not done anything for a while is "away": their specialists drift and unprotected companies can be taken over
 export function inactive(city, p) { if (p && p.coop) { const hs = p.people.filter((x) => !x.bot); return !hs.length || hs.every((x) => inactive(city, x)); } return !!p && !p.bot && !p.admin && city.m - (p.lastAct ?? city.m) >= TAKEOVER.inactiveMonths; }
-const TCTX = { feed: (p, m, t, x, k) => (p.coop ? p.people.filter((q) => !q.bot).forEach((q) => feed(q, m, `${p.name}: ${t}`, x, k)) : feed(p, m, t, x, k)), news: (city, m, t, x, k) => news(city, m, t, x, k), unassign: (city, p, k) => unassign(city, p, k),
+const TCTX = { mail: (city, p, x) => mailEmp(city, p, x), feed: (p, m, t, x, k) => (p.coop ? p.people.filter((q) => !q.bot).forEach((q) => feed(q, m, `${p.name}: ${t}`, x, k)) : feed(p, m, t, x, k)), news: (city, m, t, x, k) => news(city, m, t, x, k), unassign: (city, p, k) => unassign(city, p, k),
   listing: (city, id) => listing(city, id), automationWithout: (l, dept) => { const d = l.ops && l.ops.depts[dept]; return d ? d.w / OPS.needWorkers(l, dept) : 0; } };
 const coopPartners = (city, a, b) => Object.values(city.holdings || {}).some((h) => h.members[a] && h.members[b]);
 // a coop with at least one human owner is run by its owners like a player's own company; bot coops stay on autopilot
@@ -353,6 +354,7 @@ export function moveListing(city, lid, p) {
 function migrateLife(city) { migrateMap(city); LIFE.register(city); if (city.over) city.over = false; if (!city.talent) TAL.ensure(city); if (city.wk == null) city.wk = city.m * 4; if (city.migratedLife === 1) return; LIFE.ensure(city); city.migratedLife = 1; }
 export function advance(city, now) {
   migrate(city); migrateLife(city); coopRunMode(city);
+  mailSync(city);
   if (city.over) return;
   const target = gameTime(city, now);
   let loops = 0;
@@ -399,6 +401,7 @@ function weekBoundary(city, wk, monthEnd) {
     if (city.life) LIFE.weekStep(city, wk, LCTX);
   }
   ADS.weekStep(city, wk / 48, CTX);
+  mailWeek(city);
   planWeek(city, wk);
 }
 function stepWeek(city, wk) { runAgenda(city, wk / 48); if (wk % 4 === 0) monthBoundary(city, wk / 4); else weekBoundary(city, wk); }
@@ -459,12 +462,13 @@ const AGENDA = {
     const p = city.players[e.pid]; if (!p || p.bot || p.inbox.length >= 3) return;
     const types = new Set(ownedBy(city, 'p', p.id).map((l) => l.type)), m = city.m;
     const pool = DECISIONS.filter((d) => (!d.needs || types.has(d.needs)) && !p.inbox.some((x) => x.def === d.id)); if (!pool.length) return;
-    const d = pick(pool); p.inbox.push({ id: uid('d'), def: d.id, m, dueM: m + 2 });
-    feed(p, m, `New decision: ${d.title}`, 'Answer it in your inbox within two months.', 'info');
+    const d = pick(pool), x = { id: uid('d'), def: d.id, m, dueM: m + 2 }; p.inbox.push(x);
+    decisionMail(city, p, x);
   },
   vip: (city, e) => { const l = listing(city, e.lid); if (l && l.ops && !l.ops.managed && humanOwned(city, l)) OPS.vipBooking(city, CTX, l); },
   happening: (city, e) => {
     const l = listing(city, e.lid); if (!l || !l.ops || l.ops.managed || !humanOwned(city, l)) return;
+    if (mailWaiting(city, l)) return; // one open question per company at a time: the staff wait for your answer
     happening(city, l, pick(HAPPENINGS));
   },
   vintage: (city, e) => {
@@ -491,18 +495,116 @@ const AGENDA = {
   }
 };
 function happening(city, l, h) {
-  const o = l.ops, co = `your ${l.title || TYPES[l.type].name} in ${l.district}`, fx = h.fx, s = SIZES[l.size].mult;
-  const d = h.guard && o.depts[h.guard];
-  if (h.kind === 'bad' && d && (d.head || OPS.automation(l, h.guard) >= 0.5)) { notifyOwner(city, l, h.title, `${h.text.replace('{co}', co)} ${h.saved}`, 'good'); return; }
-  const bits = [];
+  const o = l.ops, co = MAIL.coName(l), s = SIZES[l.size].mult, mh = MAIL_HAP[h.id] || {};
+  const dept = mh.dept || h.guard || 'ops', g = h.guard && o.depts[h.guard];
+  const fill = (t) => t.replace(/\{co\}/g, co);
+  const base = { from: staffFrom(city, l, dept), lid: l.id, kind: h.kind };
+  if (h.kind === 'bad' && g && (g.head || OPS.automation(l, h.guard) >= 0.5)) {
+    mailTo(city, l, { ...base, from: staffFrom(city, l, h.guard), subj: mh.subj || h.title, body: fill(mh.saved || `${h.text} ${h.saved}`), kind: 'good' }); return;
+  }
+  if (mh.opts) {
+    const opts = mh.opts.map((x) => { const fx = MAIL.scaleFx(x.fx, s); return { l: x.l, d: x.d ? x.d.replace(/(\d+(?:\.\d+)?) M/g, (_, v) => `${Math.round(v * s * 100) / 100} M`) : MAIL.fxText(fx), fx, ...(x.safe ? { safe: true } : {}) }; });
+    mailTo(city, l, { ...base, subj: mh.subj, body: fill(mh.body), opts, due: Math.round((city.g + MAIL.WAIT) * 1e5) / 1e5, own: ownKey(l) }); return;
+  }
+  const bits = companyFx(city, l, MAIL.scaleFx(h.fx, s)); if (bits === null) return;
+  mailTo(city, l, { ...base, subj: mh.subj || h.title, body: fill(mh.body || h.text), fxt: bits.join(', ') });
+}
+export const _happening = (city, l, h) => happening(city, l, h); // tests
+// what a happening or an answer does to a company; null when there is nothing it can hit (no stock to lose)
+function companyFx(city, l, fx) {
+  const o = l.ops, bits = []; if (!fx) return bits;
+  if (fx.gamble) { const win = rand() < fx.gamble[0], r = companyFx(city, l, fx.gamble[win ? 1 : 2]) || []; return [win ? 'It worked' : 'It backfired', ...r]; }
   if (fx.rep) { o.rep = Math.max(0, Math.min(100, o.rep + fx.rep)); bits.push(`reputation ${fx.rep > 0 ? '+' : '−'}${Math.abs(fx.rep)}`); }
   if (fx.cust) { o.customers = Math.max(20, Math.min(400, o.customers * (1 + fx.cust))); bits.push(`customers ${fx.cust > 0 ? '+' : '−'}${Math.round(Math.abs(fx.cust) * 100)}%`); }
   if (fx.morale) { o.morale = Math.max(0, Math.min(100, o.morale + fx.morale)); bits.push(`morale ${fx.morale > 0 ? '+' : '−'}${Math.abs(fx.morale)}`); }
   if (fx.rp) { o.rp += fx.rp; bits.push(`+${fx.rp} research points`); }
-  if (fx.cash) { const v = r2(fx.cash * s); credit(city, l.owner, v); bits.push(`${v > 0 ? '+' : '−'}${Math.abs(v)} M`); }
-  if (fx.stock) { const gs = Object.keys(o.inv).filter((g) => o.inv[g] >= 1); if (!gs.length) return; const g = pick(gs), q = Math.round(o.inv[g] * fx.stock); o.inv[g] -= q; bits.push(`${q} ${GOODS[g].unit} of ${GOODS[g].name.toLowerCase()} lost`); }
-  const text = h.text.replace('{co}', co);
-  notifyOwner(city, l, h.title, `${text.charAt(0).toUpperCase()}${text.slice(1)} ${bits.join(', ')}.`, h.kind);
+  if (fx.cash) { const v = r2(fx.cash); credit(city, l.owner, v); bits.push(`${v > 0 ? '+' : '−'}${Math.abs(v)} M`); }
+  if (fx.stock) { const gs = Object.keys(o.inv).filter((g) => o.inv[g] >= 1); if (!gs.length) return bits.length ? bits : null; const g = pick(gs), q = Math.round(o.inv[g] * fx.stock); o.inv[g] -= q; bits.push(`${q} ${GOODS[g].unit} of ${GOODS[g].name.toLowerCase()} lost`); }
+  return bits;
+}
+
+// ---------------------------------------------------------------- mail
+const ownKey = (l) => (l.owner ? `${l.owner.k}:${l.owner.id}` : '');
+const firstName = (n) => String(n || '').split(' ')[0];
+// the person who writes from a company's department: its specialist head if there is one, else someone on the team
+function staffFrom(city, l, dept) {
+  const d = l.ops && l.ops.depts[dept], dn = (OPS.deptFor(l, dept) || OPS.DEPT.ops).name, co = l.title || TYPES[l.type].name;
+  const tid = d && d.head && d.who && TAL.PERSON[d.who] ? d.who : null;
+  if (tid) return { n: TAL.PERSON[tid].name, r: `Head of ${dn}, ${co}`, tid };
+  return { n: MAIL.staffer(l, dept), r: `${dn}, ${co}` };
+}
+function mailWaiting(city, l) {
+  const ps = l.owner.k === 'p' ? [city.players[l.owner.id]] : Object.keys((city.holdings[l.owner.id] || { members: {} }).members).map((id) => city.players[id]);
+  return ps.some((q) => q && (q.mail || []).some((x) => x.lid === l.id && !x.dec && MAIL.isOpen(x)));
+}
+// a company's mail goes to its owner, or to every human co-owner (answering one answers them all)
+function mailTo(city, l, x) {
+  if (!l.owner) return;
+  if (l.owner.k === 'p') { MAIL.send(city.players[l.owner.id], { g: city.g, m: city.m, ...x }); return; }
+  const h = city.holdings[l.owner.id]; if (!h) return; const ref = uid('mr');
+  Object.keys(h.members).forEach((pid) => MAIL.send(city.players[pid], { g: city.g, m: city.m, ref, ...x, from: { ...x.from, r: `${x.from.r} · ${h.name}` } }));
+}
+// a specialist writes to their employer: a tycoon, or every human owner of a coop (their answers act for the coop)
+function mailEmp(city, p, x) {
+  if (!p) return; const g = city.g, m = city.m;
+  if (!p.coop) { MAIL.send(p, { g, m, ...x }); return; }
+  const ref = uid('mr'), opts = x.opts && x.opts.map((o) => (o.act ? { ...o, act: [o.act[0], { ...o.act[1], coop: p.id }] } : o));
+  p.people.filter((q) => !q.bot).forEach((q) => MAIL.send(q, { g, m, ref, ...x, ...(opts ? { opts } : {}), from: { ...x.from, r: `${x.from.r} · ${p.name}` } }));
+}
+function decisionMail(city, p, x) {
+  const def = DECISIONS.find((d) => d.id === x.def), f = DEC_FROM[def.id] || {};
+  const l = def.needs ? ownedBy(city, 'p', p.id).find((k) => k.type === def.needs) : null;
+  const from = f.ext ? { n: f.ext[0], r: f.ext[1], k: f.k } : l ? staffFrom(city, l, f.dept || 'ops') : { n: 'Your office', r: 'Harbor Row' };
+  MAIL.send(p, { g: city.g, m: city.m, from, subj: def.title, body: def.text, kind: 'info', dec: x.id, dueM: x.dueM, ...(l ? { lid: l.id } : {}), opts: def.options.map((o) => ({ l: o.l, d: o.d, ...(o.safe ? { safe: true } : {}) })) });
+}
+function closeMail(city, p, x, ix, auto, out, by) {
+  const done = { ix, auto: !!auto, out: out || '', by: by || null, g: city.g };
+  const ids = x.ref ? Object.values(city.players).filter((q) => !q.bot && q.mail) : [p];
+  ids.forEach((q) => (q.mail || []).forEach((y) => { if (y === x || (x.ref && y.ref === x.ref && !y.done)) y.done = done; }));
+}
+// a talent action answered from a mail, as the tycoon or for their coop
+function mailTalent(city, p, action, args) {
+  const a = { ...args }; let emp = p;
+  if (a.coop) { const h = city.holdings[a.coop]; if (!h || !h.members[p.id]) return err('Not your coop any more.'); emp = TAL.coopEmp(city, h); }
+  if (a.oid && !a.tid) { const o = (city.tOffers || []).find((y) => y.id === a.oid); if (!o || o.status !== 'open') return err('This offer is closed.'); a.tid = o.tid; }
+  return TAL.act(city, emp, action, a, { ...TCTX, inactive: (y) => inactive(city, y) }) || err('Not possible any more.');
+}
+export function answerMail(city, p, id, ix, auto) {
+  const x = MAIL.find(p, id); if (!x) return err('This mail is gone.');
+  if (!MAIL.isOpen(x)) return err('Already answered.');
+  const o = x.opts[ix]; if (!o) return err('Unknown answer.');
+  if (x.dec) { const r = resolveDecisionFor(city, p, x.dec, ix, auto); if (r.ok === false) closeMail(city, p, x, ix, auto, 'Too late: this was settled.'); return r; }
+  let out = '';
+  if (o.fx) {
+    const l = listing(city, x.lid);
+    if (!l || !l.ops || ownKey(l) !== x.own) out = 'The company is no longer yours.';
+    else { const bits = companyFx(city, l, o.fx); out = bits && bits.length ? bits.join(', ') + '.' : 'Done.'; }
+  }
+  if (o.tfx) { const s = city.talent && city.talent[o.tfx.tid]; if (s) { if (o.tfx.sat) s.sat = Math.max(0, Math.min(100, s.sat + o.tfx.sat)); } out = out || 'Noted.'; }
+  if (o.act) {
+    const r = mailTalent(city, p, o.act[0], o.act[1]);
+    if (r.ok === false && !auto) return r;
+    out = r.msg || (r.ok === false ? 'Could not be done.' : 'Done.');
+  }
+  closeMail(city, p, x, ix, auto, out || 'Noted.', p.name);
+  return { ok: true, msg: `${o.l}. ${out}`.trim() };
+}
+// once a week: the autopilot answers staff mails left for two weeks; offers that closed elsewhere close their mail
+function mailWeek(city) {
+  Object.values(city.players).forEach((p) => {
+    if (p.bot || !p.mail) return;
+    p.mail.filter(MAIL.isOpen).forEach((x) => {
+      if (x.oid) { const o = (city.tOffers || []).find((y) => y.id === x.oid); if (!o || o.status !== 'open') closeMail(city, p, x, -1, true, o ? `The offer was ${o.status === 'accepted' ? 'accepted' : o.status === 'declined' ? 'declined' : 'closed'}.` : 'The offer is closed.'); return; }
+      if (x.dec) { if (!p.inbox.some((d) => d.id === x.dec)) closeMail(city, p, x, -1, true, 'Settled.'); return; }
+      if (x.due != null && x.due <= city.g + 1e-9) answerMail(city, p, x.id, MAIL.autoPick(x, p.policy, rand), true);
+    });
+  });
+}
+// decisions from before mail existed get their mail
+function mailSync(city) { Object.values(city.players).forEach((p) => { if (!p.bot && p.inbox && p.inbox.length) p.inbox.forEach((d) => { if (!(p.mail || []).some((y) => y.dec === d.id)) decisionMail(city, p, d); }); }); }
+function newsletterMonth(city, m) {
+  const n = MAIL.newsletter(city, m, ADS.live(city).filter((a) => listing(city, a.lid))); if (!n) return;
+  Object.values(city.players).forEach((p) => { if (!p.bot && !p.admin) MAIL.send(p, { g: city.g, m, from: { n: GAZETTE.name, r: GAZETTE.role, k: 'press' }, subj: `${monthName(m - 1)} in Aurex Bay`, kind: 'news', news: n.items, ...(n.ad ? { ad: n.ad } : {}) }); });
 }
 function monthBoundary(city, m) {
   settleAll(city, m / 12); city.m = m;
@@ -528,6 +630,7 @@ function monthBoundary(city, m) {
   holdingsMonthly(city, m);
   resolveBotReplies(city, m);
   decisionsMonthly(city, m);
+  if (m > 0) newsletterMonth(city, m);
   botHoldingsAct(city, m);
   botSocial(city, m);
   ADS.botMonth(city, (id) => !!(city.players[id] && city.players[id].bot));
@@ -739,7 +842,8 @@ function resolveDecisionFor(city, p, did, ix, auto) {
   if (fx.gamble) { const v = rand() < fx.gamble[0] ? fx.gamble[1] : fx.gamble[2]; p.cash += v; out = v > 0 ? ` It paid off: +${v} M.` : v < 0 ? ` It went wrong: ${v} M.` : ' Nothing came of it.'; }
   if (fx.risk) { if (rand() < fx.risk[0]) { p.inf = Math.max(0, p.inf + fx.risk[1]); out = ' The tabloids ran a scandal story: −1 Influence.'; } else out = ' Everything went smoothly.'; }
   p.inbox = p.inbox.filter((x) => x !== d);
-  feed(p, city.m, def.title, `${auto ? 'Autopilot chose' : 'You chose'}: ${o.l}.${out}`, auto ? 'info' : 'good');
+  const mx = (p.mail || []).find((y) => y.dec === did);
+  if (mx) closeMail(city, p, mx, ix, auto, out.trim() || 'Done.', p.name); else feed(p, city.m, def.title, `${auto ? 'Autopilot chose' : 'You chose'}: ${o.l}.${out}`, auto ? 'info' : 'good');
   return { ok: true, msg: `${o.l}.${out}` };
 }
 
@@ -982,6 +1086,7 @@ function applyAs(city, pid, p, action, a, now) {
     case 'trade': return tradeStock(city, p, a.id, Math.trunc(Number(a.qty)));
     case 'policy': if (!['cautious', 'balanced', 'bold'].includes(a.policy)) return err('Unknown policy.'); p.policy = a.policy; return ok();
     case 'decide': return resolveDecisionFor(city, p, a.id, Number(a.opt), false);
+    case 'mailAnswer': return answerMail(city, p, a.id, Number(a.opt), false);
     case 'netRequest': {
       const t = city.players[a.pid]; if (!t || t.id === pid) return err('Unknown player.'); if (p.net.includes(t.id)) return err('Already in your network.');
       const incoming = city.netReqs.find((r) => r.status === 'open' && r.from === t.id && r.to === pid); if (incoming) { linkNetwork(city, pid, t.id, m); return ok(`${t.name} is now in your network.`); }
