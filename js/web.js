@@ -2,7 +2,7 @@
 // Auction house, dealers, property listings and the city newspaper all live here.
 import * as E from '../supabase/functions/_shared/engine.js';
 import { HOMES, ROOMS, LIFESTYLES, SALARIES, TAX, LIFE as LC, RARITY, PRESTIGE_TIERS, COLLECT_CATS, COLLECTIBLES, SETS, STOCKS } from '../supabase/functions/_shared/content.js';
-import { city, me, meId, esc, M, P, lineChart, shortDate, dateLabel, msUntilMonth, dur } from './util.js';
+import { city, me, meId, esc, M, P, lineChart, shortDate, dateLabel, msUntilMonth, dur, coImg } from './util.js';
 import { money, ricon, homeBg, bidBase, standing } from './life.js';
 import { apexSite } from './team.js';
 import { carrierSite } from './freight.js';
@@ -41,6 +41,31 @@ export function itemBg(cid) {
   return c.img ? `background-image:url(img/x-${cid}.jpg);background-position:${c.img};background-size:cover` : `background-image:${L.isMade(c) ? '' : `url(img/x-${cid}.jpg), `}linear-gradient(135deg, rgba(40,30,20,0.35), rgba(20,14,8,0.55)), url(${CARD_FALLBACK[c.cat]});background-size:cover;background-position:center`;
 }
 
+// ---------------------------------------------------------------- ads: Marketing campaigns bought by companies in the city
+const ADS = E.ADS;
+const DEALER_HOST = Object.fromEntries(Object.entries(DEALERS).map(([cat, d]) => [cat, d.host]));
+// where an ad leads: the company card, or the piece at the auction house or at its dealer
+function adTarget(c, ad) {
+  if (ad.kind === 'co') return `data-a="adCo" data-lid="${esc(ad.lid)}"`;
+  const lot = c.life && c.life.lots.find((x) => x.cid === ad.cid && (!ad.uid || x.uid === ad.uid));
+  const it = L.ITEM[ad.cid], u = lot ? `aurexauctions.ab/lot/${lot.id}` : it ? `${DEALER_HOST[it.cat]}/item/${ad.cid}` : HOME_URL;
+  return `data-a="webGo" data-u="${esc(u)}"`;
+}
+export function adHTML(ad, cls = '', preview = false) {
+  const c = city(), l = E.listing(c, ad.lid); if (!l) return '';
+  const it = ad.kind === 'item' ? L.ITEM[ad.cid] : null; if (ad.kind === 'item' && !it) return '';
+  const img = it ? itemBg(ad.cid) : `background-image:url(${coImg(l)})`;
+  const cta = it ? (c.life.lots.some((x) => x.cid === ad.cid) ? 'Bid at Aurex & Co. ›' : 'See the piece ›') : `Visit ${ADS.coName(l)} ›`;
+  const inner = `<span class="adv-img" style="${img}"></span><span class="adv-t"><small>Advertisement · ${esc(ADS.coName(l))}</small><b>${esc(ad.head)}</b><span>${esc(ad.line)}</span><em>${esc(cta)}</em></span>`;
+  return preview ? `<div class="adv ${cls} tone-${ad.tone}">${inner}</div>` : `<a href="#" class="adv ${cls} tone-${ad.tone}" ${adTarget(c, ad)}>${inner}</a>`;
+}
+// one ad for a slot on a page; slots on the same page show different campaigns, and they rotate week by week
+function adSlot(slot, cls = '') {
+  const c = city(), list = ADS.live(c).filter((a) => E.listing(c, a.lid)).sort((a, b) => (a.bot ? 1 : 0) - (b.bot ? 1 : 0) || a.from - b.from);
+  if (!list.length) return '';
+  return adHTML(list[(c.wk + slot) % list.length], cls);
+}
+
 // ---------------------------------------------------------------- browser chrome
 export function parseUrl(u) { const s = String(u || HOME_URL).trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, ''); const [host, ...rest] = s.split('/'); return { host: host.toLowerCase(), path: rest, url: s || HOME_URL }; }
 export function webHTML(st) {
@@ -52,7 +77,7 @@ export function webHTML(st) {
       <form class="waddr" data-form="addr"><span class="lock" aria-hidden="true"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><input name="u" value="${esc(u.url)}" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Address"></form>
       <button data-a="webClose" aria-label="Close browser" class="x">✕</button></div>
     <div class="wbm">${bm}</div></div>
-    <div class="wpage" id="wpage"><div class="site s-${site ? (SITES[u.host].cat ? DEALERS[SITES[u.host].cat].theme : u.host.split('.')[0]) : 'nf'}">${page}</div></div></div>`;
+    <div class="wpage" id="wpage"><div class="site s-${site ? (SITES[u.host].cat ? DEALERS[SITES[u.host].cat].theme : u.host.split('.')[0]) : 'nf'}">${page}${site && u.host !== 'baylink.ab' ? `<div class="adrow">${adSlot(Object.keys(SITES).indexOf(u.host) + u.path.length, 'wide')}</div>` : ''}</div></div></div>`;
 }
 function notFound(u) {
   return `<div class="nf-in"><h1>This site can’t be reached</h1><p><b>${esc(u.host)}</b> does not exist in Aurex Bay.</p>${go(HOME_URL, 'Search on Baylink', 'nfbtn')}</div>`;
@@ -71,7 +96,7 @@ function portal(st) {
     <div class="bl-grid">${list.map(([h, s]) => `<a href="#" class="bl-tile" data-a="webGo" data-u="${h}">${favicon(h, 44)}<b>${esc(s.name)}</b><span>${esc(s.tag)}</span><em>${esc(h)}</em></a>`).join('') || '<p class="bl-none">No sites match your search.</p>'}</div>
     <div class="bl-cols"><section><h3>Today in Aurex Bay</h3>${news.map((n) => go('aurexgazette.ab', `<b>${esc(n.title)}</b><span>${esc(n.text || '')}</span>`, 'bl-news')).join('')}</section>
     <section><h3>Market movers this week</h3>${movers.map((x) => `<div class="bl-mv"><span>${esc(x.s.name)}</span><b>${M(x.p)}</b><em class="${x.ch >= 0 ? 'up' : 'down'}">${P(x.ch)}</em></div>`).join('')}</section></div>
-    <a href="#" class="bl-ad" data-a="webGo" data-u="coastlineclassics.ab/item/c4" style="background-image:linear-gradient(90deg, rgba(20,12,4,0.85), rgba(20,12,4,0.1)), url(img/x-c4.jpg)"><small>Advertisement</small><b>The Vellano V9. Built for the coast road.</b><span>Now at Coastline Classics ›</span></a>`;
+    ${adSlot(0, 'hero') || `<a href="#" class="bl-ad" data-a="webGo" data-u="coastlineclassics.ab/item/c4" style="background-image:linear-gradient(90deg, rgba(20,12,4,0.85), rgba(20,12,4,0.1)), url(img/x-c4.jpg)"><small>Advertisement</small><b>The Vellano V9. Built for the coast road.</b><span>Now at Coastline Classics ›</span></a>`}`;
 }
 
 // ---------------------------------------------------------------- Aurex & Co. auctions
@@ -164,8 +189,8 @@ function gazette() {
   const sold = (c.life.sold || []).slice(0, 4);
   const movers = STOCKS.map((s) => { const h = c.stocks[s.id].h; return { s, ch: h.length > 4 ? (h[h.length - 1] / h[h.length - 5] - 1) * 100 : 0 }; }).sort((a, b) => b.ch - a.ch);
   return `<div class="gz-mast"><span>${esc(dateLabel(c.m))}</span><h1>The Aurex Gazette</h1><span>Est. 1902 · Price 2¢</span></div>
-    <div class="gz-cols"><article class="gz-lead">${lead ? `<h2>${esc(lead.title)}</h2><p>${esc(lead.text || '')}</p>` : ''}${rest.slice(0, 6).map((n) => `<h4>${esc(n.title)}</h4><p>${esc(n.text || '')}</p>`).join('')}</article>
-    <aside><h3>Markets this month</h3>${[...movers.slice(0, 3), ...movers.slice(-3)].map((x) => `<div class="gz-mv"><span>${esc(x.s.name)}</span><b class="${x.ch >= 0 ? 'up' : 'down'}">${P(x.ch)}</b></div>`).join('')}
+    <div class="gz-cols"><article class="gz-lead">${lead ? `<h2>${esc(lead.title)}</h2><p>${esc(lead.text || '')}</p>` : ''}${rest.slice(0, 3).map((n) => `<h4>${esc(n.title)}</h4><p>${esc(n.text || '')}</p>`).join('')}${adSlot(2, 'wide')}${rest.slice(3, 6).map((n) => `<h4>${esc(n.title)}</h4><p>${esc(n.text || '')}</p>`).join('')}</article>
+    <aside>${adSlot(1, 'side')}<h3>Markets this month</h3>${[...movers.slice(0, 3), ...movers.slice(-3)].map((x) => `<div class="gz-mv"><span>${esc(x.s.name)}</span><b class="${x.ch >= 0 ? 'up' : 'down'}">${P(x.ch)}</b></div>`).join('')}
       <h3>Under the hammer</h3>${sold.map((s) => `<p><b>${esc(L.ITEM[s.cid].name)}</b> went for ${money(s.price)}.</p>`).join('') || '<p>The auction season opens this month.</p>'}<p>${go('aurexauctions.ab', 'See the sale at Aurex &amp; Co. ›')}</p>
       <h3>Society</h3>${rest.slice(6, 12).map((n) => `<p>${esc(n.title)}.</p>`).join('')}</aside></div>`;
 }

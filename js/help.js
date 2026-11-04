@@ -43,7 +43,7 @@ const TERMS = {
   'rooms this month': h('Hotel', 'Stays checked in this month out of the rooms you can fill. Front Desk & Housekeeping staff, shifts and morale decide how many rooms are ready.', 'When rooms run out, confirmed guests wait. If they wait too long, they book elsewhere.'),
   'guest stays': h('Booking', 'How many stays the booking is for. Each stay uses supplies when the guests check in. VIP stays use more.'),
   'finished stock': h('Production', 'Finished products waiting in stock, ready to deliver to your customers. Each month\'s production comes off the line over the following weeks, so stock keeps growing between months.', 'You can only deliver an order when finished stock covers all its units. Unsold stock lowers how much the company produces next month.'),
-  clients: h('Sales', 'Customers who buy from this company regularly. Each client sends orders. A client whose mood drops too low leaves.', 'Answer and deliver orders on time to keep them happy. Sales calls and Social Media find new ones.'),
+  clients: h('Sales', 'Customers who buy from this company regularly. Each client sends orders. A client whose mood drops too low leaves.', 'Answer and deliver orders on time to keep them happy. Sales calls and Marketing find new ones.'),
   reputation: h('Company', 'How customers see the company, from 0 to 100. Higher reputation raises demand.', 'It grows slowly when you deliver, and drops when orders are cancelled or you cannot meet demand. Campaigns and research can lift it.'),
   morale: h('Company', 'How happy the workers are, from 0 to 100. High morale gives more output; below 30 workers start to quit.', 'HR, better wages, training and team meetings raise it. Overtime and lean cost control lower it.'),
   staff: h('Company', 'Workers employed across all departments, and their wages per year.'),
@@ -253,7 +253,7 @@ const SETTINGS = {
   'procurement.carrier': 'Which freight company ships your supplies. Faster costs more.',
   'sales.price': 'Budget sells more units at a lower price. Premium sells fewer at a higher price, and builds reputation with good technology.',
   'sales.b2b': 'Price for supplies this company lists on the city market: under, at or over the market price.',
-  'social.intensity': 'How hard you campaign. Bigger campaigns grow customers and reputation faster but cost more each month.',
+  'social.intensity': 'How much you post on social media every month. Posting more grows customers and reputation faster but costs more each month. Ad campaigns on the city’s websites are launched separately in the Ad campaigns box.',
   'hr.wages': 'Higher wages lift morale and cost more. Below market saves money but morale falls.',
   'hr.training': 'Training costs a yearly budget and raises output and morale.',
   'finance.costs': 'Lean cuts running costs by 6% but lowers morale.',
@@ -307,6 +307,8 @@ export function helpAt(el, where = {}) {
   if (q('#datelbl, .brand')) return { t: 'Game date', k: 'Time', d: `The date in Aurex Bay. W is the week of the month. At live speed one game year lasts one real week, so a month is about 14 hours.`, tip: 'Companies produce and sell every month; supplies and share prices move every week.' };
   if ((x = q('#speed'))) return { t: 'Game speed', k: 'Time', d: `How fast time runs. ${SPEEDS.map((s) => `${s.label}: ${s.note}`).join('. ')}.`, tip: 'Online, only the administrator changes the speed for everyone.' };
   if (q('#mylogo')) return { t: 'Your parent company', k: 'Brand', d: 'The logo of the parent company that owns your businesses. Click to open your empire.' };
+  if (q('.adv')) return { t: 'Advertisement', k: 'Marketing', d: 'An ad campaign a company in Aurex Bay paid for. It runs for a few weeks on the city’s websites. Click it to see the company or the piece.', tip: 'Run your own from the Ad campaigns box of a company with a Marketing department.' };
+  if (q('.adbox')) return { t: 'Ad campaigns', k: 'Marketing', d: 'Buy a few weeks of ads on the city’s websites. Advertise the company to win customers and reputation every week, or one piece it makes or you own to lift its market value.', tip: 'Pick a tone, flip through lines with Another line, then launch. A head of marketing makes campaigns 50% stronger.' };
   if (q('.webbtn')) return { ...ACTIONS.web, t: 'Web browser', k: 'Top bar' };
   if ((x = q('.mp[data-mk]'))) return markHelp(x.dataset.mk);
   if ((x = q('.zone[data-zone]'))) { const d = DISTRICT[x.dataset.zone]; return d && { t: d.name, k: 'District', d: d.blurb, tip: 'Click to zoom into the district and see its companies, warehouses and homes.' }; }
