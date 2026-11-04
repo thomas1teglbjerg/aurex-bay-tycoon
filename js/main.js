@@ -764,6 +764,12 @@ async function onClick(e) {
     // ---- the in-game browser
     case 'web': if (d.coop) UI.talentFor = d.coop; else if (!t.closest('#web')) UI.talentFor = null; openWeb(d.u || (UI.web && UI.web.url) || HOME_URL); return;
     case 'webGo': navWeb(d.u); return;
+    case 'adCo': closeWeb(); hideMapCard(); openListing(d.lid); return;
+    // ---- Marketing: ad campaigns
+    case 'adSet': adUI(d.lid)[d.k] = d.k === 'weeks' ? Number(d.v) : d.v; if (d.k === 'tone') adUI(d.lid).n = 0; renderPanel(); return;
+    case 'adNext': adUI(d.lid).n = (adUI(d.lid).n || 0) + 1; renderPanel(); return;
+    case 'adLaunch': { const r = await act('adLaunch', { lid: d.lid, subj: d.subj, tone: d.tone, n: Number(d.n), weeks: Number(d.weeks) }); if (r && r.ok !== false && UI.ad) delete UI.ad[d.lid]; return; }
+    case 'adStop': await act('adStop', { lid: d.lid }); return;
     case 'webBack': if (UI.web.back.length) { UI.web.fwd.push(UI.web.url); UI.web.url = UI.web.back.pop(); UI.web.amt = null; renderWeb(true); } return;
     case 'webFwd': if (UI.web.fwd.length) { UI.web.back.push(UI.web.url); UI.web.url = UI.web.fwd.pop(); UI.web.amt = null; renderWeb(true); } return;
     case 'webHome': navWeb(HOME_URL); return;
@@ -935,6 +941,7 @@ async function onClick(e) {
   }
 }
 
+function adUI(lid) { UI.ad = UI.ad || {}; return (UI.ad[lid] = UI.ad[lid] || {}); }
 function renderAll() { if (!me()) return; renderTop(); updatePins(); renderPanel(); measureTop(); if (UI.web) renderWeb(); }
 // ---------------------------------------------------------------- in-game browser
 function openWeb(url) { if (!UI.web) UI.web = { url: parseUrl(url).url, back: [], fwd: [], q: '' }; else if (parseUrl(url).url !== UI.web.url) { UI.web.back.push(UI.web.url); UI.web.fwd = []; UI.web.url = parseUrl(url).url; } $('web').hidden = false; renderWeb(true); }
@@ -1039,6 +1046,7 @@ async function boot(hot) {
     const t = e.target, d = t.dataset;
     if (d.a === 'whTarget') { UI.whTarget[d.g] = t.value; refreshModal(); }
     if (d.a === 'whSupply') await act('whAuto', { wid: d.wid, supply: t.checked });
+    if (d.a === 'adSubj') { adUI(d.lid).subj = t.value; adUI(d.lid).n = 0; renderPanel(); }
     if (d.a === 'tradeTo') { UI.modal.to = t.value; UI.modal.get = []; openLife(UI.modal); }
     if (t.id === 'ob-end') { UI.found.end = t.value; foundPreview(UI.found); }
     if (t.id === 'ob-open') UI.found.open = t.checked;

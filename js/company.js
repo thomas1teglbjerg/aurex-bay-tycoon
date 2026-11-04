@@ -1,6 +1,7 @@
 // Company dashboard: one page per company with production, supplies, orders and departments
 import * as E from '../supabase/functions/_shared/engine.js';
-import { TYPES, SIZES, GOODS, RECIPES, DEPTS, STAFF, WORKER, MARKET_KIND, CLIENT_RULES, LIFE as LC, VINTAGE } from '../supabase/functions/_shared/content.js';
+import { TYPES, SIZES, GOODS, RECIPES, DEPTS, STAFF, WORKER, MARKET_KIND, CLIENT_RULES, LIFE as LC, VINTAGE, AD, AD_CATS } from '../supabase/functions/_shared/content.js';
+import { adHTML } from './web.js';
 import { carrierPicker, deliveriesBox } from './freight.js';
 import { money, cardHTML } from './life.js';
 import { scenesHTML, sceneFor } from './scenes.js';
@@ -151,6 +152,7 @@ export function companyHTML(lid, ui = {}) {
     <div class="col">
       ${ro ? '' : `<div class="box"><h2>To-do<small>${tasks.length}</small></h2><div class="in">${taskHTML}<p class="empty" style="font-size:13px">Tasks appear when a department has no staff. Hire workers to hand the work over.</p></div></div>`}
       ${cellarBox(c, l, ro)}
+      ${adBox(c, l, ro, ui)}
       <div class="box" id="orders-box"><h2>${hotel ? 'Bookings' : 'Customer orders'}<small>${ords.length} OPEN</small></h2><div class="in">
         ${!ro && ready && !hotel ? `<button class="btn navy" data-a="deliverOpen" data-lid="${l.id}">Open delivery map · ${ready} ready</button>` : ''}
         ${ords.length ? `<div class="orders">${ords.map((od) => orderCard(c, l, od, ro)).join('')}</div>` : `<p class="empty">${hotel ? (O.automation(l, 'sales') >= 1 ? 'Reservations confirms every booking. Guests check in by themselves.' : 'No open bookings. Travel agents and tour operators book every month.') : O.automation(l, 'sales') >= 1 ? 'Your sales team answers and ships every order.' : 'No open orders. New orders arrive every month from your clients.'}</p>`}
@@ -179,6 +181,35 @@ export function companyHTML(lid, ui = {}) {
     </div>
   </div>`;
 }
+// Marketing: ad campaigns on the city's websites, for the company or one piece it makes or the owner holds
+function adBox(c, l, ro, ui) {
+  const A = E.ADS, o = l.ops, mk = O.deptFor(l, 'social').name, run = A.running(c, l.id);
+  if (ro && !run) return '';
+  const head = (n) => `<div class="box adbox"><h2>Ad campaigns<small>${n}</small></h2><div class="in">`;
+  if (run) {
+    const left = Math.min(run.weeks, Math.max(0, Math.ceil((run.until - c.g) * 48 - 1e-6))), what = run.kind === 'co' ? esc(lname(l)) : esc((E.LIFE.ITEM[run.cid] || {}).name || 'a piece');
+    return head('RUNNING') + `${adHTML(run, 'wide', true)}
+      <p style="margin:10px 0 6px">Advertising <b>${what}</b> on the city’s websites · <b>${left} week${left === 1 ? '' : 's'}</b> left of ${run.weeks} · about <b>${run.views.toLocaleString('en-US')}</b> views so far.</p>
+      <p class="empty" style="font-size:13px">${run.kind === 'co' ? `Every week it runs: customers +${Math.round(AD.cust * A.strength(l) * 1000) / 10}% and reputation +${AD.rep * A.strength(l)}.` : `Every week it runs the piece gains ${Math.round(AD.lift * A.strength(l) * 1000) / 10}% in market value.`}${A.strength(l) > 1 ? ' A head of marketing makes it 50% stronger.' : ''} Open the web browser to see it live.</p>
+      ${ro ? '' : `<div class="btns"><button class="btn sm" data-a="web" data-u="baylink.ab">See it in the browser</button><button class="linkbtn" data-a="adStop" data-lid="${l.id}">Stop campaign</button></div>`}</div></div>`;
+  }
+  if (!o.depts.social) return head('MARKETING') + `<p class="empty">Open the ${esc(mk)} department to run ad campaigns on the city’s websites: banners on Baylink, the Gazette, the dealers and every other site in the browser.</p></div></div>`;
+  const st = Object.assign({ subj: 'co', tone: 'wink', n: 0, weeks: AD.weeks[1] }, (ui.ad && ui.ad[l.id]) || {});
+  const p = me(), prods = E.ADS.products(c, p, l), pr = prods.find((x) => x.uid === st.subj), cid = pr ? pr.cid : null, subj = pr ? pr.uid : 'co';
+  const t = A.copy(l, st.tone, st.n, cid, p.name), cost = A.cost(l, st.weeks), cash = l.owner.k === 'h' ? c.holdings[l.owner.id].treasury : p.cash;
+  const preview = adHTML({ lid: l.id, kind: cid ? 'item' : 'co', cid, uid: pr ? pr.uid : null, tone: st.tone, head: t.head, line: t.line }, 'wide', true);
+  const subjects = [['co', `The company · ${lname(l)}`], ...prods.map((x) => [x.uid, `${E.LIFE.ITEM[x.cid].name}${x.where === 'cellar' ? ' · estate cellar' : ' · your collection'}`])];
+  return head('MARKETING') + `<p style="margin:0 0 10px">Buy ad space on the city’s websites for a few weeks. The ad uses your picture and a line in the tone you choose.</p>
+    <div class="set"><span class="cap">Advertise</span><select class="adsel" data-a="adSubj" data-lid="${l.id}" aria-label="What to advertise">${subjects.map(([v, n]) => `<option value="${esc(v)}" ${v === subj ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></div>
+    ${prods.length ? '' : `<p class="empty" style="font-size:13px;margin:4px 0 0">Pieces this company makes${(AD_CATS_TXT[l.type] ? `, and ${AD_CATS_TXT[l.type]} from your own collection,` : '')} can be advertised one by one.</p>`}
+    <div class="set"><span class="cap">Tone</span>${seg('adSet', `data-lid="${l.id}" data-k="tone"`, AD.tones, st.tone)}</div>
+    <div class="set"><span class="cap">Runs for</span>${seg('adSet', `data-lid="${l.id}" data-k="weeks"`, AD.weeks.map((w) => [w, `${w} weeks`]), st.weeks)}</div>
+    <div class="adprev">${preview}</div>
+    <div class="btns" style="margin-top:10px"><button class="btn sm" data-a="adNext" data-lid="${l.id}">Another line</button><button class="btn gold" data-a="adLaunch" data-lid="${l.id}" data-subj="${esc(subj)}" data-tone="${st.tone}" data-n="${t.n}" data-weeks="${st.weeks}" ${cash < cost ? 'disabled' : ''}>Launch campaign · ${M(cost)}</button></div>
+    <p class="empty" style="font-size:13px">${cid ? `While it runs the piece gains about ${Math.round(AD.lift * A.strength(l) * 1000) / 10}% in market value a week.` : `While it runs: customers +${Math.round(AD.cust * A.strength(l) * 1000) / 10}% and reputation +${AD.rep * A.strength(l)} every week.`}${A.strength(l) > 1 ? ' Your head of marketing makes it 50% stronger.' : ' A head of marketing (Sofia Lindström) makes campaigns 50% stronger.'} Paid ${l.owner.k === 'h' ? 'from the coop treasury' : 'from company cash'}, shown under department budgets.</p></div></div>`;
+}
+const AD_CATS_TXT = Object.fromEntries(Object.entries(AD_CATS).map(([k, cs]) => [k, cs.map((x) => ({ car: 'cars', wine: 'wine', watch: 'watches', art: 'art' }[x])).join(' and ')]));
+
 // vineyards: the yearly harvest and the estate's own wine cellar
 function cellarBox(c, l, ro) {
   if (l.type !== 'vineyard') return '';

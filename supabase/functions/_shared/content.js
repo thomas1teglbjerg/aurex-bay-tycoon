@@ -28,7 +28,7 @@ export const TYPES = {
   pharma: { name: 'Pharma Industry', sector: 'Pharmaceuticals · Healthcare', price: 38, trade: 4, ypi: 5, group: 'health', tags: ['Pharma', 'Healthcare'],
     perks: [{ t: 'Crisis Immunity', d: 'Trade unaffected by recessions' }, { t: 'Emergency Profits', d: '+3 M YPI during a crisis' }], neg: [] },
   music: { name: 'Music Studio', sector: 'Media & Entertainment · Music', price: 12, trade: 1.2, ypi: 1.8, group: 'media', tags: ['Media', 'Music'],
-    perks: [{ t: 'Hit Single', d: '+3 M & +1 Influence on a hit (2 in 6 per year) when Social Media runs or a PR & Media Officer leads it' }, { t: 'Studio Buzz', d: '+1 Influence per year' }], neg: [{ t: 'Fickle Charts', d: '−0.4 M YPI during a recession' }] },
+    perks: [{ t: 'Hit Single', d: '+3 M & +1 Influence on a hit (2 in 6 per year) when Marketing runs or a PR & Media Officer leads it' }, { t: 'Studio Buzz', d: '+1 Influence per year' }], neg: [{ t: 'Fickle Charts', d: '−0.4 M YPI during a recession' }] },
   film: { name: 'Film Production', sector: 'Media & Entertainment', price: 38, trade: 2.5, ypi: 3.5, group: 'media', tags: ['Media', 'Influence'],
     perks: [{ t: 'Influence Boost', d: '+1 Influence per year' }, { t: 'Blockbuster Success', d: '+8 M & +1 Influence on a blockbuster (2 in 6 per year)' }], neg: [{ t: 'Influencer Staff Requirement', d: 'Blockbusters need a PR & Media Officer at HQ' }] },
   vineyard: { name: 'Vineyard', sector: 'Food & Drink · Wine Estate', price: 12, trade: 1.2, ypi: 1.6, group: 'service', tags: ['Wine', 'Collectibles'],
@@ -80,7 +80,7 @@ export const LISTINGS = [
 export const STAFF = [
   { id: 'michael', role: 'Junior Financial Analyst', name: 'Michael Turner', cost: 1.5, upkeep: 0.5, passive: ['Loan Bonus', 'Gain +0.5 M when taking a loan. Your interest drops 1 M a year.'], hq: 'Head of Finance: running costs −5% in that company.', tags: 'Finance · Risk' },
   { id: 'anika', role: 'IT Systems Engineer', name: 'Anika Rao', cost: 1.5, upkeep: 0.5, passive: ['System Stability', 'The tech company she works in earns +1 M YPI'], hq: 'Head of R&D: research 50% faster and cyberattacks on that company are blocked.', tags: 'Tech · Stability · Infrastructure' },
-  { id: 'sofia', role: 'PR & Media Officer', name: 'Sofia Lindström', cost: 2, upkeep: 0.5, passive: ['Public Relations', 'Gain +2 Influence every year. Her media or fashion company +1 M YPI.'], hq: 'Head of Social Media: campaigns 50% stronger.', tags: 'Communication · Marketing' },
+  { id: 'sofia', role: 'PR & Media Officer', name: 'Sofia Lindström', cost: 2, upkeep: 0.5, passive: ['Public Relations', 'Gain +2 Influence every year. Her media or fashion company +1 M YPI.'], hq: 'Head of Marketing: campaigns and ads 50% stronger.', tags: 'Communication · Marketing' },
   { id: 'robert', role: 'Compliance Assistant', name: 'Robert Hayes', cost: 2, upkeep: 0.5, passive: ['Regulation Shield', 'Auditors never fine the company he works in.'], hq: 'Head of Legal & Compliance: full protection from regulation fines.', tags: 'Regulation · Defense' },
   { id: 'emily', role: 'HR Recruitment Officer', name: 'Emily Carter', cost: 2, upkeep: 0.5, passive: ['Talent Network', 'Specialists cost −0.5 M to recruit.'], hq: 'Head of HR: hiring costs −50% and morale +8 in that company.', tags: 'HR · Growth · Infrastructure' },
   { id: 'carlos', role: 'Logistics Planner', name: 'Carlos Mendoza', cost: 4, upkeep: 1, passive: ['Supply Chain', 'Runs your warehouses: auto-import, auto-supply and warehouse sourcing. +1 Influence a year, and his industrial company +1 M YPI.'], hq: 'Head of Procurement: supplies 5% cheaper for that company.', tags: 'Transport · Mobility' },
@@ -115,7 +115,7 @@ export const HAPPENINGS = [
   { id: 'tip', title: 'A loyal customer tipped the team', text: 'The crew at {co} is in a good mood today.', kind: 'good', fx: { morale: 6 } },
   { id: 'refund', title: 'An old invoice was paid', text: 'A client who had forgotten {co} finally paid up.', kind: 'good', fx: { cash: 0.06 } },
   { id: 'breakdown', title: 'A machine broke down', text: 'Repairs at {co} cost money and a day of work.', kind: 'bad', fx: { cash: -0.08, morale: -3 }, guard: 'ops', saved: 'Your Operations team fixed it before the shift ended.' },
-  { id: 'complaint', title: 'An angry post went viral', text: 'A customer of {co} is complaining online.', kind: 'bad', fx: { rep: -3, cust: -0.02 }, guard: 'social', saved: 'Your social media team answered quickly and turned it around.' },
+  { id: 'complaint', title: 'An angry post went viral', text: 'A customer of {co} is complaining online.', kind: 'bad', fx: { rep: -3, cust: -0.02 }, guard: 'social', saved: 'Your marketing team answered quickly and turned it around.' },
   { id: 'inspection', title: 'Surprise inspection', text: 'City inspectors went through {co}.', kind: 'bad', fx: { cash: -0.1 }, guard: 'legal', saved: 'Every permit was in order. No fine.' },
   { id: 'theft', title: 'Supplies went missing', text: 'Part of a delivery at {co} is gone.', kind: 'bad', fx: { stock: 0.08 }, guard: 'procurement', saved: 'Procurement had counted everything. The missing crates turned up.' },
   { id: 'sick', title: 'Flu at the workplace', text: 'Half the team at {co} called in sick.', kind: 'bad', fx: { morale: -5 }, guard: 'hr', saved: 'HR had cover ready. Nobody noticed.' },
@@ -233,8 +233,8 @@ export const DEPTS = [
     settings: [{ k: 'price', label: 'Price level', opts: [['budget', 'Budget'], ['standard', 'Standard'], ['premium', 'Premium']] }, { k: 'b2b', label: 'Supply pricing', opts: [['undercut', 'Undercut −8%'], ['market', 'Market price'], ['premium', 'Premium +8%']] }],
     manual: { id: 'findCustomers', label: 'Make sales calls', note: '20 seconds, then pick which lead to chase' },
     auto: 'Answers, ships and archives customer orders and lists surplus supplies automatically.', without: 'You answer every order, deliver it on the map and archive cancellations yourself.' },
-  { id: 'social', name: 'Social Media', head: 'sofia', need: 1, cost: 0.4, desc: 'Grows your customer base and reputation.',
-    settings: [{ k: 'intensity', label: 'Campaigns', opts: [['off', 'Off'], ['normal', 'Steady'], ['viral', 'Go big']] }],
+  { id: 'social', name: 'Marketing', head: 'sofia', need: 1, cost: 0.4, desc: 'Grows your customer base and reputation, and runs ad campaigns on the city’s websites.',
+    settings: [{ k: 'intensity', label: 'Social media', opts: [['off', 'Off'], ['normal', 'Steady'], ['viral', 'Go big']] }],
     manual: { id: 'postCampaign', label: 'Shoot a campaign', note: '20 seconds in the studio, then choose how to launch' },
     auto: 'Runs your campaign plan every month.', without: 'Nothing is posted unless you do it.' },
   { id: 'hr', name: 'HR', head: 'emily', need: 1, cost: 0.4, desc: 'Keeps people motivated, paid right and trained.',
@@ -344,7 +344,7 @@ export const DEPT_LOOK = {
       manual: { label: 'Call travel agents', note: '20 seconds, then pick which partner to sign' },
       auto: 'Confirms bookings and keeps the calendar full.', without: 'You confirm every booking yourself. Unanswered guests book elsewhere.' },
     social: { name: 'Marketing & Guest Relations', desc: 'Reviews, travel sites and social media bring more guests.',
-      settings: { intensity: { label: 'Campaigns' } },
+      settings: { intensity: { label: 'Social media' } },
       manual: { label: 'Shoot a hotel campaign', note: '20 seconds by the pool, then choose how to launch' },
       auto: 'Runs campaigns and answers reviews every month.', without: 'No campaigns and nobody answers reviews.' },
     hr: { name: 'Human Resources', desc: 'Hires, trains and keeps the hotel staff happy.',
@@ -578,3 +578,45 @@ export const CARRIERS = [
 
 // place warehouses and homes from their district position
 [...WAREHOUSE_SITES, ...HOMES].forEach((o) => Object.assign(o, { district: DISTRICT[o.d].name }, placeOn(o.d, o.p)));
+
+// ---------------------------------------------------------------- Marketing: ad campaigns on the city's websites
+// A campaign runs for a few weeks and shows ads in the in-game browser. Cost per week = perWeek × company size.
+// Company campaigns grow customers and reputation every week; a product campaign lifts the market value of that one piece.
+export const AD = { perWeek: 0.04, weeks: [2, 4, 8], cust: 0.015, rep: 0.5, lift: 0.004, head: 1.5, botMax: 4,
+  tones: [['irony', 'Ironic'], ['sarcasm', 'Sarcastic'], ['wink', 'Tongue-in-cheek']] };
+// what each business sells, for the ad copy
+export const AD_NOUN = { bank: 'banking', dealer: 'cars', restaurant: 'dinner', autorepair: 'repairs', clothing: 'clothes', fashion: 'fashion', hotel: 'hotel rooms', metal: 'steel', car: 'cars', finance: 'investments', chip: 'microchips', data: 'software', pharma: 'medicine', music: 'music', film: 'films', vineyard: 'wine' };
+// besides what it makes itself, a company may advertise pieces from the owner's collection that fit its trade
+export const AD_CATS = { dealer: ['car'], autorepair: ['car'], car: ['car'], vineyard: ['wine'], restaurant: ['wine'], hotel: ['wine', 'art'], fashion: ['watch', 'art'], clothing: ['watch'], bank: ['art', 'watch'], finance: ['art', 'watch'], film: ['art'], music: ['art'] };
+// [headline, line]. {co} company, {d} district, {thing} what it sells, {type} kind of business, {item} {maker} {year} a piece, {owner} the tycoon
+export const AD_COPY = {
+  co: {
+    irony: [['Absolutely nobody needs {thing}.', 'That is why half of {d} buys it from {co}.'], ['Another totally ordinary {type}.', 'Ordinarily the best in Aurex Bay. {co}.'], ['Warning: may cause satisfaction.', 'Side effects include coming back. {co}, {d}.'], ['We tried being mediocre once.', 'It did not suit us. {co}, {d}.'], ['Our rivals love this ad.', 'They read it every morning. {co}.']],
+    sarcasm: [['Sure, go to the other place.', 'We will be here when you are done regretting it. {co}, {d}.'], ['Oh, you are happy with your {thing}?', 'How charming. {co} would like a word.'], ['Cheaper exists. So does disappointment.', '{co}, {d}. You get what you pay for.'], ['Please do not tell anyone about us.', 'We are far too busy being the best {type} in {d}.'], ['Yes, it really is this good.', 'No, we will not calm down. {co}.']],
+    wink: [['{thing}, but make it Aurex Bay.', '{co} in {d}. Come say hi.'], ['Your mother would approve.', 'Probably. {co}, {d}.'], ['Life is short. Choose the good {thing}.', '{co} · {d}'], ['Made with love. And a spreadsheet.', '{co} in {d}.'], ['We would wink, but this is a banner.', 'Imagine one. {co}, {d}.']]
+  },
+  type: {
+    bank: { wink: [['We love your money.', 'Almost as much as you do. {co}, {d}.']], sarcasm: [['Keep it under the mattress, then.', 'Mattresses pay 0% interest. {co} does a bit better.']] },
+    dealer: { irony: [['Walking is great exercise.', 'Ignore this ad from {co}.']], sarcasm: [['Your car makes that noise on purpose, right?', 'Trade it in at {co}, {d}.']] },
+    restaurant: { wink: [['Calories eaten at {co} do not count.', 'Science is still checking. {d}.']], irony: [['Do not come hungry.', 'You will leave with a doggy bag anyway. {co}.']] },
+    autorepair: { sarcasm: [['That warning light is probably fine.', 'Said every customer of {co}. Twice.']], wink: [['We speak fluent engine.', 'Clunk, rattle, fixed. {co}, {d}.']] },
+    clothing: { sarcasm: [['Wearing that again? Bold.', 'Or pop into {co} in {d}.']], wink: [['Dress for the job you want.', 'Tycoon, obviously. {co}.']] },
+    fashion: { irony: [['Fashion is fleeting.', 'This season it flees straight to {co}.']], sarcasm: [['Last season called.', 'It wants its coat back. {co}, {d}.']] },
+    hotel: { wink: [['Room service has feelings too.', 'Order anyway. {co}, {d}.']], irony: [['Terrible views. Just the sea.', 'From every single room. {co}.']] },
+    metal: { irony: [['Soft skills? We prefer steel.', 'Strong opinions, stronger alloys. {co}.']], wink: [['Heavy metal, quiet prices.', '{co}, {d}.']] },
+    car: { sarcasm: [['Bicycles are lovely. In the rain.', 'Or drive one built by {co}.']], wink: [['0 to happy in 4 seconds.', 'Built in {d} by {co}.']] },
+    finance: { irony: [['Past results guarantee nothing.', 'Ours just keep happening anyway. {co}.']], sarcasm: [['Keep picking stocks with a dartboard.', 'We will keep beating it. {co}, {d}.']] },
+    chip: { wink: [['Small chips. Big ideas.', 'Not the kind you dip. {co}.']], irony: [['Smaller than your problems.', 'And much faster. {co}.']] },
+    data: { sarcasm: [['Have you tried turning it off and on?', '{co} already did. Twice. {d}.']], wink: [['Our AI wrote this ad.', 'Then it asked for a raise. {co}.']] },
+    pharma: { wink: [['Read one of these ads daily.', 'With food. {co}, {d}.']], irony: [['Side effects may include feeling better.', 'Ask your doctor about {co}.']] },
+    music: { sarcasm: [['Silence is golden.', 'Ours went platinum. {co}.']], wink: [['Earworm guaranteed.', 'Sorry in advance. {co}, {d}.']] },
+    film: { irony: [['Spoiler: it ends well.', 'For {co}, anyway.']], wink: [['Popcorn not included.', 'Drama is. {co}.']] },
+    vineyard: { wink: [['In vino veritas.', 'And the truth is: {co} is better. {d}.']], sarcasm: [['Sure, serve the cheap stuff.', 'Your guests will smile politely. {co}.']] }
+  },
+  item: {
+    wine: { irony: [['Do not drink this.', '{item} ({year}) is far too good for a Tuesday.'], ['Grape juice, basically.', 'Very old, very rare grape juice. {item}, {year}.']], sarcasm: [['Fine. Keep your supermarket rosé.', 'Someone else will enjoy {item}, {year}.'], ['Your guests deserve better.', 'Probably. {item} by {maker}.']], wink: [['Aged better than any of us.', '{item} · {maker} · {year}'], ['Pairs well with bragging.', '{item}, {year}. From the cellar of {owner}.']] },
+    car: { irony: [['Terribly impractical.', '{item}. Two seats, no cup holder, zero regrets.'], ['Uses a little petrol.', 'And a lot of admiration. {item} by {maker}.']], sarcasm: [['Your neighbour will hate this.', 'That is the point. {item}, {year}.'], ['Sure, keep the family estate car.', 'It is very sensible. {item} is not.']], wink: [['Goes fast. Parks slowly.', 'Everyone looks. {item} by {maker}.'], ['Garage not included.', 'Smile included. {item}, {year}.']] },
+    watch: { irony: [['It tells the time.', 'So does your phone. Your phone is not {item}.'], ['Completely useless after midnight.', 'Unless you like to look good. {item}.']], sarcasm: [['Still checking your phone for the time?', 'Adorable. {item} by {maker}.'], ['A watch? In this economy?', 'Yes. Especially {item}.']], wink: [['Always on time. Fashionably.', '{item} · {maker} · {year}'], ['Time flies. In style.', '{item} by {maker}. Ask {owner}.']] },
+    art: { irony: [['It is just paint on canvas.', 'Very expensive paint. {item} by {maker}.'], ['Nobody will notice it.', 'Said no one, ever, about {item}.']], sarcasm: [['Your walls are fine. If you like beige.', '{item}, {maker}, {year}.'], ['Another poster from the furniture store?', 'Bold. Or there is {item}.']], wink: [['Hang it upside down. We will not tell.', '{item} by {maker}.'], ['Looks great above a sofa.', 'Any sofa. {item}, {year}.']] }
+  }
+};

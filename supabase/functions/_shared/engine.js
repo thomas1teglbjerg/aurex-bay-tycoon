@@ -7,7 +7,8 @@ import * as LOG from './logistics.js';
 import * as LIFE from './life.js';
 import * as TAL from './talent.js';
 import * as BR from './brand.js';
-export { OPS, LOG, LIFE, TAL, BR };
+import * as ADS from './ads.js';
+export { OPS, LOG, LIFE, TAL, BR, ADS };
 OPS.setFreightQuote((cid, v, q, route) => LOG.freight(cid, v, q, route));
 
 const TRADE_MULT = { Boom: 1.3, Stable: 1, Recession: 0.6, Crisis: 0.4 };
@@ -397,6 +398,7 @@ function weekBoundary(city, wk, monthEnd) {
     city.listings.forEach((l) => { if (l.ops && l.owner) OPS.weekStep(city, CTX, l, wk); });
     if (city.life) LIFE.weekStep(city, wk, LCTX);
   }
+  ADS.weekStep(city, wk / 48, CTX);
   planWeek(city, wk);
 }
 function stepWeek(city, wk) { runAgenda(city, wk / 48); if (wk % 4 === 0) monthBoundary(city, wk / 4); else weekBoundary(city, wk); }
@@ -477,7 +479,7 @@ const AGENDA = {
   },
   hit: (city, e) => {
     const l = listing(city, e.lid); if (!l || !l.owner || l.owner.k !== 'p') return; const p = city.players[l.owner.id]; if (!p) return;
-    if (!hasHead(city, l, p, 'sofia') && OPS.automation(l, 'social') <= 0) return;
+    if (!hasHead(city, l, p, 'sofia') && OPS.automation(l, 'social') <= 0) return; // Marketing department
     const m = city.m, film = l.type === 'film', v = r2((film ? 8 : 3) * SIZES[l.size].mult); p.cash += v; p.inf += 1;
     if (film) { feed(p, m, 'Your new film is a blockbuster', `+${v} M and +1 Influence.`, 'good'); if (!p.bot) news(city, m, `${p.name} scores a blockbuster`, 'Lines around the block in Crown Hills.', 'info'); }
     else { feed(p, m, `${l.title || TYPES[l.type].name} has a hit single`, `+${v} M and +1 Influence.`, 'good'); if (!p.bot) news(city, m, `${p.name}'s studio has a hit`, `${l.title || TYPES[l.type].name} is on every playlist in Aurex Bay.`, 'good'); }
@@ -523,6 +525,7 @@ function monthBoundary(city, m) {
   decisionsMonthly(city, m);
   botHoldingsAct(city, m);
   botSocial(city, m);
+  ADS.botMonth(city, (id) => !!(city.players[id] && city.players[id].bot));
   Object.values(city.players).forEach((p) => solvency(city, p, m));
   Object.values(city.players).forEach((p) => {
     p.hist.push([m, netWorth(city, p.id)]); if (p.hist.length > 130) p.hist.shift();
@@ -947,6 +950,13 @@ function applyAs(city, pid, p, action, a, now) {
         return ok(`${(boss.team && boss.team[spec] ? TAL.PERSON[boss.team[spec]].name : staffDef(spec).name)} now leads ${d.name} at ${TYPES[l.type].name}.`);
       }
       return err('Unknown action.');
+    }
+    case 'adLaunch': case 'adStop': {
+      const l = listing(city, a.lid); if (!l || !canRun(city, pid, l)) return err('You do not run this company.');
+      if (action === 'adStop') return ADS.stop(city, l);
+      const hq = l.owner.k === 'h' ? city.holdings[l.owner.id] : null;
+      const payer = hq ? { get cash() { return hq.treasury; }, set cash(v) { hq.treasury = v; } } : p;
+      return ADS.launch(city, p, l, a, payer);
     }
     case 'unassignHead': { if (a.coop) { const h = city.holdings[a.coop]; if (!h || !h.members[pid]) return err('Not your coop.'); unassign(city, TAL.coopEmp(city, h), a.spec); } else unassign(city, p, a.spec); return ok(); }
     case 'post': { const l = listing(city, a.lid); if (!l || !canSeeCompany(city, pid, l)) return err('Only the owner and their coop partners can post here.'); if (!l.ops) return err('This company is not running yet.'); return OPS.post(l, p, a.text, now); }

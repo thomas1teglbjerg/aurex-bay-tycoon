@@ -274,7 +274,7 @@ export function marketMonth(city) {
 // x = extra lines the engine knows about: passive income (ypi), maintenance, specialist salaries (heads)
 export function closeMonth(l, m, x = {}) {
   const o = l.ops, rc = runningCosts(l), c = o.cur;
-  o.hist.push({ m, b2c: r2(c.b2c), goods: r2(c.goods), sup: r2(c.sup), fr: r4(c.fr || 0), run: r2(rc.total / 12), sal: r4(rc.salaries / 12), bud: r4(rc.budgets / 12), workers: rc.workers || 0,
+  o.hist.push({ m, b2c: r2(c.b2c), goods: r2(c.goods), sup: r2(c.sup), fr: r4(c.fr || 0), run: r2(rc.total / 12), sal: r4(rc.salaries / 12), bud: r4(rc.budgets / 12 + (c.ads || 0)), workers: rc.workers || 0,
     ypi: r4(x.ypi || 0), maint: r4(x.maint || 0), heads: r4(x.heads || 0), units: o.last ? o.last.units : 0, sold: r2(c.sold || 0), orders: c.orders || 0, eff: r2(o.eff) });
   if (o.hist.length > 24) o.hist.shift();
   o.cur = { b2c: 0, goods: 0, sup: 0, fr: 0, sold: 0, orders: 0 };
@@ -507,7 +507,7 @@ export function tasks(city, l) {
   const outs = Object.keys(RECIPES[l.type].out).filter((g) => (o.inv[g] || 0) >= 1);
   if (automation(l, 'sales') < 1 && outs.length) out.push({ id: 'sellSurplus', dept: 'sales', label: `Sell surplus ${outs.map((g) => GOODS[g].name.toLowerCase()).join(' and ')}` });
   if (automation(l, 'sales') < 1 && o.cd.findCustomers !== m) out.push({ id: 'findCustomers', dept: 'sales', label: hotel ? 'Find new booking partners' : 'Find new clients', interactive: true });
-  if (o.depts.social && automation(l, 'social') === 0 && o.cd.postCampaign !== m) out.push({ id: 'postCampaign', dept: 'social', label: 'Shoot a social media campaign', interactive: true });
+  if (o.depts.social && automation(l, 'social') === 0 && o.cd.postCampaign !== m) out.push({ id: 'postCampaign', dept: 'social', label: 'Shoot a marketing campaign', interactive: true });
   if (automation(l, 'hr') === 0 && o.morale < 70 && o.cd.teamMeeting !== m) out.push({ id: 'teamMeeting', dept: 'hr', label: `Morale is ${Math.round(o.morale)}: hold a team meeting`, urgent: o.morale < 35, interactive: true });
   if (o.depts.finance && automation(l, 'finance') === 0 && o.booksM !== m) out.push({ id: 'reviewBooks', dept: 'finance', label: 'Close the monthly books', interactive: true });
   if (o.depts.rnd && automation(l, 'rnd') === 0 && o.cd.runExperiment !== m) out.push({ id: 'runExperiment', dept: 'rnd', label: 'Run an R&D experiment', interactive: true });
