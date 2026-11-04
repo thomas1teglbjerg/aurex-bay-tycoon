@@ -1,7 +1,7 @@
 // Aurex Bay Tycoon — game engine.
 // Pure functions over one plain "city" object, so the exact same rules run in the browser demo
 // and server-side in the Supabase Edge Function. Time is real time: 1 game year = 1 real week (speed 1).
-import { DISTRICTS, TYPES, SYNERGY, SIZES, LISTINGS, STAFF, STOCKS, WORLD, DECISIONS, HAPPENINGS, BOTS, CONFIG, VINTAGE, VIP, DEPT_DEFAULTS, WORKER, GOODS, TAKEOVER, SOMMELIER, placeOn } from './content.js';
+import { DISTRICTS, TYPES, SYNERGY, SIZES, LISTINGS, STAFF, STOCKS, WORLD, DECISIONS, HAPPENINGS, BOTS, CONFIG, VINTAGE, VIP, DEPT_DEFAULTS, WORKER, GOODS, TAKEOVER, SOMMELIER, CRAFT, placeOn } from './content.js';
 import * as OPS from './ops.js';
 import * as LOG from './logistics.js';
 import * as LIFE from './life.js';
@@ -422,12 +422,14 @@ function planWeek(city, wk) {
     // a rare VIP guest books a hotel; a better reputation draws them more often
     if (OPS.hosts(l) && rand() < VIP.week * (0.5 + l.ops.rep / 100)) plan(city, inWeek(wk), 'vip', { lid: l.id });
   });
-  // vineyards harvest once a year, each in its own week of the autumn
-  city.listings.forEach((l) => { if (l.type === 'vineyard' && l.owner && wk % 48 === harvestWeek(l)) plan(city, inWeek(wk), 'vintage', { lid: l.id }); });
+  // vineyards harvest once a year, each in its own week of the autumn; auto repair shops build a tuner car for the spring show (CRAFT)
+  city.listings.forEach((l) => { if (makes(l) && l.owner && wk % 48 === harvestWeek(l)) plan(city, inWeek(wk), 'vintage', { lid: l.id }); });
   // the next world card lands somewhere in the first half of the quarter
   if (wk % 12 === 0) plan(city, (wk + 0.5 + rand() * 6) / 48, 'world');
 }
-export const harvestWeek = (l) => VINTAGE.harvest + hashId(l.id) % 6;
+// the company makes a collectible once a year (CRAFT in content.js); a type whose car list is still empty makes nothing
+export const makes = (l) => { const cf = l && CRAFT[l.type]; return !!cf && !(cf.spec.models && !cf.spec.models.length); };
+export const harvestWeek = (l) => (CRAFT[l.type] || CRAFT.vineyard).spec.harvest + hashId(l.id) % 6;
 // the specialists leading a department in this company (ratings), the ones who make a better vintage
 function leadRatings(city, l) {
   const p = bossOf(city, l.owner); if (!p || p.bot || !city.talent) return [];
@@ -441,8 +443,8 @@ export function sommeliers(city, l) {
 }
 function vintageExtra(city, l) { return sommeliers(city, l).reduce((a, tid) => ({ chance: a.chance + SOMMELIER[tid].chance, bump: a.bump + SOMMELIER[tid].bump }), { chance: 0, bump: 0 }); }
 export function vintageOdds(city, l) {
-  const h = leadRatings(city, l), sum = h.reduce((a, r) => a + r, 0), x = vintageExtra(city, l);
-  return { heads: h.length, chance: Math.min(VINTAGE.maxChance, VINTAGE.chance + VINTAGE.perHead * h.length + x.chance), bump: Math.min(VINTAGE.maxBump, VINTAGE.bump * sum + x.bump), top: VINTAGE.top[l.size], somm: sommeliers(city, l) };
+  const V = (CRAFT[l.type] || CRAFT.vineyard).spec, h = leadRatings(city, l), sum = h.reduce((a, r) => a + r, 0), x = vintageExtra(city, l);
+  return { heads: h.length, chance: Math.min(V.maxChance, V.chance + V.perHead * h.length + x.chance), base: V.chance, bump: Math.min(V.maxBump, V.bump * sum + x.bump), top: V.top[l.size], somm: sommeliers(city, l) };
 }
 function runAgenda(city, g) {
   if (!city.agenda || !city.agenda.length) return;
@@ -466,16 +468,19 @@ const AGENDA = {
     happening(city, l, pick(HAPPENINGS));
   },
   vintage: (city, e) => {
-    const l = listing(city, e.lid); if (!l || !l.owner || l.type !== 'vineyard') return;
+    // the yearly collectible: a vintage at a vineyard, a tuner car at an auto repair shop (CRAFT)
+    const l = listing(city, e.lid); if (!l || !l.owner || !makes(l)) return;
     const yr = Math.floor(city.m / 12); if (l.vintY === yr) return; l.vintY = yr;
+    const w = CRAFT[l.type].words, wine = CRAFT[l.type].cat === 'wine';
     const r = LIFE.vintage(city, l, { heads: leadRatings(city, l), extra: vintageExtra(city, l), name: l.title || TYPES[l.type].name });
     const co = `${l.title || TYPES[l.type].name} in ${l.district}`;
-    if (!r.def) { notifyOwner(city, l, `Harvest at ${co}`, `A good year for drinking wine, but nothing worth laying down. Next harvest in a year (chance ${Math.round(r.chance * 100)}%).`, 'info'); return; }
-    const d = r.def;
-    // run by bots or an autopilot coop: the cases go straight to the wine merchant
+    if (!r.def) { notifyOwner(city, l, wine ? `Harvest at ${co}` : `${w.event[0].toUpperCase() + w.event.slice(1)} at ${co}`, wine ? `A good year for drinking wine, but nothing worth laying down. Next harvest in a year (chance ${Math.round(r.chance * 100)}%).` : `${w.none} Next ${w.event} in a year (chance ${Math.round(r.chance * 100)}%).`, 'info'); return; }
+    const d = r.def, n = (k) => `${k} ${k > 1 ? w.units : w.unit}`;
+    // run by bots or an autopilot coop: everything goes straight to the dealer
     if (isManaged(city, l)) { const v = LIFE.cellarSellAll(city, l, d.id); credit(city, l.owner, v); return; }
-    notifyOwner(city, l, `${co} bottled a ${d.rarity.toLowerCase()} vintage`, `${d.ed} case${d.ed > 1 ? 's' : ''} of ${d.name} are in the estate cellar, worth about ${Math.round(LIFE.itemValue(city, d.id) * 1e4) / 1e4} M each. Sell them to the wine merchant, at auction or move them to your own cellar.`, 'good');
-    if (d.rarity === 'Epic' || d.rarity === 'Legendary') news(city, city.m, `${co} bottles a ${d.rarity.toLowerCase()} vintage`, `${d.name}: only ${d.ed} case${d.ed > 1 ? 's' : ''} exist.`, 'info');
+    const head = wine ? `${co} bottled a ${d.rarity.toLowerCase()} vintage` : `${co} ${w.made} a ${d.rarity.toLowerCase()} ${w.item}`;
+    notifyOwner(city, l, head, `${wine ? `${n(d.ed)} of ${d.name} are` : `${n(d.ed)}: ${d.name}. ${d.ed > 1 ? 'They are' : 'It is'}`} in the ${w.store}, worth about ${Math.round(LIFE.itemValue(city, d.id) * 1e4) / 1e4} M each. Sell to the ${w.dealerKind}, at auction or move to your ${w.home}.`, 'good');
+    if (d.rarity === 'Epic' || d.rarity === 'Legendary') news(city, city.m, wine ? `${co} bottles a ${d.rarity.toLowerCase()} vintage` : `${co} unveils a ${d.rarity.toLowerCase()} ${w.item}`, `${d.name}: only ${n(d.ed)} exist${d.ed > 1 ? '' : 's'}.`, 'info');
   },
   hit: (city, e) => {
     const l = listing(city, e.lid); if (!l || !l.owner || l.owner.k !== 'p') return; const p = city.players[l.owner.id]; if (!p) return;

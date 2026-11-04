@@ -2,7 +2,7 @@
 // Your own wallet (separate from the empire), homes as investments, and collections of art, wine,
 // watches and cars that gain or lose value over time. Collections and homes add up to Prestige,
 // which gives perks back in the business game. Pure functions over the city object, like the engine.
-import { HOMES, ROOMS, LIFESTYLES, SALARIES, TAX, LIFE, RARITY, PRESTIGE_TIERS, COLLECT_CATS, COLLECTIBLES, SETS, DINNER, VINTAGE, SIZES } from './content.js';
+import { HOMES, ROOMS, LIFESTYLES, SALARIES, TAX, LIFE, RARITY, PRESTIGE_TIERS, COLLECT_CATS, COLLECTIBLES, SETS, DINNER, VINTAGE, SIZES, CRAFT } from './content.js';
 
 const r2 = (v) => Math.round(v * 100) / 100;
 const r4 = (v) => Math.round(v * 10000) / 10000;
@@ -13,7 +13,7 @@ const err = (msg) => ({ ok: false, msg });
 const CATS = ['art', 'wine', 'watch', 'car'];
 export const HOME = Object.fromEntries(HOMES.map((h) => [h.id, h]));
 export const ITEM = Object.fromEntries(COLLECTIBLES.map((c) => [c.id, c]));
-// wines bottled by players' vineyards live in city.life.made and join the catalogue here (server and browser)
+// collectibles made by players' companies (vineyard wine, tuner cars) live in city.life.made and join the catalogue here (server and browser)
 export function register(city) { if (city && city.life && city.life.made) Object.assign(ITEM, city.life.made); }
 export const isMade = (c) => !!(c && c.lid);
 let seq = 0;
@@ -45,7 +45,8 @@ export function ensurePlayer(city, p) {
 // ---------------------------------------------------------------- values
 const gNow = (city) => city.m / 12;
 function ageMult(c, g) {
-  if (!c.peak || c.peak >= 50) return 1 + 0.02 * g; // spirits just keep improving
+  if (!c.peak) return (1 + 0.02 * g) / (1 + 0.02 * (c.g0 || 0)); // cars and the like gain slowly from when they were made
+  if (c.peak >= 50) return 1 + 0.02 * g; // spirits just keep improving
   const f = (x) => (x <= c.peak ? 1 - 0.035 * (c.peak - x) : 1 - 0.07 * (x - c.peak));
   return Math.max(0.25, f(g)) / Math.max(0.25, f(c.g0 || 0)); // g0: when a player's vineyard bottled it
 }
@@ -73,7 +74,7 @@ export function homeValue(city, h) { const def = HOME[h.hid]; return def.price *
 export const unitsLeft = (city, hid) => HOME[hid].units - Object.values(city.players).reduce((a, p) => a + (p.life ? p.life.homes.filter((h) => h.hid === hid).length : 0), 0);
 export const ownedCount = (city, cid) => Object.values(city.players).reduce((a, p) => a + (p.life ? p.life.items.filter((i) => i.cid === cid).length : 0), 0);
 const onAuction = (city, cid) => city.life.lots.filter((l) => l.cid === cid && !l.seller).length;
-// cases still in a vineyard's own cellar (also the ones it has put up for auction)
+// cases / cars still in the company's own cellar or garage (also the ones it has put up for auction)
 export const inCellars = (city, cid) => (city.listings || []).reduce((a, l) => a + (l.cellar ? l.cellar.filter((x) => x.cid === cid).length : 0), 0);
 export const available = (city, cid) => ITEM[cid].ed - ownedCount(city, cid) - onAuction(city, cid) - (isMade(ITEM[cid]) ? inCellars(city, cid) : 0);
 
@@ -182,7 +183,7 @@ function resolveLot(city, lot, m, ctx) {
   const estate = lot.lid ? (city.listings || []).find((x) => x.id === lot.lid) : null, cs = estate && (estate.cellar || []).find((x) => x.uid === lot.uid);
   const sellerP = lot.seller && !lot.lid ? city.players[lot.seller] : null;
   if (!winner) {
-    if (cs) { delete cs.lot; ctx.notify(city, estate, `${c.name} did not sell`, 'No bid reached the reserve. The case is back in the estate cellar.', 'info'); }
+    if (cs) { delete cs.lot; ctx.notify(city, estate, `${c.name} did not sell`, `No bid reached the reserve. The ${craftOf(estate).words.unit} is back in the ${craftOf(estate).words.store}.`, 'info'); }
     if (sellerP) { const it = sellerP.life.items.find((i) => i.uid === lot.uid); if (it) delete it.lot; if (!sellerP.bot) ctx.feed(sellerP, m, `${c.name} did not sell`, 'No bid reached the reserve. The piece is back in your home.', 'info'); }
     Object.keys(lot.bids).forEach((pid) => { const p = city.players[pid]; if (p && !p.bot) ctx.feed(p, m, `${c.name} went unsold`, 'Nobody reached the reserve price.', 'info'); });
     return;
@@ -385,22 +386,23 @@ export function act(city, p, action, a, ctx) {
       return ok(`Donated. You get a ${r2(credit)} M tax credit and lasting prestige.`);
     }
     case 'itemCellar': {
-      // a case of wine in your vineyard's own cellar: sell it to the merchant, auction it, or take it home
-      const l = (city.listings || []).find((x) => x.id === a.lid); if (!l || !ctx.canRun || !ctx.canRun(l)) return err('This is not your vineyard.');
-      const cs = (l.cellar || []).find((x) => x.uid === a.uid); if (!cs) return err('That case is no longer in the cellar.');
+      // a case of wine in your vineyard's cellar or a tuner car in your workshop garage: sell it to the dealer, auction it, or take it home
+      const l = (city.listings || []).find((x) => x.id === a.lid); if (!l || !ctx.canRun || !ctx.canRun(l)) return err('This is not your company.');
+      const w = craftOf(l).words;
+      const cs = (l.cellar || []).find((x) => x.uid === a.uid); if (!cs) return err(`That ${w.unit} is no longer in the ${w.store}.`);
       const c = ITEM[cs.cid], v = itemValue(city, cs.cid);
-      if (a.how === 'withdraw') { if (!cs.lot) return err('Not at auction.'); city.life.lots = city.life.lots.filter((x) => x.id !== cs.lot); delete cs.lot; return ok('Withdrawn from the auction. The case is back in the cellar.'); }
-      if (cs.lot) return err('This case is up for auction.');
+      if (a.how === 'withdraw') { if (!cs.lot) return err('Not at auction.'); city.life.lots = city.life.lots.filter((x) => x.id !== cs.lot); delete cs.lot; return ok(`Withdrawn from the auction. The ${w.unit} is back in the ${w.store}.`); }
+      if (cs.lot) return err(`This ${w.unit} is up for auction.`);
       if (a.how === 'auction') { cs.lot = uid('lot'); city.life.lots.push({ id: cs.lot, cid: cs.cid, est: r4(v), endM: m + 1, bids: {}, seller: p.id, uid: cs.uid, lid: l.id, tier: lotTier(c) }); return ok(`${c.name} goes under the hammer at Aurex & Co. at the end of the month. Estimate ${r4(v)} M. The money goes to the company.`); }
       if (a.how === 'take') {
-        if (l.owner.k !== 'p') return err('Wine from a co-owned estate stays with the company. Sell it instead.');
-        if (roomFree(p, 'wine') < 1) return err(roomMsg(p, 'wine'));
+        if (l.owner.k !== 'p') return err(`A ${w.item} from a co-owned company stays with the company. Sell it instead.`);
+        if (roomFree(p, c.cat) < 1) return err(roomMsg(p, c.cat));
         l.cellar = l.cellar.filter((x) => x !== cs); L.items.push({ uid: cs.uid, cid: cs.cid, m, cost: 0, lent: false });
-        return ok(`${c.name} is in your own cellar now. Keep it, trade it with other players, give it away or serve it at a dinner.`);
+        return ok(`${c.name} is in your ${w.home} now. Keep it, trade it with other players or give it away${c.cat === 'wine' ? ' or serve it at a dinner' : ''}.`);
       }
       const all = a.all ? l.cellar.filter((x) => x.cid === cs.cid && !x.lot) : [cs], price = r4(v * LIFE.dealerBuyback * all.length);
       l.cellar = l.cellar.filter((x) => !all.includes(x)); ctx.credit(city, l.owner, price); toDealer(city, cs.cid);
-      return ok(`Sold ${all.length > 1 ? `${all.length} cases` : 'the case'} to Cellar Door for ${r4(price)} M. The money goes to the company.`);
+      return ok(`Sold ${all.length > 1 ? `${all.length} ${w.units}` : `the ${w.unit}`} to ${w.dealer} for ${r4(price)} M. The money goes to the company.`);
     }
     case 'tradePropose': {
       const to = city.players[a.to]; if (!to || to.id === p.id) return err('Pick a player.'); ensurePlayer(city, to);
@@ -435,27 +437,38 @@ export function act(city, p, action, a, ctx) {
   }
   return null;
 }
-// ---------------------------------------------------------------- vineyards
-// once a year at harvest: a chance to bottle a collectible wine. o.heads = ratings of the specialists leading the estate.
+// ---------------------------------------------------------------- company-made collectibles (vineyard wine, tuner cars)
+// once a year: a chance to make a collectible. The odds come from CRAFT[l.type].spec (VINTAGE for vineyards, TUNER for auto repair).
+// o.heads = ratings of the specialists leading the company, o.extra = sommelier bonuses, o.name = the company's name.
 const RAR = ['Common', 'Rare', 'Epic', 'Legendary'];
+export const craftOf = (l) => CRAFT[l && l.type] || CRAFT.vineyard;
 export function vintage(city, l, o) {
-  ensure(city); const V = VINTAGE, m = city.m, g = m / 12, year = Math.floor(m / 12) + 1, heads = o.heads || [], x = o.extra || { chance: 0, bump: 0 };
+  ensure(city); const cf = craftOf(l), V = cf.spec, m = city.m, g = m / 12, year = Math.floor(m / 12) + 1, heads = o.heads || [], x = o.extra || { chance: 0, bump: 0 };
   const chance = Math.min(V.maxChance, V.chance + V.perHead * heads.length + x.chance);
+  if (V.models && !V.models.length) return { chance: 0, def: null };
   if (rand() >= chance) return { chance, def: null };
   const odds = V.odds[l.size] || V.odds.M, top = RAR.indexOf(V.top[l.size] || 'Legendary');
   let t = RAR.reduce((a, k) => a + odds[k], 0) * rand(), ri = 0;
   for (let i = 0; i < RAR.length; i++) { t -= odds[RAR[i]]; if (t <= 0 && odds[RAR[i]] > 0) { ri = i; break; } }
   if (rand() < Math.min(V.maxBump, V.bump * heads.reduce((a, r) => a + r, 0) + x.bump)) ri++;
-  const rarity = RAR[Math.min(ri, top)], [style, color] = pick(V.styles[rarity]), [lo, hi] = V.value[rarity];
+  const rarity = RAR[Math.min(ri, top)], [lo, hi] = V.value[rarity];
   const id = uid('v'), ed = Math.max(1, Math.round(V.cases[rarity] * SIZES[l.size].mult * (0.8 + rand() * 0.4)));
-  const def = { id, cat: 'wine', name: `${o.name} ${style} Y${year}`, maker: o.name, year: `Y${year}`, rarity, v: r4((lo + rand() * (hi - lo)) * (1 + 0.1 * ((l.level || 1) - 1))), ed,
-    peak: r2(g + (color === 'sparkling' ? 2 + rand() * 3 : 3 + rand() * 7)), g0: r4(g), medium: `Case of 6 · ${color} · bottled Y${year}`, lid: l.id, madeM: m };
+  const base = { id, cat: cf.cat, maker: o.name, year: `Y${year}`, rarity, v: r4((lo + rand() * (hi - lo)) * (1 + 0.1 * ((l.level || 1) - 1))), ed, g0: r4(g), lid: l.id, madeM: m };
+  let def;
+  if (V.models) {
+    // a car: the rarity decides which model can come out of the workshop, then a trim
+    const pool = V.models.filter((k) => k.rar.includes(rarity)), mo = pick(pool.length ? pool : V.models);
+    def = { ...base, v: r4(base.v * (mo.vx || 1)), name: `${mo.name} ${pick(V.trims[rarity])}`, model: mo.id, pic: mo.pic, medium: `${mo.body} · built Y${year} by ${o.name}` };
+  } else {
+    const [style, color] = pick(V.styles[rarity]);
+    def = { ...base, name: `${o.name} ${style} Y${year}`, peak: r2(g + (color === 'sparkling' ? 2 + rand() * 3 : 3 + rand() * 7)), medium: `Case of 6 · ${color} · bottled Y${year}` };
+  }
   city.life.made[id] = def; ITEM[id] = def;
   city.life.items[id] = { f: r4(0.92 + rand() * 0.16), h: [] }; city.life.items[id].h.push(r4(itemValue(city, id)));
   l.cellar = l.cellar || []; for (let k = 0; k < ed; k++) l.cellar.push({ uid: uid('i'), cid: id, m });
   return { chance, def };
 }
-// all cases of one vintage go to the wine merchant; returns what the estate is paid
+// everything of one run goes to the dealer (wine merchant / car dealer); returns what the company is paid
 export function cellarSellAll(city, l, cid) {
   const all = (l.cellar || []).filter((x) => x.cid === cid && !x.lot); if (!all.length) return 0;
   l.cellar = l.cellar.filter((x) => !all.includes(x)); toDealer(city, cid);

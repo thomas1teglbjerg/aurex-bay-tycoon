@@ -501,6 +501,44 @@ export const VINTAGE = {
   value: { Common: [0.012, 0.02], Rare: [0.025, 0.05], Epic: [0.08, 0.12], Legendary: [0.2, 0.3] },
   styles: { Common: [['Table Red', 'red'], ['Rosé', 'rosé'], ['Coastal White', 'white']], Rare: [['Reserve', 'red'], ['Pinot Noir', 'red'], ['Brut', 'sparkling']], Epic: [['Grand Reserve', 'red'], ['Single Vineyard', 'red'], ['Blanc de Blancs', 'sparkling']], Legendary: [['Grand Cru', 'red'], ['Cuvée Héritage', 'red']] }
 };
+// Auto repair shops build a collectible tuner car once a year for the Aurex Bay Tuner Show. Same odds model as VINTAGE;
+// the rarity picks the model (each model has the rarities it can come in) and a trim. builds = how many cars of one run.
+export const TUNER = {
+  chance: 0.5, perHead: 0.08, maxChance: 0.85, bump: 0.04, maxBump: 0.6, harvest: 14,
+  odds: VINTAGE.odds, top: VINTAGE.top,
+  cases: { Common: 4, Rare: 3, Epic: 2, Legendary: 1 },
+  value: { Common: [0.05, 0.09], Rare: [0.12, 0.2], Epic: [0.3, 0.5], Legendary: [0.8, 1.2] },
+  models: [
+    { id: 'trailhawk', name: 'Rivermore Trailhawk', body: 'Lifted off-road SUV', pic: 'x-tuner-trailhawk', rar: ['Common', 'Rare', 'Epic'] },
+    { id: 'takemi', name: 'Takemi VTEC', body: 'Tuned sport sedan', pic: 'x-tuner-takemi', rar: ['Common', 'Rare', 'Epic'] },
+    { id: 'gtrs', name: 'Valtor GT-RS', body: 'Widebody turbo coupé', pic: 'x-tuner-gtrs', rar: ['Rare', 'Epic', 'Legendary'] }
+  ],
+  trims: { Common: ['Street', 'Daily Driver'], Rare: ['Stage 2', 'Sport'], Epic: ['Stage 3', 'Track Spec'], Legendary: ['Time Attack', 'One-Off'] }
+};
+// Car dealerships get their own collectible cars on the same model (never tuner cars): mid-range Valtor Motors (Z37, R-500, and the
+// expensive GT-R) and exclusive Bergwald (never Common). vx = the model's value multiplier. An empty models list switches it off.
+export const DEALER_CARS = { ...TUNER, harvest: 22,
+  // Common = a mid-range Valtor; fewer cars per run than a tuner shop
+  odds: { S: { Common: 45, Rare: 40, Epic: 15, Legendary: 0 }, M: { Common: 35, Rare: 38, Epic: 21, Legendary: 6 }, L: { Common: 25, Rare: 38, Epic: 27, Legendary: 10 } },
+  cases: { Common: 3, Rare: 2, Epic: 1, Legendary: 1 },
+  value: { Common: [0.08, 0.14], Rare: [0.18, 0.3], Epic: [0.45, 0.7], Legendary: [1.1, 1.6] },
+  models: [
+    { id: 'va-z37', name: 'Valtor Z37', body: 'Sports coupé', pic: 'x-valtor-z37', rar: ['Common', 'Rare'] },
+    { id: 'va-r500', name: 'Valtor R-500', body: 'Roadster', pic: 'x-valtor-r500', rar: ['Common', 'Rare'], vx: 1.1 },
+    { id: 'va-gtr', name: 'Valtor GT-R', body: 'Supercar coupé', pic: 'x-valtor-gtr', rar: ['Epic', 'Legendary'], vx: 1.4 },
+    { id: 'bw-x7', name: 'Bergwald X7', body: 'Exclusive luxury SUV', pic: 'x-bergwald-x7', rar: ['Rare', 'Epic'] },
+    { id: 'bw-s7', name: 'Bergwald S7', body: 'Exclusive sportback saloon', pic: 'x-bergwald-s7', rar: ['Rare', 'Epic'] },
+    { id: 'bw-gt', name: 'Bergwald GT', body: 'Exclusive grand tourer coupé', pic: 'x-bergwald-gt', rar: ['Rare', 'Epic', 'Legendary'] },
+    { id: 'bw-crown', name: 'Bergwald Crown Hills', body: 'Exclusive stretched limousine', pic: 'x-bergwald-crown', rar: ['Epic', 'Legendary'] }
+  ],
+  trims: { Common: ['Signature'], Rare: ['Signature'], Epic: ['Launch Edition'], Legendary: ['Founders Edition'] } };
+// Companies that make a collectible once a year. spec = the odds table above; cat = the collection it joins.
+// words = what the UI and the notes call things (the output, one unit, where it waits, the shop that buys it, the yearly event).
+export const CRAFT = {
+  vineyard: { spec: VINTAGE, cat: 'wine', words: { item: 'vintage', unit: 'case', units: 'cases', store: 'estate cellar', home: 'own cellar', dealer: 'Cellar Door', dealerKind: 'wine merchant', event: 'harvest', box: 'Harvest & wine cellar', made: 'bottled', who: 'estate', place: 'cellar', empty: 'Wine you bottle lands here' } },
+  autorepair: { spec: TUNER, cat: 'car', words: { item: 'tuner car', unit: 'car', units: 'cars', store: 'workshop garage', home: 'own garage', dealer: 'Coastline Classics', dealerKind: 'classic car dealer', event: 'tuner show', box: 'Tuner builds & garage', made: 'built', who: 'shop', place: 'garage', none: 'The team worked on customer cars all season, but no build was good enough for the show.', empty: 'Tuner cars you build land here' } },
+  dealer: { spec: DEALER_CARS, cat: 'car', words: { item: 'collector car', unit: 'car', units: 'cars', store: 'showroom', home: 'own garage', dealer: 'Coastline Classics', dealerKind: 'classic car dealer', event: 'launch event', box: 'Collector cars & showroom', made: 'unveiled', who: 'dealership', place: 'showroom', none: 'Only regular stock this year, no collector edition for the launch.', empty: 'Collector cars from Valtor and Bergwald land here' } }
+};
 export const SETS = {
   kestrel: { name: 'The Kestrel Harbors', bonus: 0.12, prestige: 40 },
   crowns: { name: 'Okafor-Lind Crowns', bonus: 0.15, prestige: 40 },
