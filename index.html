@@ -136,6 +136,58 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .decision .in { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
 .decision h3 { margin: 0; font-family: var(--head); font-size: 16px; }
 .decision p { margin: 0; font-size: 14px; line-height: 1.4; }
+/* mail (Empire › Mail) */
+.mlist { display: flex; flex-direction: column; }
+.mrow { display: flex; gap: 10px; align-items: flex-start; text-align: left; width: 100%; padding: 10px 12px 10px 18px; border-top: 1px solid var(--line); position: relative; min-width: 0; }
+.mlist > .mrow:first-child { border-top: 0; }
+.mailbox .mrow { padding: 9px 0; }
+.mrow:hover { background: var(--panel-2); } .mrow.sel { background: #e8eef7; box-shadow: inset 3px 0 0 var(--band); }
+.mrow.unread::before { content: ""; position: absolute; left: 6px; top: 25px; width: 7px; height: 7px; border-radius: 50%; background: var(--info); }
+.mailbox .mrow.unread::before { left: -9px; }
+.mrow-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.mrow-h { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.mrow-h b { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mrow.unread .mrow-h b, .mrow.unread .mrow-s { font-weight: 700; }
+.mrow-h time { font-size: 11.5px; color: var(--ink-2); white-space: nowrap; flex: none; }
+.mrow-s { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mrow-x { font-size: 13px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mtag { font-style: normal; font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: #8a5a00; background: #fdf1d9; border: 1px solid #efd59b; border-radius: 5px; padding: 0 5px; margin-right: 6px; vertical-align: 1px; }
+.mface { width: 38px; height: 38px; border-radius: 50%; flex: none; background-size: cover; background-position: center 20%; border: 1px solid var(--line); display: grid; place-items: center; font-weight: 800; font-size: 13.5px; color: #fff; }
+.mface.ini { background: var(--mc); border-color: transparent; }
+.mface.gz { background: #111; color: #fff; font-family: 'Playfair Display', Georgia, serif; font-size: 19px; border-color: #111; }
+.mface.city { background: #7a5b17; color: #f2cf6e; border-color: transparent; }
+.mread header .mface { color: #fff; } .mread header .mface.gz { color: #fff; }
+.mface.lg { width: 48px; height: 48px; font-size: 16px; } .mface.gz.lg { font-size: 24px; }
+.mfold { display: flex; flex-wrap: wrap; gap: 6px; }
+.mfold button { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); font-size: 13.5px; font-weight: 700; color: var(--ink-2); display: inline-flex; gap: 6px; align-items: center; }
+.mfold button[aria-pressed="true"] { background: var(--band); border-color: var(--band); color: #fff; }
+.mfold u { text-decoration: none; font-size: 11.5px; min-width: 18px; padding: 0 5px; border-radius: 9px; background: var(--info); color: #fff; text-align: center; }
+.mailgrid { display: grid; grid-template-columns: 1fr; gap: 14px; align-items: start; }
+.mlistbox { overflow: hidden; }
+@media (min-width: 900px) { .mailgrid { grid-template-columns: minmax(280px, 0.85fr) minmax(0, 1.4fr); } .mreadbox { position: sticky; top: 0; } }
+@media (max-width: 899px) { .mailgrid.reading .mlistbox { display: none; } .mailgrid:not(.reading) .mreadbox { display: none; } }
+.mread { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 14px; }
+.mread header { display: flex; gap: 12px; align-items: flex-start; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.mread header > div { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mread h3 { margin: 0 0 2px; font-family: var(--head); font-size: 18px; line-height: 1.2; text-wrap: balance; }
+.mread header span { font-size: 13.5px; color: var(--ink-2); } .mread header span b { color: var(--ink); font-weight: 700; }
+.mread header time { font-size: 12px; color: var(--ink-2); }
+.mbody { font-size: 15px; line-height: 1.5; max-width: 62ch; } .mbody p { margin: 0 0 10px; }
+.mbody .mfx { font-size: 13.5px; color: var(--ink-2); border-left: 3px solid var(--line); padding-left: 10px; }
+.mbody .msign { margin: 4px 0 0; }
+.mopts, .mdone { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+.mdone b { font-size: 15px; } .mdone p { margin: 0; font-size: 14px; color: var(--ink-2); }
+.mco { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; text-align: left; width: 100%; } .mco:hover { border-color: var(--band); }
+.mnews { font-family: Georgia, 'Times New Roman', serif; }
+.mnews-mast { text-align: center; border-top: 3px double #111; border-bottom: 1px solid #111; padding: 8px 0 6px; margin-bottom: 10px; }
+.mnews-mast b { display: block; font-family: 'Playfair Display', Georgia, serif; font-size: 24px; letter-spacing: 0.01em; }
+.mnews-mast span { font-family: var(--body); font-size: 11.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-2); }
+.mnews-item { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.mnews-item b { display: block; font-family: 'Playfair Display', Georgia, serif; font-size: 17px; line-height: 1.25; color: var(--ink); }
+.mnews-item.lead b { font-size: 22px; } .mnews-item p { margin: 4px 0 0; font-size: 14.5px; line-height: 1.45; color: #333; }
+.mnews-ad { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.mnews-foot { font-family: var(--body); font-size: 13px; color: var(--ink-2); margin: 10px 0 0; }
+.lnk { color: var(--info); font-weight: 700; padding: 0; } .lnk:hover { text-decoration: underline; }
 .opt { text-align: left; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: #fff; display: flex; flex-direction: column; gap: 1px; }
 .opt b { font-size: 14.5px; } .opt span { font-size: 13px; color: var(--ink-2); }
 .opt:hover { border-color: var(--band); }

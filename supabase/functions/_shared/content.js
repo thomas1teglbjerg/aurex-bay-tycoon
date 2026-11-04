@@ -122,6 +122,48 @@ export const HAPPENINGS = [
   { id: 'heatwave', title: 'A busy day', text: 'Sunny weather brought a rush of customers to {co}.', kind: 'good', fx: { cust: 0.02, rep: 1 } }
 ];
 
+// Mail (Empire › Mail): a happening arrives as an e-mail from someone in the department it concerns.
+// body: what they write ({co} = the company); opts: the answers you can give, fx as in HAPPENINGS (cash in M × size),
+// gamble: [chance, fx when it works, fx when not]; d: the line under an answer (built from fx when left out).
+// safe: what a cautious autopilot answers when you leave the mail for two weeks. saved: the mail when the department handled it.
+export const MAIL_HAP = {
+  review: { dept: 'social', subj: 'A blogger loves us', body: 'A popular local blogger just raved about {co}. Do we put money behind it, or let it run by itself?',
+    opts: [{ l: 'Boost the post', fx: { cash: -0.02, rep: 3, cust: 0.05 } }, { l: 'Say thanks and let it run', safe: true, fx: { rep: 3, cust: 0.03 } }] },
+  press: { dept: 'sales', subj: 'We are in the Herald', body: 'The Aurex Bay Herald ran a story on {co} this morning. New faces are already coming in.' },
+  idea: { dept: 'ops', subj: 'A small fix from the floor', body: 'One of our people at {co} found a fix on the line that nobody had thought of. Should we reward it?',
+    opts: [{ l: 'Pay a small bonus', fx: { cash: -0.02, rp: 12, morale: 6 } }, { l: 'Thank them at the morning meeting', safe: true, fx: { rp: 12, morale: 3 } }] },
+  tip: { dept: 'hr', subj: 'Good mood on the team', body: 'A loyal customer tipped the whole crew at {co} today. Spirits are high.' },
+  refund: { dept: 'finance', subj: 'An old invoice was paid', body: 'A client who had forgotten about {co} finally paid up.' },
+  breakdown: { dept: 'ops', subj: 'A machine broke down', body: 'One of our machines at {co} broke down this morning. We can call the express repair service, or fix it ourselves over a few days.',
+    saved: 'A machine at {co} broke down this morning. The team had it running again before the shift ended. Nothing for you to do.',
+    opts: [{ l: 'Call the express repair', fx: { cash: -0.12, morale: -1 } }, { l: 'Fix it ourselves', safe: true, fx: { cash: -0.05, morale: -5, cust: -0.01 } }] },
+  complaint: { dept: 'social', subj: 'An angry post about us went viral', body: 'A customer of {co} posted an angry review last night and it is spreading fast. How do we answer?',
+    saved: 'A customer of {co} posted an angry review last night. We answered within the hour and turned it around. Nothing for you to do.',
+    opts: [{ l: 'Apologise and refund them', safe: true, fx: { cash: -0.02, rep: -1 } }, { l: 'Ignore it', fx: { rep: -3, cust: -0.02 } },
+      { l: 'Answer with a joke', d: 'Half the time it wins people over (reputation +3, customers +4%). Otherwise reputation −6, customers −4%.', fx: { gamble: [0.5, { rep: 3, cust: 0.04 }, { rep: -6, cust: -0.04 }] } }] },
+  inspection: { dept: 'legal', subj: 'City inspectors want to fine us', body: 'City inspectors went through {co} today and want to fine us over a missing permit. We can pay, or fight it.',
+    saved: 'City inspectors went through {co} today. Every permit was in order. No fine.',
+    opts: [{ l: 'Pay the fine', safe: true, fx: { cash: -0.1 } }, { l: 'Contest it', d: 'Even odds: no fine at all, or the fine plus legal costs (about twice as much).', fx: { gamble: [0.5, {}, { cash: -0.2 }] } }] },
+  theft: { dept: 'procurement', subj: 'Supplies went missing', body: 'Part of a delivery at {co} is gone. We can bring in a night guard and get some of it back, or write it off.',
+    saved: 'Part of a delivery at {co} looked missing, but we had counted everything. The crates turned up. Nothing for you to do.',
+    opts: [{ l: 'Hire a night guard', fx: { cash: -0.03, stock: 0.03 } }, { l: 'Write it off', safe: true, fx: { stock: 0.08 } }] },
+  sick: { dept: 'hr', subj: 'Half the team is sick', body: 'The flu is going around {co}. Half the team called in sick today.',
+    saved: 'The flu is going around {co}, but we had cover ready. Nobody noticed. Nothing for you to do.',
+    opts: [{ l: 'Bring in temps', fx: { cash: -0.04, morale: -1 } }, { l: 'Push through with who we have', safe: true, fx: { morale: -5 } }] },
+  heatwave: { dept: 'sales', subj: 'A busy day', body: 'Sunny weather brought a rush of customers to {co} today.' }
+};
+// people in your companies who write to you (a stable name per company and department)
+export const MAIL_NAMES = {
+  first: ['Maria', 'Jonas', 'Leila', 'Tom', 'Aisha', 'Pete', 'Hanna', 'Omar', 'Grace', 'Felix', 'Nora', 'Viktor', 'Rosa', 'Ben', 'Ines', 'Kai', 'Lucy', 'Mateo', 'Freya', 'Sami'],
+  last: ['Holt', 'Brandt', 'Moreau', 'Okafor', 'Lindqvist', 'Costa', 'Weber', 'Nakamura', 'Doyle', 'Petersen', 'Rossi', 'Haddad', 'Kowalski', 'Byrne', 'Sato', 'Vega']
+};
+// who sends a decision: someone in that company's department, or someone outside
+export const DEC_FROM = {
+  union: { dept: 'hr' }, wedding: { dept: 'sales' }, datasale: { dept: 'sales' }, fasttrack: { dept: 'legal' }, star: { dept: 'ops' }, session: { dept: 'ops' }, expansion: { dept: 'procurement' },
+  profile: { ext: ['Nina Alvarez', 'Business editor, Aurex Bay Gazette'], k: 'press' }, charity: { ext: ['Office of the Mayor', 'City Hall, Aurex Bay'], k: 'city' }
+};
+export const GAZETTE = { name: 'The Aurex Bay Gazette', role: 'Monthly business briefing', items: 5 };
+
 export const WORLD = [
   { id: 'boom', title: 'Economic Boom', econ: 'Boom', text: 'Consumer spending surges across Aurex Bay. Luxury stores report record sales and hotels are fully booked.', shock: { diamonds: 0.08, watches: 0.08, fashion: 0.06 }, at: [255, 470] },
   { id: 'recession', title: 'Recession Hits Aurex Bay', econ: 'Recession', text: 'Unemployment climbs and spending dries up. Investors flee to gold while banks tighten lending.', shock: { gold: 0.06 }, at: [830, 440] },
