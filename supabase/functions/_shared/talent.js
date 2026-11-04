@@ -80,12 +80,16 @@ function sign(city, p, tid, salary, years, m, quiet) {
   p.team = p.team || {}; p.team[t.kind] = tid; if (!p.staff.includes(t.kind)) p.staff.push(t.kind);
   city.tOffers = (city.tOffers || []).filter((o) => o.tid !== tid || o.status !== 'open');
 }
+const BYE = {
+  'They served their notice and are now a free agent. Other tycoons can sign them.': 'I have served my notice, so this is my last day. Thank you for the time here.',
+  'Their contract ran out before you renewed it. They are now a free agent.': 'My contract ran out before we renewed it, so I am a free agent now. Thank you for the time here.'
+};
 function release(city, tid, ctx, why) {
   const t = PERSON[tid], s = st(city, tid), p = who(city, s.owner);
   if (p) { ctx.unassign(city, p, t.kind); if (p.team[t.kind] === tid) delete p.team[t.kind]; p.staff = p.staff.filter((k) => k !== t.kind); }
   Object.assign(s, { owner: null, salary: 0, since: null, until: null, leave: null, notice: null, listed: null, stress: Math.max(10, s.stress - 30), boredom: 20 });
   city.tOffers = (city.tOffers || []).filter((o) => o.tid !== tid || o.status !== 'open');
-  if (p && why && !p.bot) ctx.feed(p, city.m, `${t.name} has left`, why, 'bad');
+  if (p && why && !p.bot) tell(city, ctx, p, t, 'bad', 'Goodbye', BYE[why] || why, null, `${t.name} has left`, why);
 }
 // every specialist of an employer becomes a free agent (a coop that is dissolved)
 export function releaseAll(city, emp, ctx) { ensure(city); TALENT.forEach((t) => { if (st(city, t.id).owner === emp.id) release(city, t.id, ctx, null); }); }
@@ -100,6 +104,14 @@ function transfer(city, tid, buyer, fee, salary, years, ctx) {
   return ok(`${t.name} joins your team.`);
 }
 
+// a specialist writes to their employer (Empire › Mail); without a mailbox (tests, old callers) it lands in the feed
+const openMail = (p, tid, tag) => (p.coop ? p.people : [p]).some((q) => (q.mail || []).some((x) => !x.done && x.opts && x.opts.some((o) => o.tag === tag && o.act && o.act[1].tid === tid)));
+const fromT = (city, t) => ({ n: t.name, r: title(city, t.id), tid: t.id });
+function tell(city, ctx, p, t, kind, subj, body, opts, feedTitle, feedText) {
+  if (ctx.mail) ctx.mail(city, p, { from: fromT(city, t), subj, body, kind, ...(opts ? { opts } : {}) });
+  else ctx.feed(p, city.m, feedTitle, feedText, kind);
+}
+
 // ---------------------------------------------------------------- monthly life of a specialist
 export function monthStep(city, m, ctx) {
   ensure(city);
@@ -108,7 +120,7 @@ export function monthStep(city, m, ctx) {
     if (!p) { s.stress = Math.max(5, s.stress - 10); s.boredom = Math.min(60, s.boredom + 2); s.sat = 70; return; }
     const human = !p.bot, away = human && ctx.inactive(p);
     // back from burnout leave
-    if (s.leave != null) { s.stress = Math.max(10, s.stress - 25); if (m >= s.leave) { s.leave = null; if (!p.staff.includes(t.kind)) p.staff.push(t.kind); if (human) ctx.feed(p, m, `${t.name} is back from leave`, 'Rested and ready to work.', 'good'); } return; }
+    if (s.leave != null) { s.stress = Math.max(10, s.stress - 25); if (m >= s.leave) { s.leave = null; if (!p.staff.includes(t.kind)) p.staff.push(t.kind); if (human) tell(city, ctx, p, t, 'good', 'I am back', 'Back from leave and properly rested. Ready to get going again.', null, `${t.name} is back from leave`, 'Rested and ready to work.'); } return; }
     const a = human ? p.assign && p.assign[t.kind] : { lid: true };
     const l = a && a.lid !== true ? ctx.listing(city, a.lid) : null;
     // workload: heading a department is work; a big company or an understaffed department is more work
@@ -119,7 +131,7 @@ export function monthStep(city, m, ctx) {
     s.boredom = clamp(s.boredom + (a ? R.boredomHead : R.boredomIdle) + (rand() - 0.5) * 2);
     if (p.bot && rand() < 0.15) { s.boredom = Math.max(0, s.boredom - 35); s.stress = Math.max(0, s.stress - 25); }
     if (a) s.xp += 1;
-    if (s.xp >= R.xpPerRating * s.rating && s.rating < 5) { s.rating++; if (human) ctx.feed(p, m, `${t.name} grew into a ${title(city, t.id)}`, `Stronger as a head, but their market value and salary expectations rise too. They now ask ${ask(city, t.id)} M a year.`, 'good'); }
+    if (s.xp >= R.xpPerRating * s.rating && s.rating < 5) { s.rating++; if (human) tell(city, ctx, p, t, 'good', 'A word about my role', `I have grown a lot in this job and people now call me a ${title(city, t.id).toLowerCase()}. I lead better than before, but my market value has gone up too: next time we talk contracts I will ask about ${ask(city, t.id)} M a year.`, null, `${t.name} grew into a ${title(city, t.id)}`, `Stronger as a head, but their market value and salary expectations rise too. They now ask ${ask(city, t.id)} M a year.`); }
     if (l && l.ops && l.ops.depts[DEPT_OF[t.kind]]) { l.ops.depts[DEPT_OF[t.kind]].hb = headBonus(s.rating); l.ops.depts[DEPT_OF[t.kind]].who = t.id; }
     // satisfaction moves toward pay, workload and challenge — and drops when nobody is there to lead
     const pay = (s.salary / ask(city, t.id) - 1) * 90;
@@ -128,17 +140,20 @@ export function monthStep(city, m, ctx) {
     // burnout
     if (s.stress >= R.burnout) {
       s.leave = m + R.leaveMonths; s.stress = 55; s.sat = clamp(s.sat - 10); p.staff = p.staff.filter((k) => k !== t.kind);
-      if (human) ctx.feed(p, m, `${t.name} burned out`, `On sick leave for ${R.leaveMonths} months. Their bonus as head is gone until they return. Lighter workloads and vacations prevent this.`, 'bad');
+      if (human) tell(city, ctx, p, t, 'bad', 'I have to stop for a while', `I am sorry, I cannot go on like this. My doctor has put me on sick leave for ${R.leaveMonths} months. My department runs without me until I am back. A lighter load or a vacation would have helped.`, null, `${t.name} burned out`, `On sick leave for ${R.leaveMonths} months. Their bonus as head is gone until they return. Lighter workloads and vacations prevent this.`);
       return;
     }
-    if (human && s.stress > 75 && rand() < 0.5) ctx.feed(p, m, `${t.name} is close to burnout`, `Stress ${Math.round(s.stress)}. Give them a vacation or hire more staff in their department.`, 'bad');
-    if (human && s.boredom > 75 && rand() < 0.4) ctx.feed(p, m, `${t.name} is bored`, 'Give them a new challenge or a new company to lead.', 'info');
+    if (human && s.stress > 75 && rand() < 0.5 && !openMail(p, t.id, 'stress')) tell(city, ctx, p, t, 'bad', 'I am running on empty', `The workload is too much right now (stress ${Math.round(s.stress)}). Could I take some time off? More staff in my department would help too. Otherwise I am afraid I will burn out.`,
+      [{ l: 'Give them a vacation', d: 'Away this month. Stress −45, satisfaction +6.', safe: true, act: ['tVacation', { tid: t.id }], tag: 'stress' }, { l: 'Ask them to hang in there', d: 'Satisfaction −4', tfx: { tid: t.id, sat: -4 } }], `${t.name} is close to burnout`, `Stress ${Math.round(s.stress)}. Give them a vacation or hire more staff in their department.`);
+    if (human && s.boredom > 75 && rand() < 0.4 && !openMail(p, t.id, 'bored')) tell(city, ctx, p, t, 'info', 'Looking for a new challenge', 'I have been doing the same thing for a while now. A new project, or a new company to lead, would get me going again.',
+      [{ l: 'Start a strategic project', d: `Costs ${r2(s.salary * 0.2)} M. Boredom −45, more experience.`, act: ['tChallenge', { tid: t.id }], tag: 'bored' }, { l: 'Not right now', d: 'Satisfaction −3', safe: true, tfx: { tid: t.id, sat: -3 } }], `${t.name} is bored`, 'Give them a new challenge or a new company to lead.');
     // notice and quitting
     if (s.notice != null) {
-      if (s.sat >= 42) { s.notice = null; if (human) ctx.feed(p, m, `${t.name} withdrew their notice`, 'They are happier now and will stay.', 'good'); }
+      if (s.sat >= 42) { s.notice = null; if (human) tell(city, ctx, p, t, 'good', 'I am staying', 'Things are better now, so I withdraw my notice. Thank you for listening.', null, `${t.name} withdrew their notice`, 'They are happier now and will stay.'); }
       else if (m >= s.notice) { release(city, t.id, ctx, 'They served their notice and are now a free agent. Other tycoons can sign them.'); return; }
     } else if (s.sat < R.quitBelow && rand() < (p.bot ? 0.15 : 0.45)) {
-      s.notice = m + R.notice; if (human) ctx.feed(p, m, `${t.name} handed in their notice`, `Satisfaction ${Math.round(s.sat)}. They leave in ${R.notice} months unless things improve: raise their pay, cut their workload or give them a challenge.`, 'bad');
+      s.notice = m + R.notice; if (human) tell(city, ctx, p, t, 'bad', 'My notice', `I am handing in my notice. I am not happy here (satisfaction ${Math.round(s.sat)}), and I will leave in ${R.notice} months unless something changes: better pay, less work or a real challenge.`,
+        [{ l: 'Pay a bonus', d: `${r2(s.salary * 0.25)} M. Satisfaction +10.`, act: ['tBonus', { tid: t.id }] }, { l: 'Raise their salary 15%', d: `${r2(s.salary * 1.15)} M a year from now on.`, act: ['tSalary', { tid: t.id, salary: r2(s.salary * 1.15) }] }, { l: 'Let them go', d: 'They leave when the notice runs out.', safe: true }], `${t.name} handed in their notice`, `Satisfaction ${Math.round(s.sat)}. They leave in ${R.notice} months unless things improve: raise their pay, cut their workload or give them a challenge.`);
     }
     // contracts
     const left = s.until - m;
@@ -147,7 +162,8 @@ export function monthStep(city, m, ctx) {
       else release(city, t.id, ctx, 'Their contract ran out before you renewed it. They are now a free agent.');
       return;
     }
-    if (human && (left === 3 || left === 1)) ctx.feed(p, m, `${t.name}'s contract ends in ${left} month${left > 1 ? 's' : ''}`, `Renew it in your Empire, or they become a free agent. They ask about ${renewAsk(city, t.id)} M a year.`, left === 1 ? 'bad' : 'info');
+    if (human && (left === 3 || left === 1)) tell(city, ctx, p, t, left === 1 ? 'bad' : 'info', 'About my contract', `My contract ends in ${left} month${left > 1 ? 's' : ''}. ${s.sat < 25 ? 'To be honest, I am not sure I want to stay.' : `I would like to stay on for ${renewAsk(city, t.id)} M a year.`}`,
+      s.sat < 25 ? null : [{ l: 'Renew for two years', d: `${renewAsk(city, t.id)} M a year`, act: ['tRenew', { tid: t.id, salary: renewAsk(city, t.id), years: 2 }] }, { l: 'Let the contract run out', d: 'They become a free agent.', safe: true }], `${t.name}'s contract ends in ${left} month${left > 1 ? 's' : ''}`, `Renew it in your Empire, or they become a free agent. They ask about ${renewAsk(city, t.id)} M a year.`);
   });
   // transfer offers to human owners that nobody answered
   (city.tOffers || []).forEach((o) => {
@@ -196,7 +212,10 @@ function offer(city, p, tid, fee, salary, years, ctx) {
   }
   if (city.tOffers.some((o) => o.tid === tid && o.from === p.id && o.status === 'open')) return err('You already have an offer on the table.');
   city.tOffers.push({ id: uid('to'), tid, from: p.id, to: owner.id, fee: r2(fee), salary: r2(salary), years, m: city.m, status: 'open' });
-  ctx.feed(owner, city.m, `${p.name} bids ${r2(fee)} M for ${t.name}`, 'Answer in your Empire inbox within two months.', 'info');
+  if (ctx.mail) ctx.mail(city, owner, { from: { n: p.name, r: p.coop ? 'Coop, transfer offer' : 'Transfer offer' }, subj: `Offer for ${t.name}`, kind: 'info', oid: city.tOffers[city.tOffers.length - 1].id,
+    body: `We would like to sign ${t.name}. We offer you a transfer fee of ${r2(fee)} M, and ${t.name.split(' ')[0]} ${r2(salary)} M a year for ${years} year${years > 1 ? 's' : ''}. You have two months to answer.`,
+    opts: [{ l: 'Sell', d: `+${r2(fee)} M`, act: ['tOfferAccept', { oid: city.tOffers[city.tOffers.length - 1].id }] }, { l: `Keep ${t.name.split(' ')[0]}`, d: 'The offer is declined.', safe: true, act: ['tOfferDecline', { oid: city.tOffers[city.tOffers.length - 1].id }] }] });
+  else ctx.feed(owner, city.m, `${p.name} bids ${r2(fee)} M for ${t.name}`, 'Answer in your Empire inbox within two months.', 'info');
   return ok(`Offer sent to ${owner.name}. They have two months to answer.`);
 }
 
