@@ -458,7 +458,7 @@ export function vintage(city, l, o) {
   if (V.models) {
     // a car: the rarity decides which model can come out of the workshop, then a trim
     const pool = V.models.filter((k) => k.rar.includes(rarity)), mo = pick(pool.length ? pool : V.models);
-    def = { ...base, name: `${mo.name} ${pick(V.trims[rarity])}`, model: mo.id, pic: mo.pic, medium: `${mo.body} · built Y${year} by ${o.name}` };
+    def = { ...base, v: r4(base.v * (mo.vx || 1)), name: `${mo.name} ${pick(V.trims[rarity])}`, model: mo.id, pic: mo.pic, medium: `${mo.body} · built Y${year} by ${o.name}` };
   } else {
     const [style, color] = pick(V.styles[rarity]);
     def = { ...base, name: `${o.name} ${style} Y${year}`, peak: r2(g + (color === 'sparkling' ? 2 + rand() * 3 : 3 + rand() * 7)), medium: `Case of 6 · ${color} · bottled Y${year}` };

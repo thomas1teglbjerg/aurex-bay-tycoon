@@ -515,13 +515,17 @@ export const TUNER = {
   ],
   trims: { Common: ['Street', 'Daily Driver'], Rare: ['Stage 2', 'Sport'], Epic: ['Stage 3', 'Track Spec'], Legendary: ['Time Attack', 'One-Off'] }
 };
-// Car dealerships unveil their own collectible Bergwald cars (exclusive German-style luxury) on the same model (never tuner cars). An empty models list switches it off.
+// Car dealerships get their own collectible cars on the same model (never tuner cars): mid-range Valtor Motors (Z37, R-500, and the
+// expensive GT-R) and exclusive Bergwald (never Common). vx = the model's value multiplier. An empty models list switches it off.
 export const DEALER_CARS = { ...TUNER, harvest: 22,
-  // exclusive cars: never Common, fewer per run
-  odds: { S: { Common: 0, Rare: 75, Epic: 25, Legendary: 0 }, M: { Common: 0, Rare: 60, Epic: 32, Legendary: 8 }, L: { Common: 0, Rare: 45, Epic: 40, Legendary: 15 } },
-  cases: { Common: 2, Rare: 2, Epic: 1, Legendary: 1 },
+  // Common = a mid-range Valtor; fewer cars per run than a tuner shop
+  odds: { S: { Common: 45, Rare: 40, Epic: 15, Legendary: 0 }, M: { Common: 35, Rare: 38, Epic: 21, Legendary: 6 }, L: { Common: 25, Rare: 38, Epic: 27, Legendary: 10 } },
+  cases: { Common: 3, Rare: 2, Epic: 1, Legendary: 1 },
   value: { Common: [0.08, 0.14], Rare: [0.18, 0.3], Epic: [0.45, 0.7], Legendary: [1.1, 1.6] },
   models: [
+    { id: 'va-z37', name: 'Valtor Z37', body: 'Sports coupé', pic: 'x-valtor-z37', rar: ['Common', 'Rare'] },
+    { id: 'va-r500', name: 'Valtor R-500', body: 'Roadster', pic: 'x-valtor-r500', rar: ['Common', 'Rare'], vx: 1.1 },
+    { id: 'va-gtr', name: 'Valtor GT-R', body: 'Supercar coupé', pic: 'x-valtor-gtr', rar: ['Epic', 'Legendary'], vx: 1.4 },
     { id: 'bw-x7', name: 'Bergwald X7', body: 'Exclusive luxury SUV', pic: 'x-bergwald-x7', rar: ['Rare', 'Epic'] },
     { id: 'bw-s7', name: 'Bergwald S7', body: 'Exclusive sportback saloon', pic: 'x-bergwald-s7', rar: ['Rare', 'Epic'] },
     { id: 'bw-gt', name: 'Bergwald GT', body: 'Exclusive grand tourer coupé', pic: 'x-bergwald-gt', rar: ['Rare', 'Epic', 'Legendary'] },
@@ -533,7 +537,7 @@ export const DEALER_CARS = { ...TUNER, harvest: 22,
 export const CRAFT = {
   vineyard: { spec: VINTAGE, cat: 'wine', words: { item: 'vintage', unit: 'case', units: 'cases', store: 'estate cellar', home: 'own cellar', dealer: 'Cellar Door', dealerKind: 'wine merchant', event: 'harvest', box: 'Harvest & wine cellar', made: 'bottled', who: 'estate', place: 'cellar', empty: 'Wine you bottle lands here' } },
   autorepair: { spec: TUNER, cat: 'car', words: { item: 'tuner car', unit: 'car', units: 'cars', store: 'workshop garage', home: 'own garage', dealer: 'Coastline Classics', dealerKind: 'classic car dealer', event: 'tuner show', box: 'Tuner builds & garage', made: 'built', who: 'shop', place: 'garage', none: 'The team worked on customer cars all season, but no build was good enough for the show.', empty: 'Tuner cars you build land here' } },
-  dealer: { spec: DEALER_CARS, cat: 'car', words: { item: 'Bergwald car', unit: 'car', units: 'cars', store: 'showroom', home: 'own garage', dealer: 'Coastline Classics', dealerKind: 'classic car dealer', event: 'launch event', box: 'Bergwald cars & showroom', made: 'unveiled', who: 'dealership', place: 'showroom', none: 'Bergwald sent regular stock this year, no collector edition for the launch.', empty: 'Collector cars Bergwald allocates to you land here' } }
+  dealer: { spec: DEALER_CARS, cat: 'car', words: { item: 'collector car', unit: 'car', units: 'cars', store: 'showroom', home: 'own garage', dealer: 'Coastline Classics', dealerKind: 'classic car dealer', event: 'launch event', box: 'Collector cars & showroom', made: 'unveiled', who: 'dealership', place: 'showroom', none: 'Only regular stock this year, no collector edition for the launch.', empty: 'Collector cars from Valtor and Bergwald land here' } }
 };
 export const SETS = {
   kestrel: { name: 'The Kestrel Harbors', bonus: 0.12, prestige: 40 },
