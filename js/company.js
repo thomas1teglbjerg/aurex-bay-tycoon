@@ -5,6 +5,7 @@ import { adHTML } from './web.js';
 import { carrierPicker, deliveriesBox } from './freight.js';
 import { money, cardHTML } from './life.js';
 import { scenesHTML, sceneFor } from './scenes.js';
+import { selfHeadHTML } from './profile.js';
 import { city, me, esc, lname, coImg, faceUrl, dollars, M, K, N, P, dateLabel, shortDate, deptIcon, spark, barChart, seg } from './util.js';
 
 const O = E.OPS;
@@ -250,7 +251,7 @@ function deptCard(l, d) {
   const cand = (emp) => { const id = emp && emp.team && emp.team[d.head]; return id && c.talent[id] && c.talent[id].owner === emp.id ? id : null; };
   const offerBtn = (emp) => { const id = cand(emp); if (!id) return ''; const away = emp.assign && emp.assign[d.head]; return `<button class="btn sm" data-a="assignHead" data-lid="${l.id}" data-dept="${d.id}" data-spec="${d.head}"${emp.coop ? ` data-coop="${emp.id}"` : ''}>Make ${esc(E.TAL.PERSON[id].name)}${emp.coop ? ' (coop)' : ''} head of ${esc(d.name)}${away ? ' (moves from another company)' : ''}</button>`; };
   const offers = [cemp, p].map(offerBtn).join('');
-  const heads = d.head ? (tp ? `<div class="head"><span class="thumb" style="${face(tid)}"></span><div class="grow"><b>${esc(tp.name)}</b><span>Head of ${esc(d.name)} · +${hb}% automation${lead.coop ? ' · coop' : lead.id !== p.id ? ` · lent by ${esc(lead.name)}` : ''}${ts && ts.leave != null ? ' · on leave' : ''}${ts && ts.stress > 70 ? ' · stressed' : ''}</span></div>${canManage ? `<button class="btn sm" data-a="staff" data-id="${tid}"${lead.coop ? ` data-coop="${lead.id}"` : ''}>Manage</button><button class="btn sm" data-a="unassignHead" data-spec="${d.head}"${lead.coop ? ` data-coop="${lead.id}"` : ''}>Remove</button>` : ''}</div>`
+  const heads = dd.head === 'self' ? selfHeadHTML(l, d, dd) : d.head ? (tp ? `<div class="head"><span class="thumb" style="${face(tid)}"></span><div class="grow"><b>${esc(tp.name)}</b><span>Head of ${esc(d.name)} · +${hb}% automation${lead.coop ? ' · coop' : lead.id !== p.id ? ` · lent by ${esc(lead.name)}` : ''}${ts && ts.leave != null ? ' · on leave' : ''}${ts && ts.stress > 70 ? ' · stressed' : ''}</span></div>${canManage ? `<button class="btn sm" data-a="staff" data-id="${tid}"${lead.coop ? ` data-coop="${lead.id}"` : ''}>Manage</button><button class="btn sm" data-a="unassignHead" data-spec="${d.head}"${lead.coop ? ` data-coop="${lead.id}"` : ''}>Remove</button>` : ''}</div>`
     : offers ? `<div class="btns">${offers}</div>`
     : `<p class="muted" style="font-size:13px">Head: sign a ${esc(STAFF_BY[d.head].role.replace(/^(Junior|Senior) /, ''))} to lead this department. <button class="linkbtn" data-a="web" data-u="apextalent.ab/role/${d.head}">Find one on Apex Talent</button></p>`) : '';
   const settings = d.settings.map((s) => `<div class="set"><span class="cap">${esc(s.label)}</span>${seg('deptSet', `data-lid="${l.id}" data-dept="${d.id}" data-k="${s.k}"`, s.opts, dd.set[s.k] ?? O.setting(l, d.id, s.k))}</div>`).join('');
@@ -259,7 +260,7 @@ function deptCard(l, d) {
     <div class="wk"><div><span class="cap">Workers</span><div class="stepper"><button data-a="workers" data-lid="${l.id}" data-dept="${d.id}" data-v="-1" aria-label="Lay off one" ${dd.w ? '' : 'disabled'}>−</button><output class="num">${dd.w} / ${need}</output><button data-a="workers" data-lid="${l.id}" data-dept="${d.id}" data-v="1" aria-label="Hire one">+</button></div></div>
       <div style="flex:1;min-width:120px"><span class="cap">Automation ${Math.round(a * 100)}%</span><div class="bar"><i style="width:${a * 100}%;background:${a >= 1 ? 'var(--good)' : 'var(--gold)'}"></i></div></div></div>
     <p class="muted" style="font-size:13px">${esc(a >= 1 ? d.auto : d.without)} Hiring costs ${M(WORKER.hireFee)} per worker, wages ${M(WORKER.salary)} a year each.</p>
-    ${heads}${settings}
+    ${heads}${dd.head !== 'self' ? selfHeadHTML(l, d, dd) : ''}${settings}
     ${manualAvail ? `<button class="btn" data-a="${d.manual.id === 'restock' ? 'gotoSupplies' : 'scene'}" data-lid="${l.id}" data-task="${d.manual.id}">${esc(d.manual.label)}<span class="muted" style="font-weight:600"> · ${esc(d.manual.note)}</span></button>` : ''}
     ${d.id !== 'ops' ? `<button class="linkbtn" data-a="deptClose" data-lid="${l.id}" data-dept="${d.id}">Close department</button>` : ''}
   </div></article>`;

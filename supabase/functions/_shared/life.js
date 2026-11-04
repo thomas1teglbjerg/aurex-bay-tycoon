@@ -202,6 +202,7 @@ function resolveLot(city, lot, m, ctx) {
   } else it = { uid: uid('i'), cid: lot.cid };
   delete it.lot; it.lent = false; it.m = m; it.cost = r4(price * (1 + LIFE.auctionPremium));
   buyer.life.items.push(it);
+  if (!buyer.bot && buyer.career) buyer.career.st.won = (buyer.career.st.won || 0) + 1;
   if (!buyer.bot) ctx.feed(buyer, m, `You won ${c.name}`, `Hammer price ${r2(price)} M plus the ${Math.round(LIFE.auctionPremium * 100)}% buyer's premium.`, 'good');
   Object.keys(lot.bids).forEach((pid) => { const p = city.players[pid]; if (p && !p.bot && pid !== winner.pid) ctx.feed(p, m, `Outbid on ${c.name}`, `It went to ${buyer.name} for ${r2(price)} M.`, 'info'); });
   (city.life.sold = city.life.sold || []).unshift({ cid: lot.cid, price: r4(price), buyer: buyer.id, seller: lot.seller || null, m }); if (city.life.sold.length > 16) city.life.sold.length = 16;

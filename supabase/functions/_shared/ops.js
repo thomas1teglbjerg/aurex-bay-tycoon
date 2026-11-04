@@ -30,6 +30,13 @@ export const baseCap = (l) => RECIPES[l.type].cap * scale(l);
 export function needWorkers(l, dept) { return Math.max(1, Math.round(DEPT[dept].need * Math.sqrt(scale(l)))); }
 export function deptOpenCost(l, dept) { return r2(DEPT[dept].cost * SIZES[l.size].mult); }
 export function inputCostUnit(l) { return Object.entries(RECIPES[l.type].in).reduce((a, [g, q]) => a + q * GOODS[g].base, 0); }
+// a head brings the role's own effect: a specialist always, the owner leading it themselves from level 3 (career.js)
+export const roleOn = (d) => !!(d && d.head && (d.head !== 'self' || (d.lv >= 3 && d.hb > 0)));
+// the owner's level in a department they lead themselves (0 when a specialist or nobody leads it, or they are away)
+export const selfLv = (l, dept) => { const d = l.ops && l.ops.depts[dept]; return d && d.head === 'self' && d.hb > 0 ? d.lv || 0 : 0; };
+// a specialisation one of the company's owners chose for its sector
+export const hasSp = (l, id) => !!(l.ops && l.ops.sp && l.ops.sp.includes(id));
+const tierOf = (lv, a, b, c) => (lv >= 9 ? c : lv >= 6 ? b : lv >= 3 ? a : 0);
 export function setting(l, dept, k) { const d = l.ops && l.ops.depts[dept]; return (d && d.set && d.set[k] !== undefined) ? d.set[k] : DEPT_DEFAULTS[dept][k]; }
 export function automation(l, dept) {
   if (!l.ops) return 0; if (l.ops.managed) return 1;
@@ -75,7 +82,7 @@ export function runningCosts(l) {
   if (l.ops.depts.hr && setting(l, 'hr', 'training') === 'on') budgets += 0.15 * s;
   if (l.ops.depts.legal && setting(l, 'legal', 'level') === 'strict') budgets += 0.2 * s;
   let mult = 1;
-  if (l.ops.depts.finance) { if (setting(l, 'finance', 'costs') === 'lean') mult -= 0.06; if (automation(l, 'finance') > 0) mult -= 0.03; if (l.ops.depts.finance.head) mult -= 0.05; }
+  if (l.ops.depts.finance) { if (setting(l, 'finance', 'costs') === 'lean') mult -= 0.06; if (automation(l, 'finance') > 0) mult -= 0.03; if (roleOn(l.ops.depts.finance)) mult -= 0.05; const fl = selfLv(l, 'finance'); if (fl >= 6) mult -= 0.02; if (fl >= 9) mult -= 0.02; }
   if (l.ops.booksPenalty) mult += 0.05;
   if (l.ops.costCutM !== undefined && l.ops.costCutM === l.ops.curM) mult -= 0.04;
   return { salaries: r2(salaries * mult), budgets: r2(budgets * mult), total: r2((salaries + budgets) * mult), workers };
@@ -89,14 +96,14 @@ export function capacity(l) {
   const morale = 0.8 + 0.4 * o.morale / 100;
   const training = !o.managed && o.depts.hr && setting(l, 'hr', 'training') === 'on' ? 1.08 : 1;
   const overtime = o.boost && o.boost.m === o.curM ? o.boost.mult : (o.overtimeM === o.curM ? 1.2 : 1);
-  const chief = !o.managed && o.depts.ops && o.depts.ops.head ? 1.1 : 1;
-  return baseCap(l) * staff * shift * morale * training * overtime * chief;
+  const chief = !o.managed && roleOn(o.depts.ops) ? 1.1 : 1, own = selfLv(l, 'ops') >= 6 ? 1.04 : 1, plant = hasSp(l, 'factory') ? 1.06 : 1;
+  return baseCap(l) * staff * shift * morale * training * overtime * chief * own * plant;
 }
 export function demand(city, l) {
   const o = l.ops; const price = PRICE[o.managed ? 'standard' : setting(l, 'sales', 'price')];
   const led = (tid) => !o.managed && Object.values(o.depts).some((d) => d && d.head && d.who === tid);
   const econ = led('dario') ? Math.max(1, ECON_DEMAND[city.econ]) : ECON_DEMAND[city.econ];
-  return baseCap(l) * (o.customers / 100) * (0.8 + 0.4 * o.rep / 100) * price.demand * (1 + 0.06 * o.tech) * econ * (led('rohan') ? 1.15 : 1) * (SOMMELIER.types.includes(l.type) ? Object.keys(SOMMELIER).reduce((a, k) => a * (k !== 'types' && led(k) ? SOMMELIER[k].demand : 1), 1) : 1);
+  return baseCap(l) * (o.customers / 100) * (0.8 + 0.4 * o.rep / 100) * price.demand * (1 + 0.06 * o.tech) * econ * (led('rohan') ? 1.15 : 1) * (1 + tierOf(selfLv(l, 'sales'), 0.03, 0.06, 0.1)) * (hasSp(l, 'host') && SOMMELIER.types.includes(l.type) ? 1.08 : 1) * (SOMMELIER.types.includes(l.type) ? Object.keys(SOMMELIER).reduce((a, k) => a * (k !== 'types' && led(k) ? SOMMELIER[k].demand : 1), 1) : 1);
 }
 export function unitPrice(l, yieldTrade) {
   const price = PRICE[l.ops.managed ? 'standard' : setting(l, 'sales', 'price')];
@@ -172,7 +179,7 @@ export function restock(city, ctx, l, months) {
   let wants = {}; Object.entries(need).forEach(([g, q]) => { const want = q * months - (l.ops.inv[g] || 0) - (ctx.onTheWay ? ctx.onTheWay(city, l, g) : 0); if (want > 0.5) wants[g] = want; });
   if (policy === 'warehouse' && ctx.fromWarehouse) wants = ctx.fromWarehouse(city, l, wants);
   Object.entries(wants).forEach(([g, want]) => { if (want > 0.5) { const r = buyGoods(city, ctx, l, g, Math.ceil(want), policy === 'warehouse' ? 'cheapest' : policy, { carrier: setting(l, 'procurement', 'carrier') }); cost += r.cost; imported += r.imported; } });
-  if (l.ops.depts.procurement && l.ops.depts.procurement.head === 'carlos') { const back = cost * 0.05; ctx.credit(city, l.owner, back); cost -= back; }
+  { const pct = (l.ops.depts.procurement && l.ops.depts.procurement.head === 'carlos' ? 0.05 : 0) + tierOf(selfLv(l, 'procurement'), 0.03, 0.05, 0.07) + (hasSp(l, 'buyer') ? 0.06 : 0); if (pct > 0) { const back = cost * pct; ctx.credit(city, l.owner, back); cost -= back; } }
   return { cost: r2(cost), imported: r2(imported) };
 }
 
@@ -208,29 +215,30 @@ export function produce(city, ctx, l, m) {
   o.customers += (80 - o.customers) * 0.06;
   if (o.depts.social || o.managed) {
     const intensity = o.managed ? 'normal' : setting(l, 'social', 'intensity');
-    const a = o.managed ? 1 : automation(l, 'social'), head = o.depts.social?.head ? 1.5 : 1;
+    const a = o.managed ? 1 : automation(l, 'social'), head = roleOn(o.depts.social) ? 1.5 : 1;
     const g = { off: 0, normal: 0.03, viral: 0.07 }[intensity] * a * head;
-    o.customers *= 1 + g; if (intensity === 'viral' && a > 0) o.rep += 2 * head;
+    o.customers *= 1 + g; if (intensity === 'viral' && a > 0) o.rep += 2 * head + (selfLv(l, 'social') >= 9 ? 1 : 0);
   }
   if (lost > dem * 0.15) { o.rep -= 3; o.customers *= 0.97; }
   else if (!o.managed && setting(l, 'sales', 'price') === 'premium' && o.tech >= 2) o.rep += 1;
   else o.rep += 0.5;
+  o.rep += tierOf(selfLv(l, 'legal'), 0, 0.5, 1);
   o.rep = Math.max(0, Math.min(100, o.rep)); o.customers = Math.max(20, Math.min(400, o.customers));
   // morale and quits
   if (!o.managed) {
     let tgt = { low: 45, market: 65, high: 85 }[setting(l, 'hr', 'wages')];
     if (o.depts.hr && setting(l, 'hr', 'training') === 'on') tgt += 5;
-    tgt -= [0, 0, 10, 20][setting(l, 'ops', 'shifts')];
+    tgt -= [0, 0, 10, 20][setting(l, 'ops', 'shifts')] * (selfLv(l, 'ops') >= 9 ? 0.5 : 1);
     if (o.depts.finance && setting(l, 'finance', 'costs') === 'lean') tgt -= 8;
-    if (o.depts.hr?.head) tgt += 8;
+    if (roleOn(o.depts.hr)) tgt += 8;
     const hr = automation(l, 'hr');
     o.morale += hr > 0 ? (tgt - o.morale) * 0.3 * hr : (tgt - 15 - o.morale) * 0.15;
     if (o.overtimeM === m) o.morale -= 8;
-    o.morale = Math.max(0, Math.min(100, o.morale));
+    o.morale = Math.max(selfLv(l, 'hr') >= 9 ? 50 : 0, Math.min(100, o.morale));
     if (o.morale < 30 && rand() < 0.4) { const k = Object.keys(o.depts).sort((a, b) => o.depts[b].w - o.depts[a].w)[0]; if (o.depts[k].w > 0) { o.depts[k].w--; ctx.notify(city, l, `A worker quit ${TYPES[l.type].name} (${deptFor(l, k).name})`, 'Morale is low. Raise wages, train or hold a team meeting.', 'bad'); } }
   } else o.morale = 70;
   // research
-  if (o.depts.rnd && !o.managed) { const b = { off: 0, low: 10, high: 25 }[setting(l, 'rnd', 'budget')]; o.rp += b * (0.5 + 0.5 * automation(l, 'rnd')) * (o.depts.rnd.head ? 1.5 : 1); }
+  if (o.depts.rnd && !o.managed) { const b = { off: 0, low: 10, high: 25 }[setting(l, 'rnd', 'budget')]; o.rp += b * (0.5 + 0.5 * automation(l, 'rnd')) * (roleOn(o.depts.rnd) ? 1.5 : 1) * (selfLv(l, 'rnd') >= 6 ? 1.2 : 1) * (hasSp(l, 'architect') ? 1.25 : 1); }
   const tech = Math.min(5, Math.floor(o.rp / 100)); if (tech > o.tech) { o.tech = tech; ctx.notify(city, l, `R&D breakthrough at ${TYPES[l.type].name}`, `Technology level ${tech}: better quality, higher price and demand.`, 'good'); }
   // books
   o.booksPenalty = !o.managed && !!o.depts.finance && automation(l, 'finance') === 0 && o.booksM !== m - 1;
@@ -571,7 +579,7 @@ export function doTask(city, ctx, l, task, a = {}) {
 export function legallyCovered(l) {
   const o = l.ops; if (!o) return false; if (o.managed) return rand() < 0.5;
   const d = o.depts.legal; if (!d) return false;
-  return !!d.head || (setting(l, 'legal', 'level') === 'strict' && automation(l, 'legal') > 0) || o.legalUntil >= o.curM;
+  return roleOn(d) || (setting(l, 'legal', 'level') === 'strict' && automation(l, 'legal') > 0) || o.legalUntil >= o.curM;
 }
-export function cyberProtected(l) { const o = l.ops; if (!o) return false; if (o.managed) return rand() < 0.5; const d = o.depts.rnd; return !!(d && (d.head === 'anika' || automation(l, 'rnd') >= 1)); }
+export function cyberProtected(l) { const o = l.ops; if (!o) return false; if (o.managed) return rand() < 0.5; const d = o.depts.rnd; return !!((d && (d.head === 'anika' || automation(l, 'rnd') >= 1)) || selfLv(l, 'rnd') >= 9 || hasSp(l, 'guard')); }
 export const DEPTS_BY_HEAD = Object.fromEntries(DEPTS.filter((d) => d.head).map((d) => [d.head, d.id]));

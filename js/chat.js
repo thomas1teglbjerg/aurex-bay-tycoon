@@ -5,6 +5,7 @@ import * as E from '../supabase/functions/_shared/engine.js';
 import { city, $, esc } from './util.js';
 import { symbolIcon } from './brand.js';
 import { helpAt, showHelp, hideHelp, initHelp } from './help.js';
+import { canView } from './profile.js';
 
 let H = null; // hooks from main.js: { B, toast, renderWho, navBack, setTab, initials, where }
 const CH = { peer: null, msgs: [], unread: {}, poll: 0, inbox: {}, peers: [] };
@@ -25,6 +26,7 @@ function menuFor(e) {
     const b = c.players[id] ? E.BR.brandOf(c, id) : null, adm = id === E.ADMIN_ID;
     out.push({ head: `${p.name}${b && !adm ? ' · ' + b.name : ''}` });
     if (id === as || id === self) out.push({ label: 'Open chat', icon: 'chat', run: () => openChat() }); // your own icon: all your conversations
+    const viewer = c.players[self]; if (c.players[id] && !c.players[id].bot && viewer && canView(c, viewer, id)) out.push({ label: id === self ? 'My profile' : 'View profile', icon: 'help', run: () => H.openProfile && H.openProfile(id) });
     if (id !== as) out.push({ label: adm ? 'Chat with administrator' : 'Chat with player', icon: 'chat', run: () => openChat(id) });
     if (chip.dataset.a === 'playAs') {
       const n = inboxOf(id);
