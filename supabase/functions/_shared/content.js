@@ -700,3 +700,36 @@ export const AD_COPY = {
     art: { irony: [['It is just paint on canvas.', 'Very expensive paint. {item} by {maker}.'], ['Nobody will notice it.', 'Said no one, ever, about {item}.']], sarcasm: [['Your walls are fine. If you like beige.', '{item}, {maker}, {year}.'], ['Another poster from the furniture store?', 'Bold. Or there is {item}.']], wink: [['Hang it upside down. We will not tell.', '{item} by {maker}.'], ['Looks great above a sofa.', 'Any sofa. {item}, {year}.']] }
   }
 };
+
+// ---------------------------------------------------------------- the tycoon's own career (career.js)
+// XP per source; levels are total XP; a head's rating = ceil(level / 2). Sector XP from leading or to-dos = sectorShare × field XP.
+export const CAREER = {
+  levels: [0, 150, 400, 800, 1400, 2200, 3300, 4800, 6800, 9500],
+  xp: { lead: 10, task: 3, order: 1, own: 2, stock: 2, tier: 50, crisis: 30 },
+  sectorShare: 0.6, size: { S: 0.7, M: 1, L: 1.3 }, mentor: 1.25, mentorRating: 4,
+  caps: { task: 5, order: 10, ownPerSector: 3, ownProfit: 5, stockYear: 40 },
+  seedCap: 400, rustAfter: 24, rust: 0.01, specLevel: 5, respec: 0.25,
+  seats: [0, 25, 70],
+  titles: [{ min: 0, name: 'Entrepreneur' }, { min: 10, name: 'Director' }, { min: 25, name: 'Magnate' }, { min: 45, name: 'Tycoon' }, { min: 70, name: 'Legend' }],
+  sectors: {
+    service: { name: 'Service', specs: [{ id: 'host', name: 'The Host', d: 'Customer demand +8% at your hotels, restaurants and vineyards.' }, { id: 'motor', name: 'The Car Guy', d: '+0.5 M YPI × size at your auto repair shops and car dealerships.' }] },
+    industry: { name: 'Industry', specs: [{ id: 'factory', name: 'Plant Boss', d: 'Output +6% at your industrial companies.' }, { id: 'buyer', name: 'Master Buyer', d: 'Supplies 6% cheaper at your industrial companies.' }] },
+    tech: { name: 'Tech', specs: [{ id: 'architect', name: 'Architect', d: 'Research 25% faster at your tech companies.' }, { id: 'guard', name: 'Watchdog', d: 'Cyberattacks never hit your tech companies.' }] },
+    finance: { name: 'Finance', specs: [{ id: 'banker', name: 'Banker', d: 'Your bank loans cost 1 point less interest.' }, { id: 'investor', name: 'Investor', d: 'Your stock trades move the price half as much.' }] },
+    health: { name: 'Health', specs: [{ id: 'crisis', name: 'Crisis Manager', d: '+2 M YPI × size at your pharma companies during a crisis.' }, { id: 'research', name: 'Researcher', d: '+1 Influence every year.' }] },
+    media: { name: 'Media', specs: [{ id: 'hit', name: 'Hitmaker', d: 'Hits and blockbusters 50% more likely at your studios.' }, { id: 'star', name: 'The Star', d: '+1 Influence every year, and ads 10% stronger at your media companies.' }] }
+  },
+  // perks in a department you lead yourself (level 3 always brings the role's own effect, like a specialist head)
+  perks: {
+    ops: [{ lv: 3, t: 'Head of Operations: output +10%' }, { lv: 6, t: 'Output +4% more' }, { lv: 9, t: 'Extra shifts hurt morale half as much' }],
+    procurement: [{ lv: 3, t: 'Supplies 3% cheaper' }, { lv: 6, t: 'Supplies 5% cheaper' }, { lv: 9, t: 'Supplies 7% cheaper' }],
+    sales: [{ lv: 3, t: 'Customer demand +3%' }, { lv: 6, t: 'Customer demand +6%' }, { lv: 9, t: 'Customer demand +10%' }],
+    social: [{ lv: 3, t: 'Head of Marketing: campaigns and ads 50% stronger' }, { lv: 6, t: 'Ads 10% cheaper' }, { lv: 9, t: 'Going big adds +1 more reputation' }],
+    hr: [{ lv: 3, t: 'Head of HR: morale +8' }, { lv: 6, t: 'Hiring workers 25% cheaper' }, { lv: 9, t: 'Morale never drops below 50' }],
+    finance: [{ lv: 3, t: 'Head of Finance: running costs −5%' }, { lv: 6, t: 'Running costs −2% more' }, { lv: 9, t: 'Running costs −2% more' }],
+    rnd: [{ lv: 3, t: 'Head of R&D: research 50% faster' }, { lv: 6, t: 'Research 20% faster still' }, { lv: 9, t: 'Cyberattacks are blocked' }],
+    legal: [{ lv: 3, t: 'Head of Legal: full protection from regulation fines' }, { lv: 6, t: 'Reputation +0.5 a month' }, { lv: 9, t: 'Reputation +1 a month' }]
+  }
+};
+// personal portraits: only the first player in the city with this avatar name gets it (img/<pic>.jpg)
+export const PORTRAITS = { 'Thomas Debenhams': 'p-thomas-debenhams', 'Mikkel Debenhams': 'p-mikkel-debenhams' };

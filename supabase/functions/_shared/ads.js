@@ -3,6 +3,7 @@
 // company makes or the owner holds, with a line of copy in the tone the player picks.
 import { TYPES, SIZES, AD, AD_NOUN, AD_CATS, AD_COPY } from './content.js';
 import * as LIFE from './life.js';
+import { roleOn, selfLv, hasSp } from './ops.js';
 
 const r4 = (v) => Math.round(v * 1e4) / 1e4;
 const rand = Math.random;
@@ -11,11 +12,11 @@ const ok = (msg) => ({ ok: true, msg });
 const err = (msg) => ({ ok: false, msg });
 
 export const coName = (l) => l.title || TYPES[l.type].name;
-export const cost = (l, weeks) => r4(AD.perWeek * SIZES[l.size].mult * weeks);
+export const cost = (l, weeks) => r4(AD.perWeek * SIZES[l.size].mult * weeks * (selfLv(l, 'social') >= 6 ? 0.9 : 1));
 export const TONES = AD.tones.map(([k]) => k);
 export const live = (city, g = city.g) => (city.ads || []).filter((a) => a.until > g + 1e-9);
 export const running = (city, lid, g) => live(city, g).find((a) => a.lid === lid);
-export const strength = (l) => (l.ops && l.ops.depts.social && l.ops.depts.social.head ? AD.head : 1);
+export const strength = (l) => (l.ops && roleOn(l.ops.depts.social) ? AD.head : 1) * (l.ops && hasSp(l, 'star') ? 1.1 : 1);
 
 // pieces this company can advertise: what it made itself (its cellar, or already in the owner's collection)
 // and pieces from the player's own collection that fit its trade (cars for a dealership, wine for a restaurant…)

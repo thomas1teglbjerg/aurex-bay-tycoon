@@ -16,6 +16,7 @@ import { lifeHTML, lifeModal, newDinner, startDinner, dinnerHTML, money, bidBase
 import { logoMark, logoFull, symbolIcon } from './brand.js';
 import { initChat, openChat, unreadFrom, inboxOf } from './chat.js';
 import { mailBoxHTML, mailPageHTML, mails, isRead as mailRead, markRead } from './mail.js';
+import { profilePageHTML, profileBoxHTML, portraitUrl, canView } from './profile.js';
 import { authHTML, avatarHTML, passwordHTML, secureHTML, foundHTML, foundPreview, newFound } from './onboard.js';
 
 const ECON_COL = { Boom: '#23905a', Stable: '#2f6fb0', Recession: '#d08a1e', Crisis: '#c0392b' };
@@ -32,7 +33,8 @@ function ownerLabel(c, l) {
 function avatar(p, size) {
   const st = size ? `width:${size}px;height:${size}px;` : '';
   if (!p) return '';
-  if (p.avatar) return `<span class="av" style="${st}background-image:url(${p.avatar});--avc:${p.color}" aria-hidden="true"></span>`;
+  const pic = p.avatar || (city() ? portraitUrl(city(), p) : null);
+  if (pic) return `<span class="av" style="${st}background-image:url(${pic});background-size:cover;background-position:center 18%;--avc:${p.color}" aria-hidden="true"></span>`;
   const ini = p.name.split(' ').map((w) => w[0]).slice(0, 2).join('');
   return `<span class="av" style="${st}background:${p.color};--avc:${p.color}" aria-hidden="true">${esc(ini)}</span>`;
 }
@@ -503,7 +505,7 @@ function renderPanel() {
   if (UI.tab === 'map' || !me()) return;
   const el = $('panel'), st = el.scrollTop, active = document.activeElement && el.contains(document.activeElement) && document.activeElement.tagName === 'INPUT';
   if (active) return; // never wipe a field someone is typing in
-  const html = UI.tab === 'empire' && String(UI.company || '').startsWith('mail') ? mailPageHTML(UI) : (UI.tab === 'empire' || UI.tab === 'coop') && UI.company ? companyHTML(UI.company, UI) : { empire: empireHTML, market: marketHTML, stocks: () => stocksHTML(UI), network: networkHTML, coop: coopHTML, life: () => lifeHTML(UI) }[UI.tab]();
+  const html = UI.tab === 'empire' && String(UI.company || '').startsWith('mail') ? mailPageHTML(UI) : (UI.tab === 'empire' || UI.tab === 'network') && String(UI.company || '').startsWith('profile') ? profilePageHTML(UI) : (UI.tab === 'empire' || UI.tab === 'coop') && UI.company ? companyHTML(UI.company, UI) : { empire: empireHTML, market: marketHTML, stocks: () => stocksHTML(UI), network: networkHTML, coop: coopHTML, life: () => lifeHTML(UI) }[UI.tab]();
   el.innerHTML = `<div class="panel-in">${html}</div>`;
   applyCollapsed(el);
   el.scrollTop = st; liveUpdate();
@@ -534,6 +536,7 @@ function empireHTML() {
     return `<button class="row" style="width:100%;text-align:left" data-a="staff" data-id="${s.id}"><span class="thumb" style="background-image:url(${faceUrl(s.id)});background-position:center 20%"></span><div class="grow"><b>${esc(s.name)}</b><span>${esc(s.role)} · leads ${esc(E.OPS.DEPT[deptOfSpec(s.id)].name)}</span>${hired ? `<span class="${al ? 'up' : 'down'}">${al ? `Heads ${esc(E.OPS.deptFor(al, a.dept).name)} at ${esc(TYPES[al.type].name)}, ${esc(al.district)}` : 'Hired, not assigned: open a company and make them head of a department'}</span>` : ''}</div>${hired ? '<span class="chip good">Hired</span>' : `<span class="chip num">${M(E.staffCost(p, s.id))}</span>`}</button>`; }).join('');
   return `<div class="grid"><div class="col">
       ${parentBox(c, p)}
+      ${profileBoxHTML()}
       <div class="box"><h2>${esc(p.name)}'s empire<small>LIVE</small></h2><div class="in">
         <div><div class="cap">Cash, counting in real time</div><div class="hero-cash num" data-live="cash">$0</div></div>
         <div class="stats"><div class="stat"><small>Profit / yr (est.)</small><b class="num ${E.annualEstimate(c, 'p', p.id) >= 0 ? 'up' : 'down'}">${M(E.annualEstimate(c, 'p', p.id), true)}</b></div><div class="stat"><small>Wages, budgets, interest</small><b class="num down">${M(-r.costs)}</b></div><div class="stat"><small>Net worth</small><b class="num">${M(E.netWorth(c, p.id))}</b></div><div class="stat"><small>Influence</small><b class="num">${p.inf}</b></div></div>
@@ -586,7 +589,7 @@ function networkHTML() {
   const conLabel = (k) => { const a = E.listing(c, k.a), b = E.listing(c, k.b); return `${TYPES[a.type].name} (${c.players[k.from].name.split(' ')[0]}) ↔ ${TYPES[b.type].name} (${c.players[k.to].name.split(' ')[0]})`; };
   const members = p.net.map((id) => c.players[id]).filter(Boolean).map((m) => { const ls = E.ownedBy(c, 'p', m.id);
     let n = 0; ls.forEach((ol) => E.ownedBy(c, 'p', p.id).forEach((ml) => { if (E.contractValid(c, ml.id, ol.id, p.id, m.id).ok) n++; }));
-    return `<div class="row">${avatar(m)}<div class="grow"><b>${esc(m.name)}</b><span>${M(E.netWorth(c, m.id))} · ${ls.map((l) => TYPES[l.type].name).join(', ') || 'no companies yet'}</span>${n ? `<span class="up">${n} possible supply contract${n > 1 ? 's' : ''}: open one of your companies to offer</span>` : ''}${E.hasStaff(m, 'jason') ? '<span>Shares market insight with you</span>' : ''}</div><button class="btn sm" data-a="netRemove" data-pid="${m.id}">Remove</button></div>`; }).join('');
+    return `<div class="row">${avatar(m)}<div class="grow"><b>${esc(m.name)}</b><span>${M(E.netWorth(c, m.id))} · ${ls.map((l) => TYPES[l.type].name).join(', ') || 'no companies yet'}</span>${n ? `<span class="up">${n} possible supply contract${n > 1 ? 's' : ''}: open one of your companies to offer</span>` : ''}${E.hasStaff(m, 'jason') ? '<span>Shares market insight with you</span>' : ''}</div><button class="btn sm" data-a="profile" data-pid="${m.id}">Profile</button><button class="btn sm" data-a="netRemove" data-pid="${m.id}">Remove</button></div>`; }).join('');
   const board = st.map((r, i) => { const x = c.players[r.id], inNet = p.net.includes(r.id), pend = outReq.some((q) => q.to === r.id);
     return `<div class="row"><b class="num" style="width:24px">${i + 1}</b>${avatar(x)}<div class="grow"><b>${esc(r.id === p.id ? r.name + ' (you)' : r.name)}</b>${E.BR.brandOf(c, r.id) ? `<span class="lgline">${logoMark(E.BR.brandOf(c, r.id), 16)}${esc(E.BR.brandOf(c, r.id).name)}</span>` : ''}<span>${M(r.nw)} net worth · ${r.inf} influence · ${E.ownedBy(c, 'p', r.id).length} companies</span></div>${r.id === p.id ? '' : inNet ? '<span class="chip">In network</span>' : pend ? '<span class="chip">Requested</span>' : `<button class="btn sm navy" data-a="netRequest" data-pid="${r.id}">Add</button>`}</div>`; }).join('');
   return `<h2 class="ph1">Network</h2><p class="lede">Play together while each of you keeps your own companies. People in your network can sign supply contracts that give both companies a synergy bonus, and share market insight.</p>
@@ -765,6 +768,10 @@ async function onClick(e) {
     case 'webGo': if (UI.web) navWeb(d.u); else openWeb(d.u); return;
     // ---- mail
     case 'mailOpen': closeModal(); if (UI.tab !== 'empire') setTab('empire'); UI.company = d.id ? 'mail:' + d.id : 'mail'; if (d.id) markRead(d.id); $('panel').scrollTop = 0; renderAll(); return;
+    case 'profile': { closeModal(); const id = d.pid || meId(); if (UI.tab !== 'empire' && UI.tab !== 'network') setTab('empire'); UI.company = id === meId() ? 'profile' : 'profile:' + id; $('panel').scrollTop = 0; renderAll(); return; }
+    case 'meHead': await act('meHead', { lid: d.lid, dept: d.dept }); return;
+    case 'meLeave': await act('meLeave', { lid: d.lid, dept: d.dept }, 'You stepped down.'); return;
+    case 'meSpec': await act('meSpec', { sector: d.sector, pick: d.pick }); return;
     case 'mailFolder': UI.mailF = d.v; UI.company = 'mail'; renderPanel(); return;
     case 'mailAnswer': await act('mailAnswer', { id: d.id, opt: Number(d.opt) }); return;
     case 'adCo': closeWeb(); hideMapCard(); openListing(d.lid); return;
@@ -1085,7 +1092,7 @@ async function boot(hot) {
   // any click or key press in the game counts as activity for the online bar (game actions do too, in B.act)
   const touch = () => { if (B.touch && me()) B.touch(); };
   document.addEventListener('pointerdown', touch, true); document.addEventListener('keydown', touch, true);
-  initChat({ B, toast, renderWho: () => { renderWho(); measureTop(); }, navBack, setTab, initials, where: () => ({ tab: UI.tab, company: UI.company, modal: UI.modal }) });
+  initChat({ B, toast, renderWho: () => { renderWho(); measureTop(); }, navBack, setTab, openProfile: (pid) => { closeModal(); if (UI.tab !== 'empire' && UI.tab !== 'network') setTab('empire'); UI.company = pid === meId() ? 'profile' : 'profile:' + pid; $('panel').scrollTop = 0; renderAll(); }, initials, where: () => ({ tab: UI.tab, company: UI.company, modal: UI.modal }) });
   setInterval(renderWho, 20 * 1000); // players turn inactive without any event
 }
 window.claude?.hot?.snapshot?.(() => ({ ...(B && B.snapshot ? B.snapshot() : {}), tab: UI.tab }));
