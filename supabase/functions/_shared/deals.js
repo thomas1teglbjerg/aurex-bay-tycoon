@@ -2,7 +2,7 @@
 // A seller offers goods their company made to someone in their network (or a co-owner) at their own price.
 // The buyer picks one of their companies and a carrier, or lets the seller deliver. In that case the seller
 // gets a mail and delivers the goods themselves (a 10-second task in the browser): they land in the buyer's stock at once. The buyer pays a fixed
-// delivery fee (DEALS.selfFee) that goes to the seller with the price.
+// delivery fee that goes to the seller with the price: halfway between Ridgeway's and Harborline's freight for this cargo.
 // Deals live in city.deals: { id, g, qty, price, from, lid, so, to, m, at, due, status, ... }
 //   status: open → shipped (carrier, or the seller delivered) | deliver (waiting for the seller) → shipped
 //           open → declined | withdrawn | expired;  deliver → lapsed (the seller never sent it: buyer refunded)
@@ -22,7 +22,8 @@ const what = (d) => `${d.qty} ${unit(d.g)} of ${gname(d.g)}`;
 
 export const ensure = (city) => (city.deals = city.deals || []);
 export const total = (d) => r4(d.qty * d.price);
-export const fee = () => DEALS.selfFee;
+// what the seller charges to deliver it themselves: halfway between Ridgeway and Harborline for this cargo
+export const fee = (d) => r4((quote(d, 'ridge').cost + quote(d, 'harbor').cost) / 2);
 export const isLive = (d) => d.status === 'open' || d.status === 'deliver';
 export const priceRange = (g) => [r4(GOODS[g].base * DEALS.minPrice), r4(GOODS[g].base * DEALS.maxPrice)];
 // the freight for these goods with a carrier, inside the city
@@ -45,7 +46,7 @@ export function offer(city, p, a, ctx) {
   l.ops.inv[g] -= qty; // the goods are put aside until the deal closes
   const d = { id: uid(), g, qty, price, from: p.id, lid: l.id, so: { ...l.owner }, to: t.id, m: city.m, at: city.g, due: city.g + DEALS.openWeeks * WEEK, status: 'open' };
   city.deals.push(d);
-  ctx.mail(t.id, { from: { n: p.name, r: `${ctx.name(l)} · your network`, k: 'player', pid: p.id }, subj: `Offer: ${what(d)}`, body: `I have ${what(d)} from ${ctx.name(l)} for you at ${Math.round(price * 1e5) / 100} k per ${one(g)}, ${total(d)} M in all.\nPick one of your companies that uses it and how it should travel: with a carrier you pay, or I deliver it myself as soon as possible for ${Math.round(fee() * 1000)} k. The offer stands for ${DEALS.openWeeks} weeks.`, deal: d.id, kind: 'info' });
+  ctx.mail(t.id, { from: { n: p.name, r: `${ctx.name(l)} · your network`, k: 'player', pid: p.id }, subj: `Offer: ${what(d)}`, body: `I have ${what(d)} from ${ctx.name(l)} for you at ${Math.round(price * 1e5) / 100} k per ${one(g)}, ${total(d)} M in all.\nPick one of your companies that uses it and how it should travel: with a carrier you pay, or I deliver it myself as soon as possible for ${Math.round(fee(d) * 1000)} k. The offer stands for ${DEALS.openWeeks} weeks.`, deal: d.id, kind: 'info' });
   return ok(`Offer sent to ${t.name}: ${what(d)} for ${total(d)} M.`);
 }
 
@@ -57,14 +58,14 @@ export function accept(city, p, a, ctx) {
   if (!RECIPES[bl.type] || !(d.g in RECIPES[bl.type].in)) return err(`That company does not use ${gname(d.g)}.`);
   if (same(bl.owner, sl.owner)) return err('Seller and buyer are the same company owner. Move the goods yourself.');
   const how = a.how === 'self' ? 'self' : CID[a.how] ? a.how : null; if (!how) return err('Pick a carrier, or let the seller deliver.');
-  const goods = total(d), f = how === 'self' ? null : quote(d, how), cost = r4(goods + (f ? f.cost : fee()));
+  const goods = total(d), f = how === 'self' ? null : quote(d, how), cost = r4(goods + (f ? f.cost : fee(d)));
   if (ctx.cashOf(bl.owner) < cost - 1e-9) return err(`This costs ${cost} M${f ? ' with freight' : ''}.`);
   const seller = city.players[d.from];
   d.blid = bl.id; d.bo = { ...bl.owner }; d.how = how; d.by = p.id; d.acc = city.g;
   ctx.debit(bl.owner, how === 'self' ? cost : goods); bl.ops.cur.sup += goods;
   if (how === 'self') { // the money (price + delivery fee) waits until the seller sends the goods
-    bl.ops.cur.fr = (bl.ops.cur.fr || 0) + fee(); d.fee = fee(); d.paid = cost; d.status = 'deliver'; d.due = city.g + DEALS.deliverWeeks * WEEK;
-    ctx.mail(d.from, { from: { n: p.name, r: `${ctx.name(bl)} · buyer`, k: 'player', pid: p.id }, subj: `Please deliver: ${what(d)}`, body: `I take your ${what(d)} for ${goods} M, plus ${Math.round(fee() * 1000)} k for you to deliver it yourself. Please drive it over to ${ctx.name(bl)} as soon as you can.\nYou get the money when the goods leave. If nothing is sent within ${DEALS.deliverWeeks} weeks, the deal is off and I get my money back.`, deal: d.id, kind: 'info' });
+    bl.ops.cur.fr = (bl.ops.cur.fr || 0) + fee(d); d.fee = fee(d); d.paid = cost; d.status = 'deliver'; d.due = city.g + DEALS.deliverWeeks * WEEK;
+    ctx.mail(d.from, { from: { n: p.name, r: `${ctx.name(bl)} · buyer`, k: 'player', pid: p.id }, subj: `Please deliver: ${what(d)}`, body: `I take your ${what(d)} for ${goods} M, plus ${Math.round(fee(d) * 1000)} k for you to deliver it yourself. Please drive it over to ${ctx.name(bl)} as soon as you can.\nYou get the money when the goods leave. If nothing is sent within ${DEALS.deliverWeeks} weeks, the deal is off and I get my money back.`, deal: d.id, kind: 'info' });
     return ok(`Deal. ${seller ? seller.name : 'The seller'} delivers as soon as they can. ${cost} M is held until the goods leave.`);
   }
   const b = ship(city, d, sl, bl, how, ctx);

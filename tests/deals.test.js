@@ -18,7 +18,9 @@ assert(!offer({ price: 1 }).ok, 'price must stay in range');
 let r = offer(); assert(r.ok, 'offer to a network contact: ' + r.msg);
 let d = city.deals[city.deals.length - 1];
 assert(film.ops.inv.media === 15, 'goods are put aside');
-assert(B.mail.some((x) => x.deal === d.id && /deliver it myself as soon as possible for 10 k/.test(x.body)), 'buyer gets a mail offering seller delivery for 10 k');
+const F = E.DEAL.fee(d), rq = E.DEAL.quote(d, 'ridge').cost, hq = E.DEAL.quote(d, 'harbor').cost;
+assert(F > Math.min(rq, hq) && F < Math.max(rq, hq), `seller delivery fee ${F} lies between Harborline ${hq} and Ridgeway ${rq}`);
+assert(B.mail.some((x) => x.deal === d.id && x.body.includes(`deliver it myself as soon as possible for ${Math.round(F * 1000)} k`)), 'buyer gets a mail offering seller delivery for that fee');
 assert(!E.apply(city, 'c', 'dealAccept', { id: d.id, blid: hotel.id, how: 'ridge' }, now).ok, 'others cannot accept');
 assert(!E.apply(city, 'b', 'dealAccept', { id: d.id, blid: film.id, how: 'ridge' }, now).ok, 'buyer must use one of their own companies');
 
@@ -38,18 +40,18 @@ film.ops.inv.media = 20;
 r = offer(); assert(r.ok, 'second offer'); d = city.deals[city.deals.length - 1];
 const b1 = B.cash;
 r = E.apply(city, 'b', 'dealAccept', { id: d.id, blid: hotel.id, how: 'self' }, now); assert(r.ok && d.status === 'deliver', 'buyer lets the seller deliver');
-assert(Math.abs(b1 - B.cash - 0.07) < 1e-6 && Math.abs(d.paid - 0.07) < 1e-9, 'buyer pays price + 10 k delivery fee, held');
+assert(Math.abs(b1 - B.cash - 0.06 - F) < 1e-6 && Math.abs(d.paid - 0.06 - F) < 1e-6, 'buyer pays price + delivery fee, held');
 assert(A.mail.some((x) => x.deal === d.id && /deliver/i.test(x.subj)), 'seller is asked to deliver');
 const a1 = A.cash, h0 = hotel.ops.inv.media || 0;
 r = E.apply(city, 'a', 'dealDeliver', { id: d.id }, now); assert(r.ok && d.status === 'delivered', 'seller delivers: ' + r.msg);
-assert(Math.abs(A.cash - a1 - 0.07) < 1e-6, 'seller gets price + delivery fee, no freight bill');
+assert(Math.abs(A.cash - a1 - 0.06 - F) < 1e-6, 'seller gets price + delivery fee, no freight bill');
 assert(d.status === 'delivered' && Math.abs(hotel.ops.inv.media - h0 - 5) < 1e-9, 'goods land in the hotel stock at once');
 
 // seller never delivers: buyer gets the money back, goods go back
 r = offer(); d = city.deals[city.deals.length - 1]; const st0 = film.ops.inv.media;
 E.apply(city, 'b', 'dealAccept', { id: d.id, blid: hotel.id, how: 'self' }, now); const b2 = B.cash;
 d.due = city.g; E.DEAL.weekStep(city, E.dctx(city));
-assert(d.status === 'lapsed' && Math.abs(B.cash - b2 - 0.07) < 1e-6, 'undelivered deal lapses with a full refund');
+assert(d.status === 'lapsed' && Math.abs(B.cash - b2 - 0.06 - F) < 1e-6, 'undelivered deal lapses with a full refund');
 assert(Math.abs(film.ops.inv.media - st0 - 5) < 1e-9, 'goods back with the seller');
 assert(B.mail.some((x) => /Deal off/.test(x.subj)) && A.mail.some((x) => /Deal off/.test(x.subj)), 'both hear the deal is off');
 
