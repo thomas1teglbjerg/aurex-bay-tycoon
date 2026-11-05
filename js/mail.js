@@ -81,14 +81,22 @@ function readerHTML(x) {
     ${mine ? `<button class="row mco" data-a="company" data-lid="${l.id}"><span class="thumb" style="background-image:url(${coImg(l)})"></span><div class="grow"><b>Open ${esc(lname(l))}</b><span>${esc(l.district)} · company dashboard</span></div><span aria-hidden="true">›</span></button>` : ''}</article>`;
 }
 // the mailbox page (Empire › Mail). ui.company is 'mail' or 'mail:<id>', ui.mailF the folder
-export function mailPageHTML(ui) {
-  const id = String(ui.company).split(':')[1] || '', f = ui.mailF || 'all', all = mails();
+// admins: one mail from the city to every player (changelogs, announcements)
+function sendAllHTML() {
+  const n = Object.values(city().players).filter((p) => !p.bot && !p.admin).length;
+  return `<div class="box"><form data-form="mailAll" class="msend"><p class="muted">Goes to every player's inbox (${n}) from <b>Aurex Bay City · What's new</b>. Each line is one paragraph; "Hi &lt;first name&gt;," and the sign-off are added.</p>
+    <label>Subject<input name="subj" maxlength="80" required placeholder="What's new in Aurex Bay"></label>
+    <label>Message<textarea name="body" maxlength="4000" required></textarea></label>
+    <div><button class="btn" type="submit">Send to all players</button></div></form></div>`;
+}
+export function mailPageHTML(ui, admin = false) {
+  const id = String(ui.company).split(':')[1] || '', f = ui.mailF === 'send' && !admin ? 'all' : ui.mailF || 'all', all = mails();
   const list = all.filter((x) => inFolder(x, f)), x = id && all.find((y) => y.id === id);
   if (x) markRead(x.id);
   const count = (k) => all.filter((y) => inFolder(y, k) && (k === 'open' || !isRead(y))).length;
   return `<div class="crumbs"><button class="btn sm" data-a="${x ? 'mailOpen' : 'back'}" data-id="">‹ ${x ? 'Mailbox' : 'Empire'}</button><span class="muted">${all.length} mail${all.length === 1 ? '' : 's'} · ${toAnswer()} waiting for an answer</span></div>
     <h2 class="ph1">Mail</h2>
-    <div class="mfold" role="group">${FOLDERS.map(([k, t]) => { const n = count(k); return `<button data-a="mailFolder" data-v="${k}" aria-pressed="${f === k}">${t}${n ? `<u>${n}</u>` : ''}</button>`; }).join('')}</div>
-    <div class="mailgrid ${x ? 'reading' : ''}"><div class="box mlistbox"><div class="mlist">${list.length ? list.map((y) => rowHTML(y, x && y.id === x.id)).join('') : '<p class="empty" style="padding:14px">Nothing here.</p>'}</div></div>
-      <div class="box mreadbox">${x ? readerHTML(x) : '<p class="empty" style="padding:18px">Pick a mail to read it.</p>'}</div></div>`;
+    <div class="mfold" role="group">${[...FOLDERS, ...(admin ? [['send', 'Admin: write to all']] : [])].map(([k, t]) => { const n = k === 'send' ? 0 : count(k); return `<button data-a="mailFolder" data-v="${k}" aria-pressed="${f === k}">${t}${n ? `<u>${n}</u>` : ''}</button>`; }).join('')}</div>
+    ${f === 'send' ? sendAllHTML() : `<div class="mailgrid ${x ? 'reading' : ''}"><div class="box mlistbox"><div class="mlist">${list.length ? list.map((y) => rowHTML(y, x && y.id === x.id)).join('') : '<p class="empty" style="padding:14px">Nothing here.</p>'}</div></div>
+      <div class="box mreadbox">${x ? readerHTML(x) : '<p class="empty" style="padding:18px">Pick a mail to read it.</p>'}</div></div>`}`;
 }

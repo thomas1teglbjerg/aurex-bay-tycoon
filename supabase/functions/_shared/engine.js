@@ -65,6 +65,17 @@ const gzctx = (city) => ({ owners: (l) => cctx(city).owners(l), credit: (o, v) =
   ownerName: (l) => (!l.owner ? '' : l.owner.k === 'p' ? (city.players[l.owner.id] || {}).name || '' : (city.holdings[l.owner.id] || {}).name || '') });
 // the administrator's house ad on the Gazette (checked by the game function)
 export const setHouseAd = (city, a) => GZ.setHouse(city, a || {});
+// Admin: one mail from the city to every human tycoon (a changelog, an announcement). Blank lines are dropped:
+// every line of the body is one paragraph in the reader.
+export const ANNOUNCE_FROM = { n: 'Aurex Bay City', r: "What's new", k: 'city' };
+export function mailAll(city, a) {
+  const subj = String((a && a.subj) || '').trim().slice(0, 80);
+  const body = String((a && a.body) || '').split('\n').map((t) => t.trim()).filter(Boolean).join('\n').slice(0, 4000);
+  if (!subj || !body) return { ok: false, msg: 'Write a subject and a message.' };
+  const to = Object.values(city.players).filter((p) => !p.bot && !p.admin);
+  to.forEach((p) => MAIL.send(p, { g: city.g, m: city.m, kind: 'info', from: { ...ANNOUNCE_FROM }, subj, body }));
+  return { ok: true, n: to.length, msg: `Sent to ${to.length} player${to.length === 1 ? '' : 's'}.` };
+}
 // direct sales between tycoons (deals.js): who you can sell to, and money in and out of a company's owner
 export function contacts(city, pid) { const p = city.players[pid]; if (!p) return []; const ids = new Set(p.net || []); Object.values(city.holdings || {}).forEach((h) => { if (h.members[pid]) Object.keys(h.members).forEach((id) => ids.add(id)); }); ids.delete(pid); return [...ids].filter((id) => city.players[id] && !city.players[id].bot && !city.players[id].admin); }
 export const dctx = (city) => ({ listing: (id) => listing(city, id), canRun: (pid, l) => canRun(city, pid, l), contacts: (pid) => contacts(city, pid), name: (l) => MAIL.coName(l),

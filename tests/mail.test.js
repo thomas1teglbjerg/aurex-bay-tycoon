@@ -67,4 +67,15 @@ assert(nl.ad && nl.ad.head === 'Hello', 'the newsletter carries an advertisement
 for (let i = 0; i < 80; i++) hap('press');
 assert(p.mail.length <= ML.MAX, `the mailbox keeps at most ${ML.MAX} mails`);
 const json = JSON.stringify(p.mail); assert(json.length < 40000, `mail stays light in the save (${Math.round(json.length / 1024)} KB)`);
+
+// admins write one mail to every human tycoon (a changelog); bots and the administrator get none
+E.addPlayer(city, 'v', 'Mikkel', now);
+const bot = Object.values(city.players).find((q) => q.bot), botN = bot ? (bot.mail || []).length : 0;
+assert(!E.mailAll(city, { subj: '', body: 'x' }).ok, 'a changelog needs a subject');
+const ma = E.mailAll(city, { subj: "What's new in Aurex Bay", body: 'Line one.\n\n  Line two.  \n' });
+assert(ma.ok && ma.n === 2, 'the changelog goes to both humans: ' + ma.msg);
+x = city.players.v.mail[0];
+assert(x.subj === "What's new in Aurex Bay" && x.body === 'Line one.\nLine two.' && x.from.k === 'city' && !x.opts, 'it is a plain city mail, blank lines dropped');
+assert(p.mail[0].subj === x.subj && p.mail[0].id !== x.id, 'each player gets their own copy');
+assert(!bot || (bot.mail || []).length === botN, 'bots get no changelog');
 console.log('ALL OK');
