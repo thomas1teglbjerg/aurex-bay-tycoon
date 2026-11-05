@@ -20,9 +20,9 @@ export const TYPES = {
   textile: { name: 'Textile Mill', sector: 'Manufacturing · Textiles', starter: true, price: 12, trade: 1.2, ypi: 1.8, group: 'industry', tags: ['Textiles', 'Industry', 'Starter'],
     perks: [{ t: 'Local Fabric', d: 'Weaves the textiles clothing stores, fashion houses, hotels and the paper buy, and sells them on the city market' }, { t: 'Mill Synergy', d: '+YPI to Clothing Stores and Fashion Houses in the portfolio' }],
     neg: [{ t: 'Fast Fashion Slump', d: '−0.3 M YPI during a recession' }] },
-  chemical: { name: 'Chemical Plant', sector: 'Industry · Specialty Chemicals', price: 32, trade: 3, ypi: 4.2, group: 'industry', tags: ['Chemicals', 'Industry', 'Premium'],
+  chemical: { name: 'Chemical Plant', sector: 'Industry · Specialty Chemicals', price: 16, trade: 1.6, ypi: 2.4, group: 'industry', tags: ['Chemicals', 'Industry', 'Premium'],
     perks: [{ t: 'Local Chemicals', d: 'Makes the chemicals pharma, chip factories, textile mills, vineyards and garages buy, and sells them on the city market' }, { t: 'Chemical Synergy', d: '+YPI to Pharma and Chip Factories in the portfolio' }],
-    neg: [{ t: 'Safety Inspections', d: '1.5 M maintenance per year' }, { t: 'Spill Risk', d: '−2 M YPI during a crisis' }] },
+    neg: [{ t: 'Safety Inspections', d: '1 M maintenance per year' }, { t: 'Spill Risk', d: '−1 M YPI during a crisis' }] },
   car: { name: 'Car Factory', sector: 'Automotive Manufacturing', price: 21, trade: 3, ypi: 3.5, group: 'industry', tags: ['Automotive', 'Industry'],
     perks: [{ t: 'Metal Synergy', d: '+1 M Trade with Metal Production in the portfolio' }], neg: [{ t: 'Energy Dependence', d: 'No Trade income during an energy shortage or oil shock' }] },
   finance: { name: 'Finance & Banking', sector: 'Finance · Banking Sector', price: 22, trade: 3, ypi: 3.5, group: 'finance', tags: ['Finance', 'Loans'],
@@ -47,7 +47,7 @@ export const TYPES = {
 // Portfolio synergies: owning (or contracting with) the first type boosts the second
 export const SYNERGY = [['car', 'dealer'], ['autorepair', 'dealer'], ['car', 'autorepair'], ['metal', 'car'], ['metal', 'chip'], ['chip', 'data'], ['chip', 'pharma'], ['film', 'fashion'], ['hotel', 'fashion'], ['finance', 'data'], ['vineyard', 'restaurant'], ['newspaper', 'film'], ['newspaper', 'music'], ['textile', 'clothing'], ['textile', 'fashion'], ['chemical', 'pharma'], ['chemical', 'chip']];
 // yearly maintenance in M per size multiplier (heavy plants)
-export const MAINT = { metal: 2, chemical: 1.5 };
+export const MAINT = { metal: 2, chemical: 1 };
 
 export const SIZES = { S: { label: 'Small', mult: 0.6 }, M: { label: 'Medium', mult: 1 }, L: { label: 'Large', mult: 1.5 } };
 

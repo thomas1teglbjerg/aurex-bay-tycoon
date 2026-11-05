@@ -304,7 +304,7 @@ export function listingYield(city, l, owner) {
   if (l.type === 'car' && types.has('metal')) { trade += s; notes.push(`Metal synergy Trade +${r2(s)}`); }
   if (l.type === 'hotel' && econ === 'Boom') { ypi += s; notes.push(`Boom +${r2(s)}`); }
   if (l.type === 'hotel' && econ === 'Recession') { ypi -= s; notes.push(`Recession −${r2(s)}`); }
-  if (l.type === 'chemical' && econ === 'Crisis') { ypi -= 2 * s; notes.push(`Spill risk −${r2(2 * s)}`); }
+  if (l.type === 'chemical' && econ === 'Crisis') { ypi -= s; notes.push(`Spill risk −${r2(s)}`); }
   if (l.type === 'metal' && econ === 'Crisis') { ypi -= 3 * s; notes.push(`Crisis −${r2(3 * s)}`); }
   if (l.type === 'pharma' && econ === 'Crisis') { ypi += 3 * s; notes.push(`Emergency profits +${r2(3 * s)}`); }
   if (l.type === 'newspaper' && econ === 'Recession') { ypi -= 0.3 * s; notes.push(`Thin ad pages −${r2(0.3 * s)}`); }
