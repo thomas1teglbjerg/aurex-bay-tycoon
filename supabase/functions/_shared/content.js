@@ -441,8 +441,8 @@ export const WAREHOUSE_SITES = [
   { id: 'W5', name: 'Crown Hills Depot', d: 'crown', p: [0.9, 0.2], mode: 'road', price: 8, upkeep: 0.4, cap: 900, importMult: 0.98, importDays: 6, exportMult: 0.95, desc: 'A small depot in the north. Cheap to own, short trips to the Old Grid and the hills.' }
 ];
 // direct sales between tycoons (deals.js): an offer waits openWeeks for an answer; when the seller delivers it, they have deliverWeeks to send it.
-// The price per unit must stay between minPrice and maxPrice × the supply's normal price.
-export const DEALS = { openWeeks: 4, deliverWeeks: 4, minPrice: 0.25, maxPrice: 4 };
+// The price per unit must stay between minPrice and maxPrice × the supply's normal price. selfFee (M): what the buyer pays the seller to deliver it themselves.
+export const DEALS = { openWeeks: 4, deliverWeeks: 4, minPrice: 0.25, maxPrice: 4, selfFee: 0.01 };
 export const LOGISTICS = { truckDaysPer100px: 0.9, minTruckDays: 1, bulkDiscountQty: 500, bulkDiscount: 0.05, upgradeCostMult: 0.5, levelCap: 1.5 };
 
 // ---------------------------------------------------------------- personal life

@@ -100,6 +100,12 @@ export function dispatch(city, p, w, l, g, qty, gNow) {
   ship(city, { g, qty, from: { k: 'w', id: w.id }, to: { k: 'l', id: l.id }, owner: p.id, departG: gNow, arriveG: gNow + days * DAY, mode: 'truck' });
   return { ok: true, msg: `Truck on the way: ${qty} ${GOODS[g].unit}, arrives in ${days} game days.`, days };
 }
+// a company's own truck drives goods across the city (a seller delivering a sale themselves)
+export function truck(city, o) {
+  const from = city.listings.find((x) => x.id === o.from.id), to = city.listings.find((x) => x.id === o.to.id), days = truckDays(from, to);
+  const sh = ship(city, { g: o.g, qty: o.qty, from: o.from, to: o.to, owner: o.owner, departG: o.gNow, etaG: o.gNow + days * DAY, arriveG: o.gNow + days * DAY, mode: 'truck', value: o.value || 0, route: 'local' });
+  return { sh, days, freight: 0 };
+}
 export function exportFrom(city, p, w, g, qty, exportPrice, gNow, cid = 'ridge') {
   if (w.owner !== p.id) return { ok: false, msg: 'Not your warehouse.' };
   qty = Math.min(Math.round(qty), Math.floor(w.stock[g] || 0)); if (qty < 1) return { ok: false, msg: 'Nothing of that in stock.' };

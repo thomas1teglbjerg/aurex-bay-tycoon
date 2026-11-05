@@ -875,7 +875,7 @@ async function onClick(e) {
     case 'dealAccept': await act('dealAccept', { id: d.id, blid: d.co, how: d.how }); return;
     case 'dealDecline': await act('dealDecline', { id: d.id }); return;
     case 'dealWithdraw': await act('dealWithdraw', { id: d.id }); return;
-    case 'dealDeliver': await act('dealDeliver', { id: d.id, carrier: d.how }); return;
+    case 'dealDeliver': await act('dealDeliver', { id: d.id }); return;
     case 'assignHead': await act('assignHead', { lid: d.lid, dept: d.dept, spec: d.spec, coop: d.coop }); return;
     case 'unassignHead': await act('unassignHead', { spec: d.spec, coop: d.coop }, 'Head removed.'); return;
     case 'approveAll': await act('approveAll', {}); return;
