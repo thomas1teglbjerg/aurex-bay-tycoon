@@ -15,7 +15,7 @@ assert(C.level(0) === 1 && C.level(149) === 1 && C.level(150) === 2 && C.level(1
 assert(C.rating(1) === 1 && C.rating(5) === 3 && C.rating(10) === 5, 'level 5 leads like a normal specialist, 10 like a star');
 
 // lead Operations yourself
-const l = city.listings.find((x) => !x.owner && TYPES_OK(x) && E.listingPrice(x) < 60);
+const l = city.listings.find((x) => !x.owner && x.size !== 'S' && TYPES_OK(x) && E.listingPrice(x) < 60);
 function TYPES_OK(x) { return ['restaurant', 'hotel', 'vineyard', 'clothing', 'autorepair', 'dealer'].includes(x.type); }
 assert(A('u', 'buy', { lid: l.id }).ok, 'buy a service company');
 const r = A('u', 'meHead', { lid: l.id, dept: 'ops' });
