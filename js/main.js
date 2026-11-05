@@ -423,6 +423,7 @@ function liveUpdate() {
     if (k === 'cash') el.textContent = p.admin ? '∞' : dollars(E.liveCash(c, p.id, t));
     else if (k === 'treasury') el.textContent = dollars(E.liveTreasury(c, id, t));
     else if (k === 'until') el.textContent = dur(msUntilMonth(Number(id)));
+    else if (k === 'card') { const ms = msUntilMonth(Number(id)); el.textContent = ms > 0 ? dur(ms) : 'any moment'; }
     else if (k === 'prog') { const l = E.listing(c, id); if (l && l.upgrade) { const total = E.upgradeMonths({ level: l.upgrade.to - 1 }), left = l.upgrade.doneM - E.gameNow(c, t) * 12; el.style.width = Math.max(2, Math.min(100, (1 - left / total) * 100)) + '%'; } }
   });
 }
@@ -568,7 +569,7 @@ function empireHTML() {
     </div></div>`;
 }
 function marketHTML() {
-  const c = city(), p = me(), intel = E.intelFor(c, p.id), q = UI.qty, nextQ = (Math.floor(c.m / 3) + 1) * 3;
+  const c = city(), p = me(), intel = E.intelFor(c, p.id), q = UI.qty, nextQ = E.nextWorldM(c);
   const last = c.lastCard ? WORLD.find((w) => w.id === c.lastCard.id) : null;
   const stocks = STOCKS.map((s) => { const st = { p: livePrice(c, s.id) }, h = liveH(c, s.id), ch = h.length > 1 ? (h[h.length - 1] / h[h.length - 2] - 1) * 100 : 0, own = p.shares[s.id] || 0;
     return `<div class="srow"><img src="img/k-${s.id}.jpg" alt=""><div style="min-width:0"><b style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.name)}</b><span class="num muted" style="font-size:13px">${PX(st.p)} <span class="${ch >= 0 ? 'up' : 'down'}">${ch >= 0 ? '+' : ''}${ch.toFixed(1)}%</span> · own ${own}</span></div>
@@ -580,7 +581,7 @@ function marketHTML() {
   return `<div class="grid"><div class="col">
       <div class="box"><h2>World economy<small>${c.econ.toUpperCase()}</small></h2><div class="in">
         ${last ? `<div><div class="cap">Latest World Card · ${esc(dateLabel(c.lastCard.m))}</div><b style="font-family:var(--head);font-size:18px">${esc(last.title)}</b><p class="empty" style="margin-top:4px">${esc(last.text)}</p></div>` : ''}
-        <div class="stat"><small>Next World Card in</small><b class="num" data-live="until:${nextQ}">…</b></div>
+        <div class="stat"><small>Next World Card in</small><b class="num" data-live="card:${nextQ}">…</b></div>
         ${intel ? `<div class="prop"><span class="cap">Market insight from ${esc(intel.from)}</span><b>Next quarter: ${esc(intel.next.title)}</b><span class="muted" style="font-size:13.5px">${esc(intel.next.text)}</span></div>` : '<p class="empty" style="font-size:13.5px">Hire Jason Miller, or add someone who has him to your network, to see the next World Card before it hits.</p>'}
         <p class="empty" style="font-size:13.5px">Booms raise Trade income 30%. Recessions cut it 40%, crises 60%. Every player in the city lives in the same economy.</p></div></div>
       <div class="box"><h2>Supplies market<small>CITY-WIDE</small></h2><div class="in">

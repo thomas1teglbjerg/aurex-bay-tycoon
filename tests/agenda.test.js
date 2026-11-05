@@ -22,5 +22,13 @@ const happenTitles = HAPPENINGS.map((h) => (MAIL_HAP[h.id] || h).subj || h.title
 assert([...titles].some((t) => happenTitles.some((h) => t.includes(h))), 'companies have small happenings during the year');
 assert([...titles].some((t) => t.startsWith('decision:')), 'decisions arrive during the year');
 assert(city.agenda.every((e) => e.at >= city.g - 1e-9), 'nothing overdue is left on the agenda');
+// the next card is always planned, in the quarter after the last one, and it is the card market insight shows
+{ let ok = true, seen = 0, want = city.deck[0], lastM = city.lastCard && city.lastCard.m;
+  for (let i = 0; i < 60; i++) {
+    const at = E.nextWorldM(city); if (!city.agenda.some((e) => e.k === 'world')) ok = false;
+    now += weekMs; E.advance(city, now);
+    if (city.lastCard && city.lastCard.m !== lastM) { seen++; if (city.lastCard.id !== want || Math.floor(city.lastCard.m) !== Math.floor(at) || Math.floor(at / 3) !== Math.floor(city.lastCard.m / 3)) ok = false; lastM = city.lastCard.m; want = city.deck[0]; if (Math.floor(E.nextWorldM(city) / 3) !== Math.floor(lastM / 3) + 1) ok = false; }
+  }
+  assert(ok && seen >= 4, `the countdown and market insight match the card that lands (${seen} cards)`); }
 const json = JSON.stringify(city); assert(JSON.parse(json).agenda.length === city.agenda.length, 'the agenda survives a save');
 console.log('ALL OK');

@@ -445,8 +445,19 @@ function planWeek(city, wk) {
   });
   // vineyards harvest once a year, each in its own week of the autumn; auto repair shops build a tuner car for the spring show (CRAFT)
   city.listings.forEach((l) => { if (makes(l) && l.owner && wk % 48 === harvestWeek(l)) plan(city, inWeek(wk), 'vintage', { lid: l.id }); });
-  // the next world card lands somewhere in the first half of the quarter
-  if (wk % 12 === 0) plan(city, (wk + 0.5 + rand() * 6) / 48, 'world');
+  planWorld(city, wk);
+}
+// the next world card lands somewhere in the first half of its quarter. It is planned a quarter ahead
+// (right after the last card fired), so the Market tab can count down to the real moment.
+function planWorld(city, wk) {
+  if ((city.agenda || []).some((e) => e.k === 'world')) return;
+  const q = Math.floor(wk / 12), done = !!city.lastCard && Math.floor(city.lastCard.m / 3) >= q, base = (done ? q + 1 : q) * 12;
+  plan(city, Math.max(base + 0.5 + rand() * 6, wk + 0.05 + rand() * 0.9) / 48, 'world');
+}
+// game month (fractional) the next world card is due
+export function nextWorldM(city) {
+  const e = (city.agenda || []).find((x) => x.k === 'world');
+  return e ? e.at * 12 : (Math.floor(city.m / 3) + 1) * 3 + 0.5;
 }
 // the company makes a collectible once a year (CRAFT in content.js); a type whose car list is still empty makes nothing
 export const makes = (l) => { const cf = l && CRAFT[l.type]; return !!cf && !(cf.spec.models && !cf.spec.models.length); };
@@ -474,7 +485,7 @@ function runAgenda(city, g) {
   due.forEach((e) => { settleAll(city, Math.max(city.g, e.at)); const f = AGENDA[e.k]; if (f) f(city, e); });
 }
 const AGENDA = {
-  world: (city) => worldCard(city, city.m),
+  world: (city, e) => { worldCard(city, city.m); planWorld(city, Math.floor(e.at * 48 + 1e-6)); },
   bot: (city, e) => { const p = city.players[e.pid]; if (p && p.bot) botAct(city, p, city.m); },
   decision: (city, e) => {
     const p = city.players[e.pid]; if (!p || p.bot || p.inbox.length >= 3) return;
