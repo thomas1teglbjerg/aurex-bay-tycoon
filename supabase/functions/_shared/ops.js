@@ -512,8 +512,6 @@ export function tasks(city, l) {
   if (gone.length) out.push({ id: 'archive', dept: 'sales', label: `${gone.length} cancelled ${word}${gone.length > 1 ? 's' : ''} to archive` });
   if (automation(l, 'ops') === 0 && !(o.boost && o.boost.m === m + 1)) out.push({ id: 'runShift', dept: 'ops', label: hotel ? 'No front-desk staff: run reception yourself this month' : 'No production staff: run the line yourself this month', urgent: true });
   if (automation(l, 'procurement') < 1 && coverMonths(l) < 1.05) out.push({ id: 'restock', dept: 'procurement', label: coverMonths(l) < 0.05 ? 'Production is stopped: buy supplies' : `Supplies last ${coverMonths(l).toFixed(1)} months: restock`, urgent: coverMonths(l) < 0.5 });
-  const outs = Object.keys(RECIPES[l.type].out).filter((g) => (o.inv[g] || 0) >= 1);
-  if (automation(l, 'sales') < 1 && outs.length) out.push({ id: 'sellSurplus', dept: 'sales', label: `Sell surplus ${outs.map((g) => GOODS[g].name.toLowerCase()).join(' and ')}` });
   if (automation(l, 'sales') < 1 && o.cd.findCustomers !== m) out.push({ id: 'findCustomers', dept: 'sales', label: hotel ? 'Find new booking partners' : 'Find new clients', interactive: true });
   if (o.depts.social && automation(l, 'social') === 0 && o.cd.postCampaign !== m) out.push({ id: 'postCampaign', dept: 'social', label: 'Shoot a marketing campaign', interactive: true });
   if (automation(l, 'hr') === 0 && o.morale < 70 && o.cd.teamMeeting !== m) out.push({ id: 'teamMeeting', dept: 'hr', label: `Morale is ${Math.round(o.morale)}: hold a team meeting`, urgent: o.morale < 35, interactive: true });
@@ -546,7 +544,6 @@ export function doTask(city, ctx, l, task, a = {}) {
   const once = (k) => { if (o.cd[k] === m) return false; o.cd[k] = m; return true; };
   switch (task) {
     case 'restock': { if (automation(l, 'procurement') < 1) return { ok: false, msg: 'Order each supply by hand below, or fully staff Procurement to restock automatically.' }; const r = restock(city, ctx, l, Number(a.months) || (o.depts.procurement ? setting(l, 'procurement', 'stock') : 1)); return { ok: true, msg: r.cost > 0 ? `Bought supplies for ${r2(r.cost)} M${r.imported > 0 ? ` (${Math.round(r.imported)} units imported)` : ''}.` : 'Stock is already full.' }; }
-    case 'sellSurplus': { let v = 0; Object.keys(RECIPES[l.type].out).forEach((g) => { const mk = city.market[g]; const q = o.inv[g] || 0; if (q >= 1) { listGoods(city, l, g, q, mk.p * B2B[setting(l, 'sales', 'b2b')], false); v += q * mk.p; } }); return { ok: true, msg: `Listed on the city market for about ${r2(v)} M. Buyers pay when they buy.` }; }
     case 'runShift': { if (o.boost && o.boost.m === m + 1) return { ok: false, msg: 'You already worked the line this month.' }; o.boost = { m: m + 1, mult: 2 }; return { ok: true, msg: hosts(l) ? 'You run reception yourself. Rooms next month are doubled. Hire Operations staff to automate it.' : 'You run the line yourself. Output this month is doubled. Hire Operations staff to automate it.' }; }
     case 'teamMeeting': {
       if (!once('teamMeeting')) return { ok: false, msg: 'Already held this month.' };
