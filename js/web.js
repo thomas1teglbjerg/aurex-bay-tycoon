@@ -5,8 +5,8 @@ import { HOMES, ROOMS, LIFESTYLES, SALARIES, TAX, LIFE as LC, RARITY, PRESTIGE_T
 import { city, me, meId, esc, M, P, lineChart, shortDate, dateLabel, msUntilMonth, dur, coImg } from './util.js';
 import { money, ricon, homeBg, bidBase, standing } from './life.js';
 import { apexSite } from './team.js';
-import { carrierSite } from './freight.js';
-import { CARRIERS, CENTRAL, CENTRAL_BANK, WORLD, TYPES, GOODS, HOUSE_PICS } from '../supabase/functions/_shared/content.js';
+import { freightSite, freightAlias } from './freight.js';
+import { CENTRAL, CENTRAL_BANK, WORLD, TYPES, GOODS, HOUSE_PICS } from '../supabase/functions/_shared/content.js';
 
 const L = E.LIFE;
 export const HOME_URL = 'baylink.ab';
@@ -27,7 +27,7 @@ export const SITES = {
   'aurexauctions.ab': { name: 'Aurex & Co.', tag: 'Auctioneers since 1889', logo: ['A&C', '#0d0b09', '#e8d6a8'] },
   ...Object.fromEntries(Object.entries(DEALERS).map(([cat, d]) => [d.host, { name: d.name, tag: d.sub, logo: d.logo, cat }])),
   'apextalent.ab': { name: 'Apex Talent', tag: 'Executive search and transfers', logo: ['AT', '#111827', '#f5c84c'] },
-  ...Object.fromEntries(CARRIERS.map((c) => [c.host, { name: c.name, tag: c.tag, logo: [c.short.split(' ').map((w) => w[0]).join(''), c.color, '#fff'], carrier: c.id }])),
+  'aurexfreight.ab': { name: 'Aurex Freight', tag: 'Bolt Air, Ridgeway and Harborline · rates and tracking', logo: ['AF', '#1e293b', '#fbbf24'], freight: true },
   'bankofaurex.ab': { name: 'Bank of Aurex', tag: 'The national bank · business loans and the bank rate', logo: ['BA', '#14110d', '#d9b45a'] },
   'harbortrust.ab': { name: 'Harbor Trust', tag: 'Private banking · your personal account', logo: ['HT', '#0b3d4f', '#7fe0c9'] },
   'bayhomes.ab': { name: 'BayHomes', tag: 'Find your place in Aurex Bay', logo: ['BH', '#0e8a7e', '#fff'] },
@@ -68,17 +68,17 @@ function adSlot(slot, cls = '') {
 }
 
 // ---------------------------------------------------------------- browser chrome
-export function parseUrl(u) { const s = String(u || HOME_URL).trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, ''); const [host, ...rest] = s.split('/'); return { host: host.toLowerCase(), path: rest, url: s || HOME_URL }; }
+export function parseUrl(u) { const s = String(u || HOME_URL).trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, ''); const [host, ...rest] = s.split('/'), r = { host: host.toLowerCase(), path: rest, url: s || HOME_URL }; const alias = freightAlias(r); return alias ? parseUrl(alias) : r; }
 export function webHTML(st) {
   const u = parseUrl(st.url), site = SITES[u.host];
-  const page = !site ? notFound(u) : u.host === 'baylink.ab' ? portal(st) : u.host === 'aurexauctions.ab' ? auctions(u, st) : SITES[u.host].cat ? dealer(SITES[u.host].cat, u) : u.host === 'bayhomes.ab' ? homes(u, st) : u.host === 'harbortrust.ab' ? bank(u) : u.host === 'bankofaurex.ab' ? boa(u) : u.host === 'apextalent.ab' ? apexSite(u, go) : SITES[u.host].carrier ? carrierSite(u.host, u, go) : gazette(u, st);
+  const page = !site ? notFound(u) : u.host === 'baylink.ab' ? portal(st) : u.host === 'aurexauctions.ab' ? auctions(u, st) : SITES[u.host].cat ? dealer(SITES[u.host].cat, u) : u.host === 'bayhomes.ab' ? homes(u, st) : u.host === 'harbortrust.ab' ? bank(u) : u.host === 'bankofaurex.ab' ? boa(u) : u.host === 'apextalent.ab' ? apexSite(u, go) : SITES[u.host].freight ? freightSite(u, go) : gazette(u, st);
   const bm = Object.keys(SITES).filter((h) => h !== 'baylink.ab').map((h) => `<button data-a="webGo" data-u="${h}" class="${u.host === h ? 'on' : ''}">${favicon(h, 18)}<span>${esc(SITES[h].name.replace(/^The /, ''))}</span></button>`).join('');
   return `<div class="wwin"><div class="wchrome">
     <div class="wbar"><button data-a="webBack" aria-label="Back" ${st.back.length ? '' : 'disabled'}>‹</button><button data-a="webFwd" aria-label="Forward" ${st.fwd.length ? '' : 'disabled'}>›</button><button data-a="webHome" aria-label="Home" class="hm"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/></svg></button>
       <form class="waddr" data-form="addr"><span class="lock" aria-hidden="true"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><input name="u" value="${esc(u.url)}" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Address"></form>
       <button data-a="webClose" aria-label="Close browser" class="x">✕</button></div>
     <div class="wbm">${bm}</div></div>
-    <div class="wpage" id="wpage"><div class="site s-${site ? (SITES[u.host].cat ? DEALERS[SITES[u.host].cat].theme : u.host.split('.')[0]) : 'nf'}">${page}${site && u.host !== 'baylink.ab' ? `<div class="adrow">${adSlot(Object.keys(SITES).indexOf(u.host) + u.path.length, 'wide')}</div>` : ''}</div></div></div>`;
+    <div class="wpage" id="wpage"><div class="site s-${site ? (SITES[u.host].cat ? DEALERS[SITES[u.host].cat].theme : u.host.split('.')[0]) : 'nf'}">${page}${site && u.host !== 'baylink.ab' && u.host !== 'aurexgazette.ab' ? `<div class="adrow">${adSlot(Object.keys(SITES).indexOf(u.host) + u.path.length, 'wide')}</div>` : ''}</div></div></div>`;
 }
 function notFound(u) {
   return `<div class="nf-in"><h1>This site can’t be reached</h1><p><b>${esc(u.host)}</b> does not exist in Aurex Bay.</p>${go(HOME_URL, 'Search on Baylink', 'nfbtn')}</div>`;
@@ -213,7 +213,7 @@ function gazette(u, st) {
   return `<div class="gz-mast"><span>${esc(dateLabel(c.m))}</span><h1>The Aurex Gazette</h1><span>Est. 1902 · Price 2¢</span></div>
     ${wc ? `<div class="gz-wc"><small>World Card · ${esc(dateLabel(wc.m))}</small><b>${esc(wc.title)}</b></div>` : ''}
     <div class="gz-cols"><article class="gz-lead">${lead ? `<h2>${esc(lead.title)}</h2><p>${esc(lead.text || '')}</p>` : ''}${rest.slice(0, 3).map((n) => `<h4>${esc(n.title)}</h4><p>${esc(n.text || '')}</p>`).join('')}${adSlot(2, 'wide')}${rest.slice(3, 6).map((n) => `<h4>${esc(n.title)}</h4><p>${esc(n.text || '')}</p>`).join('')}</article>
-    <aside>${houseAd('side')}${adSlot(1, 'side')}<h3>Markets this month</h3>${moversHTML(c)}
+    <aside>${houseAd('side')}<h3>Markets this month</h3>${moversHTML(c)}
       <h3>Under the hammer</h3>${sold.map((s) => `<p><b>${esc(L.ITEM[s.cid].name)}</b> went for ${money(s.price)}.</p>`).join('') || '<p>The auction season opens this month.</p>'}<p>${go('aurexauctions.ab', 'See the sale at Aurex &amp; Co. ›')}</p>
       <h3>Society</h3>${rest.slice(6, 12).map((n) => `<p>${esc(n.title)}.</p>`).join('')}
       ${gazetteOwner(c)}${st.admin ? `<p>${go('aurexgazette.ab/house', 'Admin: edit the house ad ›')}</p>` : ''}</aside></div>`;

@@ -389,6 +389,7 @@ function renderTop() {
   renderWho();
   $('datelbl').textContent = c.over ? `Season ${c.season} is over` : `${dateLabel(c.m)} · W${((c.wk ?? c.m * 4) % 4) + 1}`;
   $('econ').innerHTML = `<i style="background:${ECON_COL[c.econ]}"></i>${c.econ}`;
+  $('econ').title = `Economy: ${c.econ}. Booms raise Trade income 30%. Recessions cut it 40%, crises 60%. Every player in the city lives in the same economy.`;
   const brand = E.BR.brandOf(c, p.id), lg = $('mylogo'), key = brand ? [brand.name, brand.color, brand.font, brand.sym].join('|') : '';
   lg.hidden = !brand; if (lg.dataset.k !== key) { lg.dataset.k = key; lg.innerHTML = brand ? logoFull(brand, { size: 30 }) : ''; }
   const est = E.annualEstimate(c, 'p', p.id), st = E.standings(c);
@@ -526,10 +527,11 @@ function renderPanel() {
   el.scrollTop = st; liveUpdate();
 }
 // every box on a page can be folded away; the choice is remembered per page and box title
-const boxKey = (h2) => `${UI.company || UI.tab}:${(h2.childNodes[0] && h2.childNodes[0].textContent || '').trim()}`;
+const boxKey = (h2) => `${UI.company || UI.tab}:${h2.dataset.k || (h2.childNodes[0] && h2.childNodes[0].textContent || '').trim()}`;
+const FOLD = '.box > h2, .fold > .dh'; // box titles and the headers of departments not opened yet
 function applyCollapsed(el) {
   let closed = UI.closed; if (!closed) { try { closed = new Set(JSON.parse(localStorage.getItem('ab-closed') || '[]')); } catch { closed = new Set(); } UI.closed = closed; }
-  el.querySelectorAll('.box > h2').forEach((h2) => { const box = h2.parentElement; h2.setAttribute('role', 'button'); h2.tabIndex = 0; const shut = closed.has(boxKey(h2)); box.classList.toggle('closed', shut); h2.setAttribute('aria-expanded', String(!shut)); });
+  el.querySelectorAll(FOLD).forEach((h2) => { const box = h2.parentElement; h2.setAttribute('role', 'button'); h2.tabIndex = 0; const shut = closed.has(boxKey(h2)); box.classList.toggle('closed', shut); h2.setAttribute('aria-expanded', String(!shut)); });
 }
 function toggleBox(h2) {
   const k = boxKey(h2), box = h2.parentElement; if (UI.closed.has(k)) UI.closed.delete(k); else UI.closed.add(k);
@@ -571,7 +573,6 @@ function empireHTML() {
 }
 function marketHTML() {
   const c = city(), p = me(), q = UI.qty;
-  const last = c.lastCard ? WORLD.find((w) => w.id === c.lastCard.id) : null;
   const stocks = STOCKS.map((s) => { const st = { p: livePrice(c, s.id) }, h = liveH(c, s.id), ch = h.length > 1 ? (h[h.length - 1] / h[h.length - 2] - 1) * 100 : 0, own = p.shares[s.id] || 0;
     return `<div class="srow"><img src="img/k-${s.id}.jpg" alt=""><div style="min-width:0"><b style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.name)}</b><span class="num muted" style="font-size:13px">${PX(st.p)} <span class="${ch >= 0 ? 'up' : 'down'}">${ch >= 0 ? '+' : ''}${ch.toFixed(1)}%</span> · own ${own}</span></div>
       <div class="btns" style="flex-wrap:nowrap;gap:6px">${spark(h.slice(-48), 54, 24)}<button class="btn sm gold" data-a="trade" data-id="${s.id}" data-q="${q}" ${p.cash < q * st.p ? 'disabled' : ''}>Buy</button><button class="btn sm" data-a="trade" data-id="${s.id}" data-q="${-q}" ${own ? '' : 'disabled'}>Sell</button></div></div>`; }).join('');
@@ -580,9 +581,6 @@ function marketHTML() {
   const myOffers = (c.book || []).filter((x) => x.seller.k === 'p' && x.seller.id === p.id).map((x) => { const l = E.listing(c, x.lid); return `<div class="row"><div class="grow"><b>${N(x.qty)} ${esc(GOODS[x.g].unit)} ${esc(GOODS[x.g].name.toLowerCase())}</b><span>${K(x.price)} each · from ${esc(l ? TYPES[l.type].name : '')}${x.auto ? ' · listed by Sales' : ''}</span></div><button class="btn sm" data-a="cancelOffer" data-id="${x.id}">Withdraw</button></div>`; }).join('');
   const debt = E.debt(p), r = E.rates(c, 'p', p.id);
   return `<div class="grid"><div class="col">
-      <div class="box"><h2>World economy<small>${c.econ.toUpperCase()}</small></h2><div class="in">
-        ${last ? `<div><div class="cap">Latest World Card · ${esc(dateLabel(c.lastCard.m))}</div><b style="font-family:var(--head);font-size:18px">${esc(last.title)}</b><p class="empty" style="margin-top:4px">${esc(last.text)}</p></div>` : ''}
-        <p class="empty" style="font-size:13.5px">Booms raise Trade income 30%. Recessions cut it 40%, crises 60%. Every player in the city lives in the same economy.</p></div></div>
       <div class="box"><h2>Supplies market<small>CITY-WIDE</small></h2><div class="in">
         <p class="empty" style="font-size:13.5px">Every company in Aurex Bay buys and sells here. Prices float between the export floor and the import ceiling, driven by what players produce and need.</p>
         <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Supply</th><th>Price</th><th>vs normal</th><th>Trend</th><th>Import</th><th>Export</th><th>On offer</th><th>Bought last mo</th><th>Imported</th></tr></thead><tbody>${supplies}</tbody></table></div></div></div>
@@ -773,7 +771,7 @@ function showSeasonEnd() {
 // ---------------------------------------------------------------- events
 async function onClick(e) {
   { const p0 = me(), c1 = city(); if (p0 && c1 && c1.m - (p0.lastAct ?? c1.m) >= 1) B.act('ping', {}); } // being here counts as being active
-  { const h2 = e.target.closest('#panel .box > h2'); if (h2 && !e.target.closest('[data-a]')) { toggleBox(h2); return; } }
+  { const h2 = e.target.closest(`#panel :is(${FOLD})`); if (h2 && !e.target.closest('[data-a]')) { toggleBox(h2); return; } }
   const t = e.target.closest('[data-a]'); if (!t || t.disabled) return;
   if (t.tagName === 'A') e.preventDefault();
   const d = t.dataset, a = d.a, c = city();
@@ -1103,7 +1101,7 @@ async function boot(hot) {
   $('boot').remove();
   buildMap(); setupPanZoom(); setupMapEvents(); mapImg(MAP.img); preloadDistricts();
   document.addEventListener('click', onClick);
-  document.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('#panel .box > h2')) { e.preventDefault(); toggleBox(e.target); } });
+  document.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches(`#panel :is(${FOLD})`)) { e.preventDefault(); toggleBox(e.target); } });
   document.addEventListener('change', async (e) => {
     const t = e.target, d = t.dataset;
     if (d.a === 'whTarget') { UI.whTarget[d.g] = t.value; refreshModal(); }
