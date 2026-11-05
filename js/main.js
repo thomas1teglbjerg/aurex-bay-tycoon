@@ -579,7 +579,6 @@ function marketHTML() {
   const supplies = Object.entries(GOODS).map(([g, d]) => { const mk = c.market[g], last = mk.last || {}, vs = (mk.p / d.base - 1) * 100;
     return `<tr><td><b>${esc(d.name)}</b><span>${d.producer ? 'Made by ' + esc(TYPES[d.producer].name) : 'Import only'}</span></td><td class="num">${K(mk.p)}</td><td class="num ${vs > 5 ? 'down' : vs < -5 ? 'up' : ''}">${P(vs)}</td><td>${spark(mk.h.slice(-18), 60, 22)}</td><td class="num muted">${K(E.OPS.importPrice(c, g))}</td><td class="num muted">${K(E.OPS.exportPrice(c, g))}</td><td class="num">${N(E.OPS.listedQty(c, g))}</td><td class="num">${N(last.bought || 0)}</td><td class="num">${N(last.imported || 0)}</td></tr>`; }).join('');
   const myOffers = (c.book || []).filter((x) => x.seller.k === 'p' && x.seller.id === p.id).map((x) => { const l = E.listing(c, x.lid); return `<div class="row"><div class="grow"><b>${N(x.qty)} ${esc(GOODS[x.g].unit)} ${esc(GOODS[x.g].name.toLowerCase())}</b><span>${K(x.price)} each · from ${esc(l ? TYPES[l.type].name : '')}${x.auto ? ' · listed by Sales' : ''}</span></div><button class="btn sm" data-a="cancelOffer" data-id="${x.id}">Withdraw</button></div>`; }).join('');
-  const debt = E.debt(p), r = E.rates(c, 'p', p.id);
   return `<div class="grid"><div class="col">
       <div class="box"><h2>Supplies market<small>CITY-WIDE</small></h2><div class="in">
         <p class="empty" style="font-size:13.5px">Every company in Aurex Bay buys and sells here. Prices float between the export floor and the import ceiling, driven by what players produce and need.</p>
@@ -587,8 +586,6 @@ function marketHTML() {
       ${myOffers ? `<div class="box"><h2>Your offers<small>OPEN</small></h2><div class="in"><div class="rows">${myOffers}</div></div></div>` : ''}
     </div><div class="col">
       ${gazetteBox()}
-      <div class="box"><h2>Bank of Aurex</h2><div class="in"><div class="stats"><div class="stat"><small>Debt</small><b class="num down">${M(-debt)}</b></div><div class="stat"><small>Rate</small><b class="num">${E.loanRate(c, p)}%</b></div><div class="stat"><small>Interest / yr</small><b class="num">${M(-r.interest)}</b></div><div class="stat"><small>Credit limit</small><b class="num">${M(E.loanCap(c, p))}</b></div></div>
-        <div class="btns"><button class="btn navy" data-a="webGo" data-u="bankofaurex.ab/loans">Manage loans at bankofaurex.ab ›</button></div></div></div>
     </div></div>
     ${stocksHTML(UI)}`;
 }

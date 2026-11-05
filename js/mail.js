@@ -35,6 +35,7 @@ function face(x, cls = '') {
   if (f.tid && PERSON[f.tid] && PERSON[f.tid].img) return `<span class="mface ${cls}" style="background-image:url(${faceUrl(f.tid)})"></span>`;
   if (x.kind === 'news' || f.k === 'press') return `<span class="mface gz ${cls}">G</span>`;
   if (f.k === 'city') return `<span class="mface city ${cls}">✦</span>`;
+  if (f.k === 'bank') return `<span class="mface bank ${cls}">BA</span>`;
   return `<span class="mface ini ${cls}" style="--mc:${hue(f.n)}">${esc(initials(f.n))}</span>`;
 }
 const when = (x) => `${dateLabel(x.m)}${x.g != null ? ` · W${(Math.floor(x.g * 48 + 1e-6) % 4) + 1}` : ''}`;
