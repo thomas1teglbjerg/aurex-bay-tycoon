@@ -667,7 +667,7 @@ export const TALENT = [
   { id: 'anika', kind: 'anika', name: 'Anika Rao', rating: 3, img: true }, { id: 't-diego', kind: 'anika', name: 'Diego Alvarez', rating: 5 }, { id: 't-mei', kind: 'anika', name: 'Mei Lin', rating: 2 },
   { id: 'sofia', kind: 'sofia', name: 'Sofia Lindström', rating: 3, img: true }, { id: 't-jamal', kind: 'sofia', name: 'Jamal Reed', rating: 4, img: true }, { id: 't-clara', kind: 'sofia', name: 'Clara Novak', rating: 2 },
   { id: 'robert', kind: 'robert', name: 'Robert Hayes', rating: 3, img: true }, { id: 't-ingrid', kind: 'robert', name: 'Ingrid Falk', rating: 4 }, { id: 't-tomas', kind: 'robert', name: 'Tomás Silva', rating: 2 },
-  { id: 'emily', kind: 'emily', name: 'Emily Carter', rating: 3, img: true }, { id: 't-yara', kind: 'emily', name: 'Yara Haddad', rating: 4 }, { id: 't-noah', kind: 'emily', name: 'Noah Brooks', rating: 2 },
+  { id: 'emily', kind: 'emily', name: 'Emily Carter', rating: 3, img: true }, { id: 't-yara', kind: 'emily', name: 'Yara Haddad', rating: 4 }, { id: 't-noah', kind: 'emily', name: 'Noah Brooks', rating: 2, img: true },
   { id: 'carlos', kind: 'carlos', name: 'Carlos Mendoza', rating: 4, img: true }, { id: 'mack', kind: 'carlos', name: 'Mack Brennan', rating: 1, img: true, starter: true, role: 'Logistics Operator', pay: 0.6 }, { id: 't-olga', kind: 'carlos', name: 'Olga Petrova', rating: 3 }, { id: 't-sam', kind: 'carlos', name: 'Sam Okoye', rating: 2 },
   { id: 'marco', kind: 'marco', name: 'Marco Vitale', rating: 2, img: true, starter: true }, { id: 't-dana', kind: 'marco', name: 'Dana Kowalski', rating: 3 }, { id: 't-viktor', kind: 'marco', name: 'Viktor Hale', rating: 4 },
   { id: 'rohan', kind: 'jason', name: 'Rohan Mehta', rating: 3, img: true, role: 'Sales Executive', pay: 1.1,
