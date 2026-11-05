@@ -44,7 +44,7 @@ export function ask(city, p, a, ctx) {
   const g = s.g, bl = ctx.listing(a.blid);
   if (!bl || !bl.ops || !ctx.canRun(p.id, bl)) return err('Pick one of your companies to deliver to.');
   if (!RECIPES[bl.type] || !(g in RECIPES[bl.type].in)) return err(`That company does not use ${GOODS[g].name.toLowerCase()}.`);
-  if (same(bl.owner, l.owner)) return err('You own the plant yourself. Move the goods yourself.');
+  // the plant's own owner may order too (e.g. for their own construction company): it still has to be mixed and delivered
   const qty = Math.round(Number(a.qty) || 0), min = Math.round(Number(a.min) || 0), wk = Math.round(Number(a.weeks) || 0);
   if (qty < QUOTES.minQty) return err(`The smallest order is ${QUOTES.minQty} ${GOODS[g].unit}.`);
   if (qty > QUOTES.maxQty) return err(`The most in one order is ${QUOTES.maxQty} ${GOODS[g].unit}.`);

@@ -75,9 +75,12 @@ assert(E.apply(city, 'b', 'quoteDecline', { id: q.id }, now).ok && q.status === 
 r = ask('b'); q = city.quotes[city.quotes.length - 1]; E.apply(city, 'a', 'quoteOffer', { id: q.id, qty: 150, price: 0.004, weeks: 2 }, now); wk(); wk(); wk();
 assert(q.status === 'expired', 'an unaccepted quote runs out');
 
-// the owner cannot order from their own plant
+// the plant's owner can order for their own construction company too
 const a2 = take('construction', 'a');
-assert(!E.apply(city, 'a', 'quoteAsk', { site: HOST, blid: a2.id, qty: 100, min: 100, weeks: 2 }, now).ok, 'no orders to yourself');
+r = E.apply(city, 'a', 'quoteAsk', { site: HOST, blid: a2.id, qty: 100, min: 100, weeks: 2 }, now); q = city.quotes[city.quotes.length - 1]; const c0 = A.cash;
+assert(r.ok && E.apply(city, 'a', 'quoteOffer', { id: q.id, qty: 100, price: 0.004, weeks: 2 }, now).ok && E.apply(city, 'a', 'quoteAccept', { id: q.id }, now).ok, 'the owner orders from their own plant');
+plant.ops.inv.concrete = 120; const own = city.deals.find((x) => x.id === q.deal);
+assert(E.apply(city, 'a', 'dealDeliver', { id: own.id }, now).ok && near(A.cash, c0) && near(plant.ops.inv.concrete, 20), 'own delivery: money goes round, concrete moves');
 
 // runs inside advance without errors
 now += E.realMsPerMonth(city); E.advance(city, now);
