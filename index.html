@@ -834,6 +834,7 @@ em.s { color: #b07a10; font-style: normal; font-weight: 700; } em.m { color: var
 .pf-hero { position: relative; aspect-ratio: 4 / 3.6; background-size: cover; background-position: 50% 16%; background-color: #0d1014; }
 .pf-hero::after { content: ""; position: absolute; inset: auto 0 0 0; height: 45%; background: linear-gradient(180deg, rgba(24,28,34,0), var(--pf-panel)); pointer-events: none; }
 .pf-hero.noimg { display: grid; place-items: center; aspect-ratio: 16 / 10; background: radial-gradient(circle at 50% 40%, var(--kc), #0d1014 75%); }
+.pf-hero.noimg { background-size: cover; background-position: center bottom; background-repeat: no-repeat; aspect-ratio: 4 / 3.2; }
 .pf-ini { font-family: var(--head); font-weight: 800; font-size: 64px; color: rgba(255,255,255,0.9); position: relative; z-index: 1; }
 .pf-logo { position: absolute; z-index: 1; top: 14px; left: 14px; display: flex; gap: 7px; align-items: center; background: rgba(16,19,23,0.8); padding: 5px 10px 5px 6px; border-radius: 999px; font-weight: 700; font-size: 12px; color: #fff; max-width: 70%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .pf-ovr { position: absolute; z-index: 1; top: 14px; right: 14px; width: 58px; height: 58px; border-radius: 14px; background: var(--pf-gold); color: #0d1114; display: grid; place-items: center; text-align: center; font-family: var(--head); font-weight: 800; font-size: 22px; line-height: 1; }
@@ -865,6 +866,16 @@ em.s { color: #b07a10; font-style: normal; font-weight: 700; } em.m { color: var
 .pf-box { background: var(--pf-panel-2); border: 1px solid #262c34; border-radius: 12px; padding: 13px 15px; min-width: 0; --line: #262c34; --ink-2: var(--pf-ink-2); }
 .pf-box h3 { margin: 0 0 10px; font-family: var(--head); font-size: 11.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--pf-ink-2); }
 .pf-note { margin: 8px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--pf-ink-2); }
+.pf-box h3 small { float: right; letter-spacing: 0.04em; text-transform: none; color: var(--pf-gold); font-size: 12px; }
+.pf-home { display: grid; grid-template-columns: 58px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 7px 0; border-top: 1px solid #222830; } .pf-home:first-of-type { border-top: 0; }
+.pf-hth { width: 58px; height: 40px; border-radius: 7px; background-color: #0d1014; }
+.pf-home b { display: block; font-size: 14px; color: var(--pf-ink); } .pf-home span { font-size: 12.5px; color: var(--pf-ink-2); } .pf-home em { font-style: normal; font-weight: 700; color: var(--pf-ink); font-size: 13.5px; }
+.pf-cats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.pf-cat { display: grid; grid-template-columns: auto 1fr auto; gap: 2px 8px; align-items: center; padding: 8px 10px; border-radius: 9px; background: #181c22; color: var(--pf-gold); }
+.pf-cat span { color: var(--pf-ink); font-weight: 700; font-size: 13.5px; } .pf-cat b { color: var(--pf-ink); } .pf-cat em { grid-column: 2 / 4; font-style: normal; font-size: 12.5px; color: var(--pf-ink-2); }
+.pf-box .linkbtn { margin-top: 8px; color: var(--pf-acc); }
+.pf-box.lifep.pf-best { display: block; gap: 0; } .pf-best .cstrip { padding-bottom: 4px; }
+.lifep.lprof { margin-bottom: 12px; }
 .pf-br { display: grid; grid-template-columns: 74px minmax(0, 1fr) 22px; gap: 8px; align-items: center; font-size: 12.5px; margin: 7px 0; }
 .pf-br i { height: 8px; background: #262c34; border-radius: 4px; overflow: hidden; display: block; } .pf-br i u { display: block; height: 100%; background: var(--pf-gold); }
 .pf-br b { text-align: right; font-family: var(--head); } .pf-br em { grid-column: 2 / 4; font-style: normal; font-size: 11.5px; color: #ecd09a; margin-top: -4px; }
