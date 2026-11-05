@@ -306,6 +306,7 @@ export function listingYield(city, l, owner) {
   if (l.type === 'hotel' && econ === 'Recession') { ypi -= s; notes.push(`Recession −${r2(s)}`); }
   if (l.type === 'construction' && econ === 'Boom') { ypi += 0.5 * s; notes.push(`Building boom +${r2(0.5 * s)}`); }
   if (l.type === 'construction' && econ === 'Recession') { ypi -= 0.5 * s; notes.push(`Building freeze −${r2(0.5 * s)}`); }
+  if (l.type === 'concrete' && econ === 'Recession') { ypi -= 0.3 * s; notes.push(`Building freeze −${r2(0.3 * s)}`); }
   if (l.type === 'chemical' && econ === 'Crisis') { ypi -= s; notes.push(`Spill risk −${r2(s)}`); }
   if (l.type === 'metal' && econ === 'Crisis') { ypi -= 3 * s; notes.push(`Crisis −${r2(3 * s)}`); }
   if (l.type === 'pharma' && econ === 'Crisis') { ypi += 3 * s; notes.push(`Emergency profits +${r2(3 * s)}`); }
@@ -407,7 +408,7 @@ function migrateMap(city) {
   });
   city.listings = city.listings.filter((l) => known[l.id] === l.type);
   LISTINGS.forEach((n) => { if (!city.listings.some((l) => l.id === n.id)) city.listings.push({ ...n, level: 1, owner: null, boughtM: null, upgrade: null, contracts: 0 }); });
-  CB.ensure(city); GZ.ensure(city);
+  CB.ensure(city); GZ.ensure(city); OPS.ensureMarket(city);
   // the national bank is never run by a bot: a bot owner is bought out at full value
   // the same for The Aurex Gazette, a community service run by tycoons
   { const l = listing(city, GZ.ID); if (l && l.owner && !humanOwned(city, l) && !(l.owner.k === 'p' && city.players[l.owner.id] && city.players[l.owner.id].admin)) { payOwner(city, l, r2(listingValue(l))); releaseListing(city, l); } }

@@ -116,7 +116,9 @@ export function coverMonths(l) { const n = needsPerMonth(l); let min = Infinity;
 
 // ---------------------------------------------------------------- city market
 export function ensureMarket(city) {
-  if (!city.market) { city.market = {}; Object.entries(GOODS).forEach(([g, d]) => (city.market[g] = { p: d.base, h: [d.base], bought: 0, imported: 0, exported: 0, sold: 0 })); }
+  if (!city.market) city.market = {};
+  // goods added after a city started join its market at their base price
+  Object.entries(GOODS).forEach(([g, d]) => { if (!city.market[g]) city.market[g] = { p: d.base, h: [d.base], bought: 0, imported: 0, exported: 0, sold: 0 }; });
   if (!city.book) city.book = [];
 }
 // cb.px: the national bank's price index (cheap money lifts supply prices, dear money lowers them)
