@@ -6,7 +6,7 @@
 // Deals live in city.deals: { id, g, qty, price, from, lid, so, to, m, at, due, status, ... }
 //   status: open → shipped (carrier, or the seller delivered) | deliver (waiting for the seller) → shipped
 //           open → declined | withdrawn | expired;  deliver → lapsed (the seller never sent it: buyer refunded)
-import { GOODS, RECIPES, DEALS, CARRIERS } from './content.js';
+import { GOODS, RECIPES, DEALS, CARRIERS, ROADS } from './content.js';
 import { freight } from './logistics.js';
 
 const r4 = (v) => Math.round(v * 10000) / 10000;
@@ -89,6 +89,7 @@ export function withdraw(city, p, a, ctx) {
 export function deliver(city, p, a, ctx) {
   const d = ensure(city).find((x) => x.id === a.id && x.status === 'deliver'); if (!d) return err('Nothing to deliver.');
   const sl = ctx.listing(d.lid); if (!sl || !ctx.canRun(p.id, sl) || !same(sl.owner, d.so)) return err('You no longer run the company that sold it.');
+  if (d.npc) return deliverNpc(city, p, d, sl, ctx);
   const bl = ctx.listing(d.blid); if (!bl || !same(bl.owner, d.bo)) { lapse(city, d, ctx, 'The buyer no longer owns the company it was for.'); return err('The buyer no longer owns that company. The deal is off and the money went back.'); }
   // an order from a quote was never put aside: it leaves the seller's stock now (the oldest fresh lots first)
   if (d.stock) { const have = Math.floor((sl.ops.inv[d.g] || 0) + 1e-6); if (have < d.qty) return err(`Only ${have} ${unit(d.g)} in stock. Make ${Math.ceil(d.qty - have)} more first.`); sl.ops.inv[d.g] -= d.qty; }
@@ -98,6 +99,14 @@ export function deliver(city, p, a, ctx) {
   const got = d.paid; pay(d, sl, d.paid, ctx); d.paid = 0; d.dby = p.id;
   ctx.mail(d.to, { from: { n: p.name, r: `${ctx.name(sl)} · seller`, k: 'player', pid: p.id }, subj: `Delivered: ${what(d)}`, body: `I just dropped off your ${what(d)} at ${ctx.name(bl)} myself. It is in your stock now.`, deal: d.id, kind: 'good' });
   return ok(`Delivered to ${ctx.name(bl)}. ${r4(got)} M is yours.`);
+}
+
+// the city's road works (quotes.js take): the concrete goes to the site and the city pays the price and delivery
+function deliverNpc(city, p, d, sl, ctx) {
+  const have = Math.floor((sl.ops.inv[d.g] || 0) + 1e-6); if (have < d.qty) return err(`Only ${have} ${unit(d.g)} in stock. Make ${Math.ceil(d.qty - have)} more first.`);
+  sl.ops.inv[d.g] -= d.qty; d.status = 'delivered'; d.carrier = null; d.freight = 0; d.sent = city.g; d.dby = p.id;
+  const got = d.paid; pay(d, sl, got, ctx); d.paid = 0;
+  return ok(`Delivered to the road works in ${d.place || 'the city'}. ${ROADS.name} paid ${r4(got)} M.`);
 }
 
 // ---------------------------------------------------------------- every week: offers and deliveries that waited too long
@@ -123,6 +132,7 @@ function close(city, d, status, ctx) {
   const sl = ctx.listing(d.lid); if (!d.stock && sl && sl.ops && same(sl.owner, d.so)) sl.ops.inv[d.g] = (sl.ops.inv[d.g] || 0) + d.qty;
 }
 function lapse(city, d, ctx, why) {
+  if (d.npc) { d.paid = 0; close(city, d, 'lapsed', ctx); ctx.mail(d.from, { from: { n: ROADS.name, r: ROADS.role, k: 'city' }, subj: `Order cancelled: ${what(d)}`, body: `The concrete did not arrive by the date, so we found it elsewhere. Nothing is paid for this order.`, kind: 'bad' }); return; }
   if (d.paid) { ctx.credit(d.bo, d.paid); const bl = ctx.listing(d.blid); if (bl && bl.ops) { bl.ops.cur.sup -= d.paid - (d.fee || 0); bl.ops.cur.fr = (bl.ops.cur.fr || 0) - (d.fee || 0); } }
   d.paid = 0; close(city, d, 'lapsed', ctx);
   const body = `${why} The deal for ${what(d)} is off: the buyer has the money back${d.stock ? '' : ' and the goods are back with the seller'}.`;

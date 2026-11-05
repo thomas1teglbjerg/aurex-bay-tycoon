@@ -51,9 +51,9 @@ assert(b.ok && Math.abs(E.LOG.onTheWay(city, l, 'cement') + l.ops.inv.cement - 1
 assert(!E.apply(city, 'u', 'buySupply', { lid: l.id, g: 'cement', qty: 10 }, t).ok, 'a full yard refuses more');
 // an older save: the plant gets its starting stock once
 const ops = l.ops; delete ops.yardV; ops.inv.sand = 3; E.advance(city, t + 1);
-assert(ops.inv.sand === 1000 && ops.yardV === 3, 'older saves fill the yard to half once');
+assert(ops.inv.sand === 1000 && ops.yardV === 4, 'older saves fill the yard to half once');
 ops.yardV = 2; ops.inv.water = 50; ops.inv.sand = 3; O.fillYard(l);
-assert(ops.inv.water === undefined && ops.inv.sand === 3 && ops.yardV === 3, 'water is no longer kept in stock');
+assert(ops.inv.water === undefined && ops.inv.sand === 3 && ops.yardV === 4, 'water is no longer kept in stock');
 assert(!E.apply(city, 'u', 'buySupply', { lid: l.id, g: 'water', qty: 10 }, t).ok && !('water' in O.needsPerMonth(l)), 'water cannot be ordered: it comes from the mains');
 ops.depts.ops.w = 0; ops.mixed = 0; ops.batch = null; ops.inv.concrete = 0; Object.assign(ops.inv, { cement: 500, sand: 1000, gravel: 2000, energy: 30 });
 assert(O.mixMax(l) >= Math.floor(O.baseCap(l)) - 1 && !O.mixBlock(l), `no staff needed to mix (${O.mixMax(l)} t)`);

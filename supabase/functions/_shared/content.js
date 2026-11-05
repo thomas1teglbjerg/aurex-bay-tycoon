@@ -539,6 +539,9 @@ export const WAREHOUSE_SITES = [
 export const DEALS = { openWeeks: 4, deliverWeeks: 4, minPrice: 0.25, maxPrice: 4 };
 // quote requests on a company website: a tycoon asks, the company answers with an offer, the buyer accepts (quotes.js)
 export const QUOTES = { minQty: 10, maxQty: 2000, maxWeeks: 12, answerWeeks: 2, acceptWeeks: 2, maxOpen: 6, markup: 1.15, tiers: [[250, 0.05], [1000, 0.1]] };
+// the city's own buyer on the plant's website: now and then it orders concrete for road works at the current mixing cost + 10%
+export const ROADS = { id: 'roads', name: 'City Road Maintenance', role: 'Aurex Bay public works', week: 0.3, qty: [30, 200], weeks: [2, 5], markup: 1.1,
+  jobs: ['Pothole repairs on the harbour road', 'A new kerb line along the avenue', 'Resurfacing a junction', 'Bridge deck patching', 'A new bus stop platform', 'Repairs to the sea wall walkway', 'Footpath renewal by the school'] };
 // company websites that take quote requests: host → the listing and the good it sells
 export const SITE_CO = { 'baysideconcrete.ab': { lid: 'L37', g: 'concrete' } };
 export const LOGISTICS = { truckDaysPer100px: 0.9, minTruckDays: 1, bulkDiscountQty: 500, bulkDiscount: 0.05, upgradeCostMult: 0.5, levelCap: 1.5 };

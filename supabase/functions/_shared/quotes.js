@@ -6,8 +6,9 @@
 // date, and is paid when it is there. Nothing delivered by the date: the buyer gets the money back.
 // Quotes live in city.quotes: { id, site, g, lid, so, to, blid, bo, qty, min, when, note, at, status, offer, deal }
 //   status: asked → quoted → ordered;  asked → refused | withdrawn | expired;  quoted → declined | expired
-import { GOODS, RECIPES, QUOTES, SITE_CO } from './content.js';
+import { GOODS, RECIPES, QUOTES, SITE_CO, ROADS, DISTRICTS } from './content.js';
 import * as DEAL from './deals.js';
+import { costUnit } from './ops.js';
 
 const r4 = (v) => Math.round(v * 10000) / 10000;
 const uid = () => 'qt' + Math.random().toString(36).slice(2, 9);
@@ -64,6 +65,7 @@ export function cancel(city, p, a) {
 // ---------------------------------------------------------------- the plant: answer
 export function offer(city, p, a, ctx) {
   const q = ensure(city).find((x) => x.id === a.id && x.status === 'asked'); if (!q) return err('This request is no longer open.');
+  if (q.npc) return take(city, p, a, ctx);
   const l = ctx.listing(q.lid); if (!l || !ctx.canRun(p.id, l)) return err('Only the people running the plant can answer.');
   const qty = Math.round(Number(a.qty) || 0); if (qty < q.min || qty > q.qty) return err(`Offer between ${q.min} and ${q.qty} ${GOODS[q.g].unit}.`);
   const price = r4(Number(a.price) || 0), [lo, hi] = DEAL.priceRange(q.g);
@@ -79,6 +81,7 @@ export function refuse(city, p, a, ctx) {
   const q = ensure(city).find((x) => x.id === a.id && x.status === 'asked'); if (!q) return err('This request is no longer open.');
   const l = ctx.listing(q.lid); if (!l || !ctx.canRun(p.id, l)) return err('Only the people running the plant can answer.');
   q.status = 'refused'; q.end = city.g;
+  if (q.npc) return ok(`Turned down. ${ROADS.name} will ask again another time.`);
   ctx.mail(q.to, { from: { n: p.name, r: `${ctx.name(l)} · sales`, k: 'player', pid: p.id }, subj: `No quote: ${what(q)}`, body: `Sorry, we cannot take on ${what(q)} this time.`, kind: 'info' });
   return ok('Request turned down.');
 }
@@ -118,15 +121,45 @@ export function setList(city, p, a, ctx) {
 
 // ---------------------------------------------------------------- every week: requests and quotes nobody answered
 export function weekStep(city, ctx) {
-  if (!city.quotes || !city.quotes.length) return;
+  ensure(city);
   city.quotes.forEach((q) => {
     if (q.status === 'asked' && city.g >= q.at + QUOTES.answerWeeks * WEEK - 1e-9) {
-      q.status = 'expired'; q.end = city.g;
+      q.status = 'expired'; q.end = city.g; if (q.npc) return;
       const l = ctx.listing(q.lid); ctx.mail(q.to, { from: { n: 'Sales desk', r: l ? ctx.name(l) : q.site, k: 'city' }, subj: `No answer: ${what(q)}`, body: `${l ? ctx.name(l) : 'The plant'} did not answer your request in ${QUOTES.answerWeeks} weeks. Try again on ${q.site}.`, kind: 'info' });
     }
     if (q.status === 'quoted' && city.g >= q.offer.at + QUOTES.acceptWeeks * WEEK - 1e-9) { q.status = 'expired'; q.end = city.g; }
   });
+  Object.keys(SITE_CO).forEach((host) => roadsWeek(city, ctx, host));
   const open = city.quotes.filter((q) => isOpen(q) || (q.status === 'ordered' && (city.deals || []).some((d) => d.id === q.deal && DEAL.isLive(d))));
   const done = city.quotes.filter((q) => !open.includes(q)).slice(-60);
   city.quotes = done.concat(open);
+}
+
+// ---------------------------------------------------------------- City Road Maintenance: the plant's one regular client
+// Now and then (ROADS.week a week, one request at a time) the city asks for concrete for road works at the plant's
+// current mixing cost + 10% (plus the usual delivery). The plant takes it or turns it down; taken, it is an order
+// the plant delivers from stock by the date and the city pays on delivery. Nothing is paid if the date is missed.
+export const roadsPrice = (city, l) => Math.round(costUnit(city, l) * ROADS.markup * 1e6) / 1e6;
+export function roadsWeek(city, ctx, host, force) {
+  const s = site(host), l = plant(city, ctx, host); if (!s || !l || !taking(ctx, l)) return null;
+  const busy = city.quotes.some((q) => q.npc && q.lid === l.id && q.status === 'asked') || (city.deals || []).some((d) => d.npc && d.lid === l.id && DEAL.isLive(d));
+  if (busy || (!force && Math.random() >= ROADS.week)) return null;
+  const qty = Math.round((ROADS.qty[0] + Math.random() * (ROADS.qty[1] - ROADS.qty[0])) / 10) * 10, wk = ROADS.weeks[0] + Math.floor(Math.random() * (ROADS.weeks[1] - ROADS.weeks[0] + 1));
+  const dist = DISTRICTS[Math.floor(Math.random() * DISTRICTS.length)], job = ROADS.jobs[Math.floor(Math.random() * ROADS.jobs.length)];
+  const price = roadsPrice(city, l);
+  const q = { id: uid(), site: host, g: s.g, lid: l.id, so: { ...l.owner }, to: null, npc: ROADS.id, blid: null, bo: null, qty, min: qty, when: r4(city.g + wk * WEEK), note: `${job}, ${dist.name}.`, place: dist.name, price, at: city.g, status: 'asked' };
+  city.quotes.push(q);
+  ctx.runners(l).forEach((r) => ctx.mail(r.id, { from: { n: ROADS.name, r: ROADS.role, k: 'city' }, subj: `Order request: ${qty} t of concrete`, body: `We need ${qty} t of concrete for ${job.toLowerCase()} in ${dist.name}, delivered within ${wk} weeks. We pay the current mixing cost plus 10%: ${kT(price)} per tonne, ${r4(qty * price)} M, plus your usual delivery charge. We pay when it is on site.\nTake it or turn it down in the plant office on ${host} within ${QUOTES.answerWeeks} weeks.`, web: `${host}/office`, kind: 'info' }));
+  return q;
+}
+// the plant takes the city's order: an order to deliver from stock by the date, paid by the city on delivery
+export function take(city, p, a, ctx) {
+  const q = ensure(city).find((x) => x.id === a.id && x.npc && x.status === 'asked'); if (!q) return err('This request is no longer open.');
+  const l = ctx.listing(q.lid); if (!l || !l.ops || !ctx.canRun(p.id, l)) return err('Only the people running the plant can answer.');
+  const f = fee(q.g, q.qty, q.price);
+  const d = { id: 'dl' + q.id.slice(2), g: q.g, qty: q.qty, price: q.price, from: p.id, lid: l.id, so: { ...l.owner }, to: null, npc: q.npc, place: q.place, m: city.m, at: city.g, due: q.when,
+    status: 'deliver', how: 'self', acc: city.g, fee: f, paid: r4(q.qty * q.price + f), stock: true, quote: q.id };
+  DEAL.ensure(city).push(d);
+  q.status = 'ordered'; q.deal = d.id; q.end = city.g; q.offer = { qty: q.qty, price: q.price, fee: f, when: q.when, by: p.id, at: city.g };
+  return ok(`Order taken: ${q.qty} t for ${ROADS.name}, ${d.paid} M on delivery.`);
 }

@@ -82,6 +82,24 @@ assert(r.ok && E.apply(city, 'a', 'quoteOffer', { id: q.id, qty: 100, price: 0.0
 plant.ops.inv.concrete = 120; const own = city.deals.find((x) => x.id === q.deal);
 assert(E.apply(city, 'a', 'dealDeliver', { id: own.id }, now).ok && near(A.cash, c0) && near(plant.ops.inv.concrete, 20), 'own delivery: money goes round, concrete moves');
 
+// the plant has no regular clients; City Road Maintenance asks on the website at the mixing cost + 10%
+assert(!(plant.ops.clients || []).length && E.OPS.taskBlock(city, plant, 'findCustomers') && !E.OPS.tasks(city, plant).some((t) => t.id === 'findCustomers'), 'no clients and no "Find new clients" for the plant');
+city.quotes.filter((q) => q.npc && q.status === 'asked').forEach((q) => (q.status = 'expired')); city.deals.filter((d) => d.npc).forEach((d) => (d.status = 'lapsed')); // requests the random weekly steps above may have made
+const before = city.quotes.length; const rq = E.QT.roadsWeek(city, ctx(), HOST, true);
+assert(rq && rq.npc === 'roads' && city.quotes.length === before + 1 && Math.abs(rq.price - E.OPS.costUnit(city, plant) * 1.1) < 1e-5, `City Road Maintenance asks for ${rq.qty} t at mixing cost + 10% (${rq.price * 1000} k/t)`);
+assert(!E.QT.roadsWeek(city, ctx(), HOST, true), 'one city request at a time');
+assert(A.mail.some((x) => /Order request/.test(x.subj) && x.from.n === 'City Road Maintenance'), 'the plant gets a mail from the city');
+r = E.apply(city, 'a', 'quoteOffer', { id: rq.id }, now); const rd = city.deals.find((x) => x.id === rq.deal);
+assert(r.ok && rd && rd.npc && rd.status === 'deliver' && rd.stock, 'the plant takes the order: ' + r.msg);
+plant.ops.inv.concrete = rq.qty + 5; const ca = A.cash;
+r = E.apply(city, 'a', 'dealDeliver', { id: rd.id }, now);
+assert(r.ok && near(A.cash - ca, rq.qty * rq.price + rd.fee) && near(plant.ops.inv.concrete, 5), 'delivered: the city pays price + delivery: ' + r.msg);
+const rq2 = E.QT.roadsWeek(city, ctx(), HOST, true); E.apply(city, 'a', 'quoteOffer', { id: rq2.id }, now); const rd2 = city.deals.find((x) => x.id === rq2.deal), ca2 = A.cash;
+city.g = rd2.due + 0.001; E.DEAL.weekStep(city, ctx());
+assert(rd2.status === 'lapsed' && near(A.cash, ca2) && A.mail.some((x) => /Order cancelled/.test(x.subj)), 'a missed city order just lapses, nothing paid');
+const rq3 = E.QT.roadsWeek(city, ctx(), HOST, true);
+assert(E.apply(city, 'a', 'quoteRefuse', { id: rq3.id }, now).ok && rq3.status === 'refused', 'the plant can turn the city down');
+
 // runs inside advance without errors
 now += E.realMsPerMonth(city); E.advance(city, now);
 assert(Array.isArray(city.quotes), 'weekly steps keep the quotes list');

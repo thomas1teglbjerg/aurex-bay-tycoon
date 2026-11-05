@@ -148,11 +148,14 @@ export function freshStep(city, ctx, l, now) {
 export function nextHardens(l) { const g = freshGoods(l)[0]; if (!g || !l.ops) return null; const a = lotsOf(l, g, 'inv')[0], b = lotsOf(l, g, 'fg')[0], t = [a, b].filter(Boolean).map((x) => x.at); return t.length ? Math.min(...t) + GOODS[g].fresh : null; }
 // a yard company that never had its starting stock (older saves): fill each raw material to half
 // v2: supplies outside the yard (water, power) get the usual starter month once, for plants bought before they were in the recipe
-export function fillYard(l) { const rec = RECIPES[l.type], y = rec.yard; if (!y || !l.ops || l.ops.yardV >= 3) return; const o = l.ops;
+export function fillYard(l) { const rec = RECIPES[l.type], y = rec.yard; if (!y || !l.ops || l.ops.yardV >= 4) return; const o = l.ops;
+  // a hand-run plant has no regular clients: it sells through its website (quotes.js), City Road Maintenance included
+  if (rec.manual) { o.clients = []; o.orders = (o.orders || []).filter((od) => od.status === 'delivered'); }
+  if (o.yardV >= 3) { o.yardV = 4; return; }
   if (!o.yardV) Object.entries(y).forEach(([g, cap]) => { if (g in rec.in) o.inv[g] = Math.max(o.inv[g] || 0, cap / 2); });
   if ((o.yardV || 0) < 2) stocked(l).forEach(([g, q]) => { if (!(g in y)) o.inv[g] = Math.max(o.inv[g] || 0, Math.ceil(q * baseCap(l) * 1.25)); });
   Object.keys(rec.in).filter((g) => GOODS[g].mains).forEach((g) => { delete o.inv[g]; }); // mains water is never stocked
-  o.yardV = 3; }
+  o.yardV = 4; }
 export function newOps(l, managed) {
   const ops = { managed: !!managed, depts: { ops: { w: managed ? needWorkers(l, 'ops') : 0, set: { ...DEPT_DEFAULTS.ops }, head: null } }, inv: {}, customers: 100, rep: 50, morale: 70, rp: 0, tech: 0, eff: 1,
     pending: [], fg: 0, cur: { b2c: 0, goods: 0, sup: 0 }, hist: [], cd: {}, booksM: -1, legalUntil: -1, overtimeM: -1, board: [] };
@@ -423,6 +426,7 @@ function newClient(l, o, opts = {}) {
 export function ensureClients(l) {
   const o = l.ops; if (o.clients) return;
   o.clients = []; o.orders = []; o.done = []; o.board = o.board || [];
+  if (RECIPES[l.type].manual) return; // sells through its website, no regular clients
   for (let i = 0; i < CLIENT_RULES[kindOf(l)].start; i++) newClient(l, o);
 }
 function recalc(city, l, od) { od.value = r2(od.units * od.unit); od.cost = r2(od.units * costUnit(city, l) * (od.need || 1)); od.earning = r2(od.value - od.cost); }
@@ -635,7 +639,7 @@ export function tasks(city, l) {
   if (gone.length) out.push({ id: 'archive', dept: 'sales', label: `${gone.length} cancelled ${word}${gone.length > 1 ? 's' : ''} to archive` });
   if (automation(l, 'ops') === 0 && !(o.boost && o.boost.m === m + 1)) out.push({ id: 'runShift', dept: 'ops', label: hotel ? 'No front-desk staff: run reception yourself this month' : 'No production staff: run the line yourself this month', urgent: true });
   if (automation(l, 'procurement') < 1 && coverMonths(l) < 1.05) out.push({ id: 'restock', dept: 'procurement', label: coverMonths(l) < 0.05 ? 'Production is stopped: buy supplies' : `Supplies last ${coverMonths(l).toFixed(1)} months: restock`, urgent: coverMonths(l) < 0.5 });
-  if (automation(l, 'sales') < 1 && o.cd.findCustomers !== m) out.push({ id: 'findCustomers', dept: 'sales', label: hotel ? 'Find new booking partners' : 'Find new clients', interactive: true });
+  if (automation(l, 'sales') < 1 && o.cd.findCustomers !== m && !RECIPES[l.type].manual) out.push({ id: 'findCustomers', dept: 'sales', label: hotel ? 'Find new booking partners' : 'Find new clients', interactive: true });
   if (o.depts.social && automation(l, 'social') === 0 && o.cd.postCampaign !== m) out.push({ id: 'postCampaign', dept: 'social', label: 'Shoot a marketing campaign', interactive: true });
   if (automation(l, 'hr') === 0 && o.morale < (l.size === 'S' ? 50 : 70) && o.cd.teamMeeting !== m) out.push({ id: 'teamMeeting', dept: 'hr', label: `Morale is ${Math.round(o.morale)}: hold a team meeting`, urgent: o.morale < 35, interactive: true });
   if (o.depts.finance && automation(l, 'finance') === 0 && o.booksM !== m) out.push({ id: 'reviewBooks', dept: 'finance', label: 'Close the monthly books', interactive: true });
@@ -650,7 +654,7 @@ export function taskBlock(city, l, task) {
   const hotel = hosts(l), cd = (k) => o.cd && o.cd[k] === m;
   switch (task) {
     case 'teamMeeting': return cd('teamMeeting') ? 'You already held a team meeting this month. Try again next month.' : null;
-    case 'findCustomers': return cd('findCustomers') ? `You already looked for new ${hotel ? 'booking partners' : 'clients'} this month. Try again next month.` : null;
+    case 'findCustomers': if (RECIPES[l.type].manual) return 'This plant sells through its website, not to regular clients.'; return cd('findCustomers') ? `You already looked for new ${hotel ? 'booking partners' : 'clients'} this month. Try again next month.` : null;
     case 'postCampaign': return cd('postCampaign') ? 'You already shot a campaign this month. Try again next month.' : null;
     case 'runExperiment': return cd('runExperiment') ? 'You already ran an experiment this month. Try again next month.' : null;
     case 'reviewBooks': return o.booksM === m ? 'The books are already closed this month.' : null;
