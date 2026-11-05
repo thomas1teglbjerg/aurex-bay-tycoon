@@ -85,7 +85,7 @@ export const STAFF = [
   { id: 'emily', role: 'HR Recruitment Officer', name: 'Emily Carter', cost: 2, upkeep: 0.5, passive: ['Talent Network', 'Specialists cost −0.5 M to recruit.'], hq: 'Head of HR: hiring costs −50% and morale +8 in that company.', tags: 'HR · Growth · Infrastructure' },
   { id: 'carlos', role: 'Logistics Planner', name: 'Carlos Mendoza', cost: 4, upkeep: 1, passive: ['Supply Chain', 'Runs your warehouses: auto-import, auto-supply and warehouse sourcing. +1 Influence a year, and his industrial company +1 M YPI.'], hq: 'Head of Procurement: supplies 5% cheaper for that company.', tags: 'Transport · Mobility' },
   { id: 'marco', role: 'Workshop Chief', name: 'Marco Vitale', cost: 1, upkeep: 0.3, passive: ['Quick Turnaround', 'The auto repair, dealership or car company he works in earns +1 M YPI.'], hq: 'Head of Operations: output +10% in that company.', tags: 'Operations · Automotive' },
-  { id: 'jason', role: 'Market Research Associate', name: 'Jason Miller', cost: 4, upkeep: 0.5, passive: ['Market Insight', 'You and your whole network see the next World Card.'], hq: 'Head of Sales: +50% sales automation in that company.', tags: 'Strategy · Information' }
+  { id: 'jason', role: 'Market Research Associate', name: 'Jason Miller', cost: 4, upkeep: 0.5, passive: ['Market Insight', 'Mails you a technical research note before each World Card. You decide if your network gets it too.'], hq: 'Head of Sales: +50% sales automation in that company.', tags: 'Strategy · Information' }
 ];
 
 // drift per year: [boom, stable, recession, crisis]
@@ -180,6 +180,41 @@ export const WORLD = [
   { id: 'recovery', title: 'Recovery Takes Hold', econ: 'Stable', text: 'Hiring picks up and consumers return to the shops. Analysts call the worst over.', shock: { taxi: 0.06, airline: 0.06 }, at: [610, 380] },
   { id: 'calm', title: 'A Steady Quarter', econ: 'Stable', text: 'No surprises this quarter. Markets move sideways and businesses get on with the work.', shock: {}, at: [610, 380] }
 ];
+
+// Market insight: the research note a Market Research Associate mails before each World Card.
+// It never names the card: the specialist tells what their contacts see per sector and leaves the conclusion to the player.
+export const INSIGHT = {
+  // per stock: what the specialist hears when it is about to go up, and when it is about to go down
+  hint: {
+    pharma: ['Lab suppliers tell me reagent orders are through the roof. Someone is getting the pharma labs ready for a busy quarter.', 'The pharma labs are cancelling reagent orders. Not a good sign for that sector.'],
+    ai: ['GPU lease rates are climbing fast. The AI people are buying every chip they can get.', 'Data centers are quietly handing back GPU leases. The AI crowd is nervous.'],
+    oil: ['Oil traders are paying up for barrels months ahead. They expect crude to get a lot dearer.', 'Crude buyers are holding back. Oil looks soft.'],
+    gold: ['The vaults on Harbor Row are taking in more bullion than usual. Money is looking for a safe place.', 'Bullion is leaving the vaults. Investors feel brave enough to skip gold.'],
+    energy: ['Power for next quarter is selling at a premium. The utilities stand to gain.', 'Power prices for next quarter are sliding. Energy companies will feel it.'],
+    diamonds: ['Bids at the rough-stone tenders are high. Diamond dealers expect rich buyers.', 'Diamond tenders are going unsold. The luxury buyers have gone quiet.'],
+    military: ['Defence filings at City Hall have piled up. Contractors are lining up new orders.', 'Defence contracts are being postponed. Military tech could cool off.'],
+    streaming: ['Bandwidth at night is way above normal. People are staying home and streaming.', 'Evening bandwidth is down. People are out, not watching.'],
+    taxi: ['Ride-hail surge pricing is everywhere. The taxis can barely keep up.', 'Taxi drivers are idling at the ranks. Ride demand is drying up.'],
+    airline: ['Forward bookings at Clowd are full. Everyone wants to fly.', 'Forward bookings at Clowd Airline are collapsing. People are cancelling trips.'],
+    fashion: ['The textile mills have more orders than they can sew. Demiware is betting on a big season.', 'Textile mills are cutting shifts. Fashion looks weak.'],
+    watches: ['Second-hand Vanthoben watches sell above list price. Luxury demand is hot.', 'Second-hand luxury watches are piling up at the dealers. Luxury is cooling.']
+  },
+  strong: ['This one is big.', 'I would bet on this one.', 'Very clear signal.'],
+  weak: ['Smaller move, I think.', 'Not huge, but real.'],
+  rumour: 'One more thing, but only a rumour I could not confirm: {x}',
+  macro: {
+    Boom: 'On the big picture: hiring is up, people are borrowing to spend, and the shops are full. It feels like good times are coming.',
+    Recession: 'On the big picture: jobless claims are rising and the banks are tightening loans. I would not be surprised if the economy slows down.',
+    Crisis: 'On the big picture: the market is very jumpy and the banks barely lend to each other. Something serious may be coming. Brace for it.',
+    Stable: 'On the big picture: things are calming down. Normal numbers, normal mood.',
+    none: 'On the big picture: nothing changes, as far as I can tell.'
+  },
+  fx: { energy: 'The grid operator warns that power reserves are almost gone. Factories that need a lot of energy could stand still.', cyber: 'Hacker forums are full of chatter about breaking into data centers. Tech companies without good protection should watch out.',
+    regulation: 'City Hall is hiring auditors. Tech and finance companies should get their papers in order.', viral: 'Old Grid streetwear is all over social media right now. Fashion stores could cash in.',
+    tourism: 'The cruise berths at Harbor Row are fully booked. Hotels will be busy.', ai: 'Aurex City labs have filed a record number of patents. Something big may come out of them.' },
+  open: ['Here is what my contacts tell me about the coming quarter.', 'A few things I picked up this week that you should know about.', 'My read on what is coming. I only tell you what I see; the trades are your call.'],
+  close: ['When it hits, I do not know. Probably within the quarter.', 'I cannot tell you the day. Most likely before the quarter is out.']
+};
 
 // Decisions land in a player's inbox. If nobody answers before the deadline, the autopilot picks by policy.
 export const DECISIONS = [

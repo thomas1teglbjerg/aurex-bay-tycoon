@@ -220,10 +220,29 @@ export function loanRate(city, p) { const life = (city.life ? LIFE.tierOf(city, 
 export function standings(city) {
   return Object.values(city.players).filter((p) => !p.admin).map((p) => ({ id: p.id, name: p.name, bot: p.bot, color: p.color, avatar: p.avatar, nw: netWorth(city, p.id), inf: p.inf, score: r2(netWorth(city, p.id) + p.inf) })).sort((a, b) => b.score - a.score);
 }
-export function intelFor(city, pid) {
-  const p = city.players[pid]; if (!p) return null;
-  const src = [p].concat(p.net.map((id) => city.players[id]).filter(Boolean)).find((x) => hasStaff(x, 'jason'));
-  return src ? { from: src.id === pid ? 'you' : src.name, next: WORLD.find((w) => w.id === city.deck[0]) } : null;
+// market insight: a tycoon with a Market Research Associate gets one research note per upcoming world card, as a mail.
+// The note can be forwarded to the whole network from the mail; nobody else sees it.
+const intelKey = (city) => `${city.lastCard ? city.lastCard.m : -1}:${city.deck[0]}`;
+function insightWeek(city) {
+  const key = intelKey(city), card = WORLD.find((w) => w.id === city.deck[0]);
+  Object.values(city.players).forEach((p) => {
+    if (p.bot || !p.mail) return;
+    p.mail.filter((x) => x.intel && x.intel !== key && MAIL.isOpen(x)).forEach((x) => closeMail(city, p, x, -1, true, 'The quarter has turned: this note is history.'));
+  });
+  if (!card) return;
+  Object.values(city.players).forEach((p) => {
+    if (p.bot || p.coop || p.admin || !hasStaff(p, 'jason') || p.intel === key) return;
+    p.intel = key;
+    const tid = p.team && p.team.jason, t = tid && TAL.PERSON[tid];
+    MAIL.send(p, { g: city.g, m: city.m, intel: key, kind: 'info', from: t ? { n: t.name, r: 'Market Research', tid } : { n: 'Market Research', r: 'Your team', k: 'staff' },
+      subj: 'Research note: signals for the coming quarter', body: MAIL.insightBody(card, rand),
+      opts: [{ l: 'Forward to my network', d: p.net.length ? `Send the note to your ${p.net.length} contact${p.net.length > 1 ? 's' : ''}` : 'Your network is empty', fwd: true }, { l: 'Keep it to myself', d: 'Only you have it', safe: true }] });
+  });
+}
+function forwardIntel(city, p, x) {
+  const to = p.net.map((id) => city.players[id]).filter((q) => q && !q.bot);
+  to.forEach((q) => MAIL.send(q, { g: city.g, m: city.m, kind: 'info', from: { ...x.from, r: `${x.from.r} · via ${p.name}` }, subj: `Fwd from ${p.name}: ${x.subj}`, body: x.body }));
+  return to.length ? `Forwarded to ${to.map((q) => q.name).join(', ')}.` : 'Nobody in your network to send it to.';
 }
 
 // ---------------------------------------------------------------- income
@@ -427,6 +446,7 @@ function weekBoundary(city, wk, monthEnd) {
   ADS.weekStep(city, wk / 48, CTX);
   DEAL.weekStep(city, dctx(city));
   mailWeek(city);
+  insightWeek(city);
   planWeek(city, wk);
 }
 function stepWeek(city, wk) { runAgenda(city, wk / 48); if (wk % 4 === 0) monthBoundary(city, wk / 4); else weekBoundary(city, wk); }
@@ -452,8 +472,19 @@ function planWeek(city, wk) {
   });
   // vineyards harvest once a year, each in its own week of the autumn; auto repair shops build a tuner car for the spring show (CRAFT)
   city.listings.forEach((l) => { if (makes(l) && l.owner && wk % 48 === harvestWeek(l)) plan(city, inWeek(wk), 'vintage', { lid: l.id }); });
-  // the next world card lands somewhere in the first half of the quarter
-  if (wk % 12 === 0) plan(city, (wk + 0.5 + rand() * 6) / 48, 'world');
+  planWorld(city, wk);
+}
+// the next world card lands somewhere in the first half of its quarter. It is planned a quarter ahead
+// (right after the last card fired), so the Market tab can count down to the real moment.
+function planWorld(city, wk) {
+  if ((city.agenda || []).some((e) => e.k === 'world')) return;
+  const q = Math.floor(wk / 12), done = !!city.lastCard && Math.floor(city.lastCard.m / 3) >= q, base = (done ? q + 1 : q) * 12;
+  plan(city, Math.max(base + 0.5 + rand() * 6, wk + 0.05 + rand() * 0.9) / 48, 'world');
+}
+// game month (fractional) the next world card is due
+export function nextWorldM(city) {
+  const e = (city.agenda || []).find((x) => x.k === 'world');
+  return e ? e.at * 12 : (Math.floor(city.m / 3) + 1) * 3 + 0.5;
 }
 // the company makes a collectible once a year (CRAFT in content.js); a type whose car list is still empty makes nothing
 export const makes = (l) => { const cf = l && CRAFT[l.type]; return !!cf && !(cf.spec.models && !cf.spec.models.length); };
@@ -481,7 +512,7 @@ function runAgenda(city, g) {
   due.forEach((e) => { settleAll(city, Math.max(city.g, e.at)); const f = AGENDA[e.k]; if (f) f(city, e); });
 }
 const AGENDA = {
-  world: (city) => worldCard(city, city.m),
+  world: (city, e) => { worldCard(city, city.m); planWorld(city, Math.floor(e.at * 48 + 1e-6)); },
   bot: (city, e) => { const p = city.players[e.pid]; if (p && p.bot) botAct(city, p, city.m); },
   decision: (city, e) => {
     const p = city.players[e.pid]; if (!p || p.bot || p.inbox.length >= 3) return;
@@ -606,6 +637,7 @@ export function answerMail(city, p, id, ix, auto) {
     else { const bits = companyFx(city, l, o.fx); out = bits && bits.length ? bits.join(', ') + '.' : 'Done.'; }
   }
   if (o.tfx) { const s = city.talent && city.talent[o.tfx.tid]; if (s) { if (o.tfx.sat) s.sat = Math.max(0, Math.min(100, s.sat + o.tfx.sat)); } out = out || 'Noted.'; }
+  if (o.fwd) out = forwardIntel(city, p, x);
   if (o.act) {
     const r = mailTalent(city, p, o.act[0], o.act[1]);
     if (r.ok === false && !auto) return r;
