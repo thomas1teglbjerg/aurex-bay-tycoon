@@ -9,7 +9,7 @@ import { stocksHTML, stockModal, livePrice, liveH, PX } from './stocks.js';
 import { deliveryHTML, warehouseHTML, MODE_LABEL } from './interact.js';
 import { SCENES, startScene, endScene, sceneFor, tickScenes, sceneTitle } from './scenes.js';
 import { WAREHOUSE_SITES, HOMES, TAKEOVER as GC_T } from '../supabase/functions/_shared/content.js';
-import { webHTML, parseUrl, HOME_URL } from './web.js';
+import { webHTML, parseUrl, HOME_URL, gazetteBox } from './web.js';
 import { teamBoxHTML, talentModal, talentStep } from './team.js';
 import { lifeHTML, lifeModal, newDinner, startDinner, dinnerHTML, money, bidBase } from './life.js';
 import { logoMark, logoFull, symbolIcon } from './brand.js';
@@ -416,7 +416,7 @@ function liveUpdate() {
   tickScenes((st) => { toast(`${sceneTitle(st)}: your call`, 'good'); renderAll(); });
   if (UI.modal && UI.modal.t === 'dinner') tickDinner();
   // share prices tick between weekly closes: refresh the exchange views every second or so
-  if (Date.now() - lastTicker > 1200) { lastTicker = Date.now(); if ((UI.tab === 'stocks' || UI.tab === 'market') && !UI.company && !$('panel').hidden) renderPanel(); if (UI.modal && UI.modal.t === 'stock') openStock(UI.modal.id); }
+  if (Date.now() - lastTicker > 1200) { lastTicker = Date.now(); if (UI.tab === 'market' && !UI.company && !$('panel').hidden) renderPanel(); if (UI.modal && UI.modal.t === 'stock') openStock(UI.modal.id); }
   const t = now();
   document.querySelectorAll('[data-live]').forEach((el) => {
     const [k, id] = el.dataset.live.split(':');
@@ -506,9 +506,10 @@ function openProfile(pid) {
 }
 function setTab(t) {
   if (t === 'coop') t = 'network'; // Coop and Network are one tab now
+  if (t === 'stocks') t = 'market'; // so are Market and Stocks
   UI.company = null;
   UI.tab = t;
-  document.querySelectorAll('#tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
+  document.querySelectorAll('#tabs button[data-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
   if (t === 'life') UI.life.room = null;
   $('panel').classList.toggle('dark', t === 'life');
   hideMapCard(); $('mapnav').hidden = t !== 'map';
@@ -518,7 +519,7 @@ function renderPanel() {
   if (UI.tab === 'map' || !me()) return;
   const el = $('panel'), st = el.scrollTop, active = document.activeElement && el.contains(document.activeElement) && document.activeElement.tagName === 'INPUT';
   if (active) return; // never wipe a field someone is typing in
-  const html = UI.tab === 'empire' && String(UI.company || '').startsWith('mail') ? mailPageHTML(UI) : UI.tab === 'network' && String(UI.company || '').startsWith('profile:') ? profilePageHTML(UI) : (UI.tab === 'empire' || UI.tab === 'network') && UI.company ? companyHTML(UI.company, UI) : { empire: empireHTML, market: marketHTML, stocks: () => stocksHTML(UI), network: () => coopHTML() + networkHTML(), life: () => lifeHTML(UI) }[UI.tab]();
+  const html = UI.tab === 'empire' && String(UI.company || '').startsWith('mail') ? mailPageHTML(UI) : UI.tab === 'network' && String(UI.company || '').startsWith('profile:') ? profilePageHTML(UI) : (UI.tab === 'empire' || UI.tab === 'network') && UI.company ? companyHTML(UI.company, UI) : { empire: empireHTML, market: marketHTML, network: () => coopHTML() + networkHTML(), life: () => lifeHTML(UI) }[UI.tab]();
   el.innerHTML = `<div class="panel-in">${html}</div>`;
   applyCollapsed(el);
   el.scrollTop = st; liveUpdate();
@@ -586,10 +587,11 @@ function marketHTML() {
         <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Supply</th><th>Price</th><th>vs normal</th><th>Trend</th><th>Import</th><th>Export</th><th>On offer</th><th>Bought last mo</th><th>Imported</th></tr></thead><tbody>${supplies}</tbody></table></div></div></div>
       ${myOffers ? `<div class="box"><h2>Your offers<small>OPEN</small></h2><div class="in"><div class="rows">${myOffers}</div></div></div>` : ''}
     </div><div class="col">
+      ${gazetteBox()}
       <div class="box"><h2>Bank of Aurex</h2><div class="in"><div class="stats"><div class="stat"><small>Debt</small><b class="num down">${M(-debt)}</b></div><div class="stat"><small>Rate</small><b class="num">${E.loanRate(c, p)}%</b></div><div class="stat"><small>Interest / yr</small><b class="num">${M(-r.interest)}</b></div><div class="stat"><small>Credit limit</small><b class="num">${M(E.loanCap(c, p))}</b></div></div>
         <div class="btns"><button class="btn navy" data-a="loan" data-v="5">Borrow 5 M</button><button class="btn navy" data-a="loan" data-v="20">Borrow 20 M</button><button class="btn" data-a="repay" data-v="5" ${debt ? '' : 'disabled'}>Repay 5 M</button><button class="btn" data-a="repay" data-v="999" ${debt ? '' : 'disabled'}>Repay all</button></div></div></div>
-      <div class="box"><h2>Aurex Bay Gazette<small>CITY NEWS</small></h2><div class="in">${feedHTML(c.news, 16)}</div></div>
-    </div></div>`;
+    </div></div>
+    ${stocksHTML(UI)}`;
 }
 function networkHTML() {
   const c = city(), p = me(), st = E.standings(c);
@@ -1120,7 +1122,7 @@ async function boot(hot) {
     const r = await B.setSpeed(sp.id); renderAll();
     if (r && r.ok === false) toast(r.msg, 'bad'); else toast(B.mode === 'online' ? `Admin: everyone now plays at ${sp.note}` : sp.note, 'good');
   });
-  document.querySelectorAll('#tabs button').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); setTab(b.dataset.tab); }));
+  document.querySelectorAll('#tabs button[data-tab]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); setTab(b.dataset.tab); }));
   $('modal').addEventListener('click', (e) => { if (e.target.id === 'modal' && UI.modal && UI.modal.t !== 'ob') closeModal(); });
   B.subscribe(() => { renderAll(); if (UI.modal && ['listing', 'wh', 'deliv', 'home', 'lot'].includes(UI.modal.t)) refreshModal(); if (city().over && me() && !shownSeasonEnd) { shownSeasonEnd = true; showSeasonEnd(); } });
   updatePins();

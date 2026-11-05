@@ -6,7 +6,7 @@ import { city, me, meId, esc, M, P, lineChart, shortDate, dateLabel, msUntilMont
 import { money, ricon, homeBg, bidBase, standing } from './life.js';
 import { apexSite } from './team.js';
 import { carrierSite } from './freight.js';
-import { CARRIERS } from '../supabase/functions/_shared/content.js';
+import { CARRIERS, HOUSE_AD, WORLD } from '../supabase/functions/_shared/content.js';
 
 const L = E.LIFE;
 export const HOME_URL = 'baylink.ab';
@@ -184,15 +184,33 @@ function homes(u, st) {
 }
 
 // ---------------------------------------------------------------- The Aurex Gazette
+// the house ad is set by the administrator / system (HOUSE_AD in content.js), never bought by players
+export function houseAd(cls = '') {
+  const a = HOUSE_AD; if (!a) return '';
+  return `<div class="adv house ${cls}"><span class="adv-img" style="background-image:url(${esc(a.img)});background-position:${esc(a.pos || 'center')}"></span><span class="adv-t"><small>Advertisement · ${esc(a.from)}</small><b>${esc(a.head)}</b><span>${esc(a.line)}</span></span></div>`;
+}
+const worldCard = (c) => { const w = c.lastCard ? WORLD.find((x) => x.id === c.lastCard.id) : null; return w ? { ...w, m: c.lastCard.m } : null; };
+const movers = (c) => STOCKS.map((s) => { const h = c.stocks[s.id].h; return { s, ch: h.length > 4 ? (h[h.length - 1] / h[h.length - 5] - 1) * 100 : 0 }; }).sort((a, b) => b.ch - a.ch);
+const moversHTML = (c) => { const m = movers(c); return [...m.slice(0, 3), ...m.slice(-3)].map((x) => `<div class="gz-mv"><span>${esc(x.s.name)}</span><b class="${x.ch >= 0 ? 'up' : 'down'}">${P(x.ch)}</b></div>`).join(''); };
 function gazette() {
-  const c = city(), [lead, ...rest] = c.news;
+  const c = city(), [lead, ...rest] = c.news, wc = worldCard(c);
   const sold = (c.life.sold || []).slice(0, 4);
-  const movers = STOCKS.map((s) => { const h = c.stocks[s.id].h; return { s, ch: h.length > 4 ? (h[h.length - 1] / h[h.length - 5] - 1) * 100 : 0 }; }).sort((a, b) => b.ch - a.ch);
   return `<div class="gz-mast"><span>${esc(dateLabel(c.m))}</span><h1>The Aurex Gazette</h1><span>Est. 1902 · Price 2¢</span></div>
+    ${wc ? `<div class="gz-wc"><small>World Card · ${esc(dateLabel(wc.m))}</small><b>${esc(wc.title)}</b></div>` : ''}
     <div class="gz-cols"><article class="gz-lead">${lead ? `<h2>${esc(lead.title)}</h2><p>${esc(lead.text || '')}</p>` : ''}${rest.slice(0, 3).map((n) => `<h4>${esc(n.title)}</h4><p>${esc(n.text || '')}</p>`).join('')}${adSlot(2, 'wide')}${rest.slice(3, 6).map((n) => `<h4>${esc(n.title)}</h4><p>${esc(n.text || '')}</p>`).join('')}</article>
-    <aside>${adSlot(1, 'side')}<h3>Markets this month</h3>${[...movers.slice(0, 3), ...movers.slice(-3)].map((x) => `<div class="gz-mv"><span>${esc(x.s.name)}</span><b class="${x.ch >= 0 ? 'up' : 'down'}">${P(x.ch)}</b></div>`).join('')}
+    <aside>${houseAd('side')}${adSlot(1, 'side')}<h3>Markets this month</h3>${moversHTML(c)}
       <h3>Under the hammer</h3>${sold.map((s) => `<p><b>${esc(L.ITEM[s.cid].name)}</b> went for ${money(s.price)}.</p>`).join('') || '<p>The auction season opens this month.</p>'}<p>${go('aurexauctions.ab', 'See the sale at Aurex &amp; Co. ›')}</p>
       <h3>Society</h3>${rest.slice(6, 12).map((n) => `<p>${esc(n.title)}.</p>`).join('')}</aside></div>`;
+}
+// a clipping of the Gazette for the Market tab: World Card headline, the 3 latest stories, markets and the house ad; a click opens the site
+export function gazetteBox() {
+  const c = city(), wc = worldCard(c), news = c.news.slice(0, 3);
+  return `<a href="#" class="gzbox" data-a="web" data-u="aurexgazette.ab" aria-label="Open The Aurex Gazette">
+    <div class="gz-mast"><span>${esc(dateLabel(c.m))}</span><h1>The Aurex Gazette</h1><span>News, markets and society</span></div>
+    ${wc ? `<div class="gz-wc"><small>World Card · ${esc(dateLabel(wc.m))}</small><b>${esc(wc.title)}</b></div>` : ''}
+    <div class="gz-cols"><div class="gz-lead">${news.map((n, i) => i ? `<h4>${esc(n.title)}</h4><p>${esc(n.text || '')}</p>` : `<h3 class="gz-h">${esc(n.title)}</h3><p>${esc(n.text || '')}</p>`).join('') || '<p>No news yet.</p>'}</div>
+    <aside><h3>Markets this month</h3>${moversHTML(c)}</aside></div>
+    ${houseAd('wide')}<span class="gz-more">Read The Aurex Gazette ›</span></a>`;
 }
 
 // ---------------------------------------------------------------- Harbor Trust online banking

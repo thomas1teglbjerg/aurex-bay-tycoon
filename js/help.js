@@ -275,8 +275,7 @@ const SETTINGS = {
 const TABS = {
   map: h('Tab', 'The city map. Click a district to zoom in; pins show companies, warehouses and homes.', 'Gold pins are for sale.'),
   empire: h('Tab', 'Your empire: cash, mail, to-dos, companies, warehouses and your team of specialists.'),
-  market: h('Tab', 'The economy, the supplies market, your offers and the Bank of Aurex.'),
-  stocks: h('Tab', 'The Aurex Bay Stock Exchange: buy and sell shares.'),
+  market: h('Tab', 'The economy, the supplies market, your offers, the Bank of Aurex, the Gazette and the Aurex Bay Stock Exchange.'),
   network: h('Tab', 'Companies you own together with other players at the top; your network, supply contracts and the city ranking below.'),
   life: h('Tab', 'Your personal side: wallet, homes, collections, auctions and prestige.')
 };
@@ -319,7 +318,8 @@ export function helpAt(el, where = {}) {
   if (q('#mylogo')) return { t: 'Your parent company', k: 'Brand', d: 'The logo of the parent company that owns your businesses. Click to open your empire.' };
   if (q('.adv')) return { t: 'Advertisement', k: 'Marketing', d: 'An ad campaign a company in Aurex Bay paid for. It runs for a few weeks on the city’s websites. Click it to see the company or the piece.', tip: 'Run your own from the Ad campaigns box of a company with a Marketing department.' };
   if (q('.adbox')) return { t: 'Ad campaigns', k: 'Marketing', d: 'Buy a few weeks of ads on the city’s websites. Advertise the company to win customers and reputation every week, or one piece it makes or you own to lift its market value.', tip: 'Pick a tone, flip through lines with Another line, then launch. A head of marketing makes campaigns 50% stronger.' };
-  if (q('.webbtn')) return { ...ACTIONS.web, t: 'Web browser', k: 'Top bar' };
+  if (q('.webtab')) return { ...ACTIONS.web, t: 'Web browser', k: 'Menu' };
+  if (q('.gzbox')) return { t: 'The Aurex Gazette', k: 'News', d: 'A clipping of the city newspaper: the latest World Card, the three newest stories, this month’s biggest share movers and the Gazette’s own advertisement.', tip: 'Click it to open the full paper in the web browser.' };
   if ((x = q('.mp[data-mk]'))) return markHelp(x.dataset.mk);
   if ((x = q('.zone[data-zone]'))) { const d = DISTRICT[x.dataset.zone]; return d && { t: d.name, k: 'District', d: d.blurb, tip: 'Click to zoom into the district and see its companies, warehouses and homes.' }; }
   if (q('.mn-crumb')) return { t: 'Where you are', k: 'Map', d: 'The part of the city you are looking at. In a district, ‹ Aurex Bay takes you back to the whole city and the arrows step to the previous or next district.' };
