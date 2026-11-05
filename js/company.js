@@ -185,7 +185,7 @@ export function companyHTML(lid, ui = {}) {
 // Marketing: ad campaigns on the city's websites, for the company or one piece it makes or the owner holds
 function adBox(c, l, ro, ui) {
   const A = E.ADS, o = l.ops, mk = O.deptFor(l, 'social').name, run = A.running(c, l.id);
-  if (ro && !run) return '';
+  if ((ro || !o.depts.social) && !run) return ''; // only companies with a Marketing department advertise
   const head = (n) => `<div class="box adbox"><h2>Ad campaigns<small>${n}</small></h2><div class="in">`;
   if (run) {
     const left = Math.min(run.weeks, Math.max(0, Math.ceil((run.until - c.g) * 48 - 1e-6))), what = run.kind === 'co' ? esc(lname(l)) : esc((E.LIFE.ITEM[run.cid] || {}).name || 'a piece');
@@ -194,7 +194,6 @@ function adBox(c, l, ro, ui) {
       <p class="empty" style="font-size:13px">${run.kind === 'co' ? `Every week it runs: customers +${Math.round(AD.cust * A.strength(l) * 1000) / 10}% and reputation +${AD.rep * A.strength(l)}.` : `Every week it runs the piece gains ${Math.round(AD.lift * A.strength(l) * 1000) / 10}% in market value.`}${A.strength(l) > 1 ? ' A head of marketing makes it 50% stronger.' : ''} Open the web browser to see it live.</p>
       ${ro ? '' : `<div class="btns"><button class="btn sm" data-a="web" data-u="baylink.ab">See it in the browser</button><button class="linkbtn" data-a="adStop" data-lid="${l.id}">Stop campaign</button></div>`}</div></div>`;
   }
-  if (!o.depts.social) return head('MARKETING') + `<p class="empty">Open the ${esc(mk)} department to run ad campaigns on the city’s websites: banners on Baylink, the Gazette, the dealers and every other site in the browser.</p></div></div>`;
   const st = Object.assign({ subj: 'co', tone: 'wink', n: 0, weeks: AD.weeks[1] }, (ui.ad && ui.ad[l.id]) || {});
   const p = me(), prods = E.ADS.products(c, p, l), pr = prods.find((x) => x.uid === st.subj), cid = pr ? pr.cid : null, subj = pr ? pr.uid : 'co';
   const t = A.copy(l, st.tone, st.n, cid, p.name), cost = A.cost(l, st.weeks), cash = l.owner.k === 'h' ? c.holdings[l.owner.id].treasury : p.cash;
