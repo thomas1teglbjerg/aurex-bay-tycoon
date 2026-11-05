@@ -95,6 +95,7 @@ export function dispatch(city, p, w, l, g, qty, gNow) {
   if (w.owner !== p.id) return { ok: false, msg: 'Not your warehouse.' };
   if (!l || !l.owner || l.owner.k !== 'p' || l.owner.id !== p.id) return { ok: false, msg: 'You can only supply your own companies.' };
   qty = Math.min(Math.round(qty), Math.floor(w.stock[g] || 0)); if (qty < 1) return { ok: false, msg: 'Nothing of that in stock.' };
+  { const y = RECIPES[l.type].yard; if (y && y[g] != null) { const room = Math.floor(y[g] - ((l.ops && l.ops.inv[g]) || 0) - onTheWay(city, l, g)); if (room < 1) return { ok: false, msg: `The yard is full: it holds ${y[g]} ${GOODS[g].unit}.` }; qty = Math.min(qty, room); } }
   w.stock[g] -= qty; if (w.stock[g] < 0.5) delete w.stock[g];
   const days = truckDays(SITE[w.id], l);
   ship(city, { g, qty, from: { k: 'w', id: w.id }, to: { k: 'l', id: l.id }, owner: p.id, departG: gNow, arriveG: gNow + days * DAY, mode: 'truck' });
