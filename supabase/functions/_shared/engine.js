@@ -292,6 +292,7 @@ export function listingYield(city, l, owner) {
   if (l.type === 'dealer' && econ === 'Recession') { trade = 0; notes.push('Credit squeeze: no Trade'); }
   if (l.type === 'clothing' && econ === 'Boom') { ypi += 0.3 * s; notes.push(`Boom +${r2(0.3 * s)}`); }
   if (l.type === 'clothing' && econ === 'Recession') { ypi -= 0.3 * s; notes.push(`Recession −${r2(0.3 * s)}`); }
+  if (l.type === 'textile' && econ === 'Recession') { ypi -= 0.3 * s; notes.push(`Fast fashion slump −${r2(0.3 * s)}`); }
   if (l.type === 'music' && econ === 'Recession') { ypi -= 0.4 * s; notes.push(`Fickle charts −${r2(0.4 * s)}`); }
   if (l.type === 'restaurant' && econ === 'Recession') { ypi -= 0.3 * s; notes.push(`Recession −${r2(0.3 * s)}`); }
   if (l.type === 'car' && city.fx && city.fx.id === 'energy') { trade = 0; notes.push('Energy shortage: no Trade'); }
