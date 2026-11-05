@@ -6,14 +6,15 @@ import * as E from '../supabase/functions/_shared/engine.js';
 import { RECIPES, GOODS } from '../supabase/functions/_shared/content.js';
 import { city, now, esc, N } from './util.js';
 
-const PARTS = ['cement', 'sand', 'gravel'];
-const TOL = 0.06;           // ± share that still counts as right (fairly easy)
+const PARTS = ['cement', 'sand', 'gravel', 'water'];
+const TOL = 0.06;           // ± share that still counts as right (fairly easy); small parts (water) get a band
+const tol = (g) => Math.min(TOL, MX.target[g] * 0.45); // in proportion to their share
 const DRAIN = 9, HEAL = 5;  // quality points per second out of / inside the band
 let MX = null;
 
 function targets(l) { const r = RECIPES[l.type].in, sum = PARTS.reduce((a, g) => a + (r[g] || 0), 0); return Object.fromEntries(PARTS.map((g) => [g, (r[g] || 0) / sum])); }
 function shares() { const v = PARTS.map((g) => MX.feed[g] * MX.drift[g]), sum = v.reduce((a, x) => a + x, 0) || 1; return Object.fromEntries(PARTS.map((g, i) => [g, v[i] / sum])); }
-const inBand = (sh) => PARTS.every((g) => Math.abs(sh[g] - MX.target[g]) <= TOL);
+const inBand = (sh) => PARTS.every((g) => Math.abs(sh[g] - MX.target[g]) <= tol(g));
 
 function css() {
   if (document.getElementById('mixer-css')) return;
@@ -48,11 +49,11 @@ function render() {
   const l = E.listing(city(), MX.lid), out = Object.keys(RECIPES[l.type].out)[0];
   const el = document.getElementById('mixer') || Object.assign(document.createElement('div'), { id: 'mixer' });
   el.innerHTML = `<div class="mx" role="dialog" aria-label="Concrete mixer"><h2>Mixing ${N(MX.qty)} t of ${esc(GOODS[out].name.toLowerCase())}</h2>
-    <p class="mx-sub">The sand, gravel and cement drift as the drum turns. Move the sliders to keep every line in its green band.</p>
+    <p class="mx-sub">The cement, sand, gravel and water drift as the drum turns. Move the sliders to keep every line in its green band.</p>
     <div class="mx-top"><div class="mx-time" id="mx-time"></div><div class="mx-q"><small>Mix quality</small><div class="mx-bar"><i id="mx-q"></i></div></div></div>
     ${PARTS.map((g) => `<div class="mx-row" id="mx-r-${g}"><div class="mx-head"><b>${esc(GOODS[g].name)}</b><span id="mx-v-${g}"></span></div>
-      <div class="mx-gauge"><div class="mx-band" style="left:${(MX.target[g] - TOL) * 100}%;width:${TOL * 200}%"></div><div class="mx-dot" id="mx-d-${g}"></div></div>
-      <small>Feed</small><input type="range" min="5" max="100" step="1" value="${Math.round(MX.feed[g])}" data-mx="${g}" aria-label="${esc(GOODS[g].name)} feed"></div>`).join('')}
+      <div class="mx-gauge"><div class="mx-band" style="left:${(MX.target[g] - tol(g)) * 100}%;width:${tol(g) * 200}%"></div><div class="mx-dot" id="mx-d-${g}"></div></div>
+      <small>Feed</small><input type="range" min="1" max="100" step="1" value="${Math.round(MX.feed[g])}" data-mx="${g}" aria-label="${esc(GOODS[g].name)} feed"></div>`).join('')}
     <div class="mx-msg" id="mx-msg"></div>
     <div class="mx-btns" id="mx-btns"><button class="btn" data-mxa="quit">Stop and throw out</button></div></div>`;
   if (!el.parentNode) document.body.appendChild(el);
@@ -64,7 +65,7 @@ function paint() {
   const sh = shares(), left = Math.max(0, MX.end - now());
   const secs = Math.ceil(left / 1000); document.getElementById('mx-time').textContent = left > 0 ? `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}` : 'Done';
   const q = document.getElementById('mx-q'); q.style.width = MX.q + '%'; q.style.background = MX.q < 30 ? 'var(--bad)' : MX.q < 60 ? 'var(--gold)' : 'var(--good)';
-  PARTS.forEach((g) => { const off = Math.abs(sh[g] - MX.target[g]) > TOL;
+  PARTS.forEach((g) => { const off = Math.abs(sh[g] - MX.target[g]) > tol(g);
     document.getElementById('mx-r-' + g).classList.toggle('off', off);
     document.getElementById('mx-v-' + g).textContent = `${Math.round(sh[g] * 100)}% · aim ${Math.round(MX.target[g] * 100)}%`;
     document.getElementById('mx-d-' + g).style.left = Math.min(100, sh[g] * 100) + '%'; });
