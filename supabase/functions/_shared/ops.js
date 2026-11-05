@@ -522,8 +522,26 @@ export function tasks(city, l) {
   if (o.depts.legal && automation(l, 'legal') === 0 && o.legalUntil < m) out.push({ id: 'reviewContracts', dept: 'legal', label: 'Review contracts', interactive: true });
   return out;
 }
+// why a manual task cannot run right now (already done this month, next month already planned…), or null.
+// The browser asks this before starting a 20-second task, and doTask refuses with the same words.
+export function taskBlock(city, l, task) {
+  const o = l && l.ops, m = city.m; if (!o) return 'This company has no operations.';
+  const hotel = hosts(l), cd = (k) => o.cd && o.cd[k] === m;
+  switch (task) {
+    case 'teamMeeting': return cd('teamMeeting') ? 'You already held a team meeting this month. Try again next month.' : null;
+    case 'findCustomers': return cd('findCustomers') ? `You already looked for new ${hotel ? 'booking partners' : 'clients'} this month. Try again next month.` : null;
+    case 'postCampaign': return cd('postCampaign') ? 'You already shot a campaign this month. Try again next month.' : null;
+    case 'runExperiment': return cd('runExperiment') ? 'You already ran an experiment this month. Try again next month.' : null;
+    case 'reviewBooks': return o.booksM === m ? 'The books are already closed this month.' : null;
+    case 'reviewContracts': return o.legalUntil >= m ? `Contracts are already covered${o.legalUntil > m ? ` for ${o.legalUntil - m + 1} more months` : ' this month'}.` : null;
+    case 'overtime': return o.boost && o.boost.m === m + 1 ? 'Next month is already planned.' : null;
+    case 'runShift': return o.boost && o.boost.m === m + 1 ? (hotel ? 'You already run reception this month.' : 'You already worked the line this month.') : null;
+    default: return null;
+  }
+}
 export function doTask(city, ctx, l, task, a = {}) {
   const o = l.ops, m = city.m, s = SIZES[l.size].mult, ch = a.choice;
+  const blocked = taskBlock(city, l, task); if (blocked) return { ok: false, msg: blocked };
   const workers = Object.values(o.depts).reduce((x, d) => x + d.w, 0);
   const once = (k) => { if (o.cd[k] === m) return false; o.cd[k] = m; return true; };
   switch (task) {

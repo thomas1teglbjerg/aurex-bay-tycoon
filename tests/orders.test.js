@@ -47,6 +47,8 @@ E.apply(city, 'u', 'holdingCreate', { name: 'Test Co', amt: 6 }, now); const h =
 assert(E.apply(city, 'bot-lars', 'post', { lid: car.id, text: 'Steel is cheap this month.' }, now).ok, 'coop partner can post');
 // interactive task with a choice
 const morale = car.ops.morale; assert(E.apply(city, 'u', 'task', { lid: car.id, task: 'teamMeeting', choice: 'bonus' }, now).ok && car.ops.morale > morale, 'team meeting with bonus raises morale');
+{ const again = E.apply(city, 'u', 'task', { lid: car.id, task: 'teamMeeting', choice: 'bonus' }, now); assert(!again.ok && /already/i.test(again.msg) && E.OPS.taskBlock(city, car, 'teamMeeting'), 'a second team meeting this month is refused with a message'); }
+{ car.ops.booksM = city.m; const b = E.apply(city, 'u', 'task', { lid: car.id, task: 'reviewBooks', choice: 'chase' }, now); assert(!b.ok && /already closed/.test(b.msg), 'books cannot be closed twice in a month'); car.ops.booksM = -1; }
 // warehouses
 const W = city.warehouses.find((x) => x.id === 'W3'); if (W.owner) W.owner = null;
 assert(E.apply(city, 'u', 'whBuy', { wid: 'W3' }, now).ok, 'buy Ridgeway Haulage');
