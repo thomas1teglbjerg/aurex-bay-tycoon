@@ -6,7 +6,7 @@ import { city, me, meId, esc, M, P, lineChart, shortDate, dateLabel, msUntilMont
 import { money, ricon, homeBg, bidBase, standing } from './life.js';
 import { apexSite } from './team.js';
 import { carrierSite } from './freight.js';
-import { CARRIERS, CENTRAL, CENTRAL_BANK, WORLD, TYPES, GOODS, HOUSE_AD } from '../supabase/functions/_shared/content.js';
+import { CARRIERS, CENTRAL, CENTRAL_BANK, WORLD, TYPES, GOODS, HOUSE_PICS } from '../supabase/functions/_shared/content.js';
 
 const L = E.LIFE;
 export const HOME_URL = 'baylink.ab';
@@ -71,7 +71,7 @@ function adSlot(slot, cls = '') {
 export function parseUrl(u) { const s = String(u || HOME_URL).trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, ''); const [host, ...rest] = s.split('/'); return { host: host.toLowerCase(), path: rest, url: s || HOME_URL }; }
 export function webHTML(st) {
   const u = parseUrl(st.url), site = SITES[u.host];
-  const page = !site ? notFound(u) : u.host === 'baylink.ab' ? portal(st) : u.host === 'aurexauctions.ab' ? auctions(u, st) : SITES[u.host].cat ? dealer(SITES[u.host].cat, u) : u.host === 'bayhomes.ab' ? homes(u, st) : u.host === 'harbortrust.ab' ? bank(u) : u.host === 'bankofaurex.ab' ? boa(u) : u.host === 'apextalent.ab' ? apexSite(u, go) : SITES[u.host].carrier ? carrierSite(u.host, u, go) : gazette();
+  const page = !site ? notFound(u) : u.host === 'baylink.ab' ? portal(st) : u.host === 'aurexauctions.ab' ? auctions(u, st) : SITES[u.host].cat ? dealer(SITES[u.host].cat, u) : u.host === 'bayhomes.ab' ? homes(u, st) : u.host === 'harbortrust.ab' ? bank(u) : u.host === 'bankofaurex.ab' ? boa(u) : u.host === 'apextalent.ab' ? apexSite(u, go) : SITES[u.host].carrier ? carrierSite(u.host, u, go) : gazette(u, st);
   const bm = Object.keys(SITES).filter((h) => h !== 'baylink.ab').map((h) => `<button data-a="webGo" data-u="${h}" class="${u.host === h ? 'on' : ''}">${favicon(h, 18)}<span>${esc(SITES[h].name.replace(/^The /, ''))}</span></button>`).join('');
   return `<div class="wwin"><div class="wchrome">
     <div class="wbar"><button data-a="webBack" aria-label="Back" ${st.back.length ? '' : 'disabled'}>‹</button><button data-a="webFwd" aria-label="Forward" ${st.fwd.length ? '' : 'disabled'}>›</button><button data-a="webHome" aria-label="Home" class="hm"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/></svg></button>
@@ -187,25 +187,45 @@ function homes(u, st) {
 // ---------------------------------------------------------------- The Aurex Gazette
 // the house ad is set by the administrator / system (HOUSE_AD in content.js), never bought by players
 export function houseAd(cls = '') {
-  const a = HOUSE_AD; if (!a) return '';
+  const a = E.GZ.houseAd(city()); if (!a) return '';
   return `<div class="adv house ${cls}"><span class="adv-img" style="background-image:url(${esc(a.img)});background-position:${esc(a.pos || 'center')}"></span><span class="adv-t"><small>Advertisement · ${esc(a.from)}</small><b>${esc(a.head)}</b><span>${esc(a.line)}</span></span></div>`;
 }
 const worldCard = (c) => { const w = c.lastCard ? WORLD.find((x) => x.id === c.lastCard.id) : null; return w ? { ...w, m: c.lastCard.m } : null; };
 const movers = (c) => STOCKS.map((s) => { const h = c.stocks[s.id].h; return { s, ch: h.length > 4 ? (h[h.length - 1] / h[h.length - 5] - 1) * 100 : 0 }; }).sort((a, b) => b.ch - a.ch);
 const moversHTML = (c) => { const m = movers(c); return [...m.slice(0, 3), ...m.slice(-3)].map((x) => `<div class="gz-mv"><span>${esc(x.s.name)}</span><b class="${x.ch >= 0 ? 'up' : 'down'}">${P(x.ch)}</b></div>`).join(''); };
-function gazette() {
-  const c = city(), [lead, ...rest] = c.news, wc = worldCard(c);
+// the front page story of the week leads the paper while it is fresh; otherwise the latest news does
+const frontFirst = (c) => { const f = c.gz && c.gz.front, i = f && c.g - f.g < 1.5 / 48 ? c.news.findIndex((n) => n.front && n.lid === f.lid && n.title === f.t) : -1; return i > 0 ? [c.news[i], ...c.news.filter((_, k) => k !== i)] : c.news; };
+function houseForm() {
+  const c = city(), h = E.GZ.houseAd(c) || {}, cur = (String(h.img || '').match(/img\/(.+)\.jpg/) || [])[1];
+  return `<div class="gz-mast"><span>Administrator</span><h1>House ad</h1><span>One ad set by the system, never by players</span></div>
+    <div class="gz-cols"><article class="gz-lead"><form data-form="house" class="gz-form">
+      <label>Picture<select name="pic">${HOUSE_PICS.map(([k, n]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
+      <label>From<input name="from" maxlength="40" value="${esc(h.from || '')}" placeholder="Bergwald"></label>
+      <label>Headline<input name="head" maxlength="70" value="${esc(h.head || '')}" required></label>
+      <label>Line<input name="line" maxlength="90" value="${esc(h.line || '')}"></label>
+      <div class="gz-fb"><button type="submit">Save for everyone</button><button type="button" data-a="houseAd" data-v="reset">Back to default</button><button type="button" data-a="houseAd" data-v="off">Turn off</button></div></form></article>
+    <aside><h3>Now showing</h3>${houseAd('side') || '<p>No house ad.</p>'}<p>${go('aurexgazette.ab', '‹ Back to the paper')}</p></aside></div>`;
+}
+function gazette(u, st) {
+  if (u.path[0] === 'house' && st.admin) return houseForm();
+  const c = city(), [lead, ...rest] = frontFirst(c), wc = worldCard(c);
   const sold = (c.life.sold || []).slice(0, 4);
   return `<div class="gz-mast"><span>${esc(dateLabel(c.m))}</span><h1>The Aurex Gazette</h1><span>Est. 1902 · Price 2¢</span></div>
     ${wc ? `<div class="gz-wc"><small>World Card · ${esc(dateLabel(wc.m))}</small><b>${esc(wc.title)}</b></div>` : ''}
     <div class="gz-cols"><article class="gz-lead">${lead ? `<h2>${esc(lead.title)}</h2><p>${esc(lead.text || '')}</p>` : ''}${rest.slice(0, 3).map((n) => `<h4>${esc(n.title)}</h4><p>${esc(n.text || '')}</p>`).join('')}${adSlot(2, 'wide')}${rest.slice(3, 6).map((n) => `<h4>${esc(n.title)}</h4><p>${esc(n.text || '')}</p>`).join('')}</article>
     <aside>${houseAd('side')}${adSlot(1, 'side')}<h3>Markets this month</h3>${moversHTML(c)}
       <h3>Under the hammer</h3>${sold.map((s) => `<p><b>${esc(L.ITEM[s.cid].name)}</b> went for ${money(s.price)}.</p>`).join('') || '<p>The auction season opens this month.</p>'}<p>${go('aurexauctions.ab', 'See the sale at Aurex &amp; Co. ›')}</p>
-      <h3>Society</h3>${rest.slice(6, 12).map((n) => `<p>${esc(n.title)}.</p>`).join('')}</aside></div>`;
+      <h3>Society</h3>${rest.slice(6, 12).map((n) => `<p>${esc(n.title)}.</p>`).join('')}
+      ${gazetteOwner(c)}${st.admin ? `<p>${go('aurexgazette.ab/house', 'Admin: edit the house ad ›')}</p>` : ''}</aside></div>`;
+}
+function gazetteOwner(c) {
+  const l = E.GZ.paper(c); if (!l) return '';
+  const who = !l.owner ? 'For sale' : l.owner.k === 'p' ? (c.players[l.owner.id] || {}).name : (c.holdings[l.owner.id] || {}).name;
+  return `<h3>The paper</h3><p>Published in Aurex City by <b>${esc(who || '')}</b>. Ads cost ×${(c.gz && l.owner && c.gz.rate) || 1}; a press release ${money(E.GZ.pressFee(c))}.</p>`;
 }
 // a clipping of the Gazette for the Market tab: World Card headline, the 3 latest stories, markets and the house ad; a click opens the site
 export function gazetteBox() {
-  const c = city(), wc = worldCard(c), news = c.news.slice(0, 3);
+  const c = city(), wc = worldCard(c), news = frontFirst(c).slice(0, 3);
   return `<a href="#" class="gzbox" data-a="web" data-u="aurexgazette.ab" aria-label="Open The Aurex Gazette">
     <div class="gz-mast"><span>${esc(dateLabel(c.m))}</span><h1>The Aurex Gazette</h1><span>News, markets and society</span></div>
     ${wc ? `<div class="gz-wc"><small>World Card · ${esc(dateLabel(wc.m))}</small><b>${esc(wc.title)}</b></div>` : ''}

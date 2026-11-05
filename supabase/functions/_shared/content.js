@@ -31,13 +31,15 @@ export const TYPES = {
     perks: [{ t: 'Hit Single', d: '+3 M & +1 Influence on a hit (2 in 6 per year) when Marketing runs or a PR & Media Officer leads it' }, { t: 'Studio Buzz', d: '+1 Influence per year' }], neg: [{ t: 'Fickle Charts', d: '−0.4 M YPI during a recession' }] },
   film: { name: 'Film Production', sector: 'Media & Entertainment', price: 38, trade: 2.5, ypi: 3.5, group: 'media', tags: ['Media', 'Influence'],
     perks: [{ t: 'Influence Boost', d: '+1 Influence per year' }, { t: 'Blockbuster Success', d: '+8 M & +1 Influence on a blockbuster (2 in 6 per year)' }], neg: [{ t: 'Influencer Staff Requirement', d: 'Blockbusters need a PR & Media Officer at HQ' }] },
+  newspaper: { name: 'Newspaper', sector: 'Media · News & Publishing', price: 14, trade: 1, ypi: 1.6, group: 'media', tags: ['Media', 'Community'],
+    perks: [{ t: 'Ad Desk', d: 'Every ad campaign in the city is booked through the paper: you set the price and keep the money' }, { t: 'Front Page', d: 'Pick the story of the week; the company on the front page wins customers and reputation' }], neg: [{ t: 'Thin Ad Pages', d: '−0.3 M YPI during a recession' }] },
   vineyard: { name: 'Vineyard', sector: 'Food & Drink · Wine Estate', price: 12, trade: 1.2, ypi: 1.6, group: 'service', tags: ['Wine', 'Collectibles'],
     perks: [{ t: 'Vintage Year', d: 'Every harvest: 50% chance to bottle a collectible wine. Sell it to the dealer, at auction or to other players' }, { t: 'Estate Specialists', d: 'Each specialist leading a department raises the odds and the rarity' }, { t: 'House Wine', d: '+YPI to a Restaurant in the portfolio' }],
     neg: [{ t: 'Small Harvests', d: 'Small estates rarely bottle anything above Rare and never a Legendary' }, { t: 'Crisis Hangover', d: '−0.4 M YPI during a crisis' }] }
 };
 
 // Portfolio synergies: owning (or contracting with) the first type boosts the second
-export const SYNERGY = [['car', 'dealer'], ['autorepair', 'dealer'], ['car', 'autorepair'], ['metal', 'car'], ['metal', 'chip'], ['chip', 'data'], ['chip', 'pharma'], ['film', 'fashion'], ['hotel', 'fashion'], ['finance', 'data'], ['vineyard', 'restaurant']];
+export const SYNERGY = [['car', 'dealer'], ['autorepair', 'dealer'], ['car', 'autorepair'], ['metal', 'car'], ['metal', 'chip'], ['chip', 'data'], ['chip', 'pharma'], ['film', 'fashion'], ['hotel', 'fashion'], ['finance', 'data'], ['vineyard', 'restaurant'], ['newspaper', 'film'], ['newspaper', 'music']];
 
 export const SIZES = { S: { label: 'Small', mult: 0.6 }, M: { label: 'Medium', mult: 1 }, L: { label: 'Large', mult: 1.5 } };
 
@@ -61,7 +63,7 @@ DISTRICTS.forEach((d) => { d.x = Math.round(d.box.x + d.box.w / 2); d.y = Math.r
 export const DISTRICT = Object.fromEntries(DISTRICTS.map((d) => [d.id, d]));
 export function placeOn(d, p) { const b = DISTRICT[d].box; return { x: Math.round(b.x + p[0] * b.w), y: Math.round(b.y + p[1] * b.h) }; }
 
-// 32 unique listings: [type, district, size, x, y within the district view, title, own picture in img/]
+// 33 unique listings: [type, district, size, x, y within the district view, title, own picture in img/]
 export const LISTINGS = [
   ['clothing', 'ironport', 'S', 0.24, 0.31, 'Eastbridge Supply Co.'], ['fashion', 'aurex', 'L', 0.6, 0.72], ['fashion', 'marina', 'S', 0.54, 0.5],
   ['hotel', 'marina', 'L', 0.2, 0.3], ['hotel', 'marina', 'M', 0.42, 0.4], ['hotel', 'sunset', 'S', 0.45, 0.4, null, 'c-hotel-sunset'],
@@ -74,7 +76,8 @@ export const LISTINGS = [
   ['film', 'crown', 'L', 0.11, 0.17], ['music', 'ironport', 'M', 0.75, 0.88, 'Watertower Sound'], ['film', 'harbor', 'S', 0.58, 0.3],
   ['autorepair', 'ironport', 'S', 0.3, 0.6, 'Kingside Auto Works'],
   ['restaurant', 'ironport', 'S', 0.62, 0.6, 'Ground Café'],
-  ['vineyard', 'greenfield', 'S', 0.66, 0.2, 'Greenfield Hill Vines'], ['vineyard', 'crown', 'M', 0.815, 0.6, 'Aurex Bay Vineyard'], ['vineyard', 'nevus', 'L', 0.33, 0.42, 'Nevus Cliff Estate']
+  ['vineyard', 'greenfield', 'S', 0.66, 0.2, 'Greenfield Hill Vines'], ['vineyard', 'crown', 'M', 0.815, 0.6, 'Aurex Bay Vineyard'], ['vineyard', 'nevus', 'L', 0.33, 0.42, 'Nevus Cliff Estate'],
+  ['newspaper', 'aurex', 'M', 0.8, 0.5, 'The Aurex Gazette', 'c-gazette']
 ].map(([type, d, size, px, py, title, img], i) => ({ id: 'L' + (i + 1), type, d, p: [px, py], district: DISTRICT[d].name, size, ...(title ? { title } : {}), ...(img ? { img } : {}), ...placeOn(d, [px, py]) }));
 
 // the national bank: the Bank of Aurex site in Aurex City (bankofaurex.ab in the in-game browser)
@@ -308,6 +311,7 @@ export const RECIPES = {
   // guests: no finished stock and no deliveries. Bookings come in, guests check in when a room and supplies are free, and use the supplies during their stay.
   hotel: { cap: 25, unit: 'guest stays', in: { food: 2, textiles: 0.5, energy: 1, media: 0.3 }, out: {}, guests: { client: 'Booking channel' } },
   finance: { cap: 20, unit: 'client accounts', in: { software: 0.5, energy: 0.5 }, out: {} },
+  newspaper: { cap: 30, unit: 'editions', in: { software: 0.3, energy: 0.2, textiles: 0.2 }, out: {} },
   vineyard: { cap: 20, unit: 'barrels', in: { chemicals: 0.3, energy: 0.3, food: 0.2 }, out: {} }
 };
 
@@ -353,7 +357,7 @@ export const WORKER = { salary: 0.08, hireFee: 0.02 };
 // ---------------------------------------------------------------- clients and orders
 // B2B companies have a few large corporate clients who negotiate hard but stay loyal.
 // B2C companies sell through many retail channels with smaller, faster, more impatient orders.
-export const MARKET_KIND = { bank: 'b2c', dealer: 'b2c', restaurant: 'b2c', autorepair: 'b2c', metal: 'b2b', chip: 'b2b', data: 'b2b', finance: 'b2b', pharma: 'b2b', car: 'b2c', clothing: 'b2c', fashion: 'b2c', hotel: 'b2c', music: 'b2c', film: 'b2c', vineyard: 'b2c' };
+export const MARKET_KIND = { bank: 'b2c', dealer: 'b2c', restaurant: 'b2c', autorepair: 'b2c', metal: 'b2b', chip: 'b2b', data: 'b2b', finance: 'b2b', pharma: 'b2b', car: 'b2c', clothing: 'b2c', fashion: 'b2c', hotel: 'b2c', music: 'b2c', film: 'b2c', vineyard: 'b2c', newspaper: 'b2c' };
 export const CLIENT_RULES = {
   b2b: { start: 4, weight: [1, 2.5], orderChance: 0.55, expire: 3, renegotiate: 0.6, rejectHit: 18, label: 'Corporate client' },
   b2c: { start: 6, weight: [0.4, 1.2], orderChance: 0.7, expire: 2, renegotiate: 0.42, rejectHit: 10, label: 'Retail channel' }
@@ -384,6 +388,7 @@ export const CLIENT_NAMES = {
   fashion: ['Boutique Lumen', 'Old Grid Department Store', 'Aurex Mall', 'Sunset Surf & Style', 'Crown Hills Atelier', 'Harbor Outlet', 'Midtown Sneaker Lab', 'Lagoon Resort Shops', 'Nevus Concept Store'],
   hotel: ['Northwind Travel', 'Cruise Terminal Desk', 'Aurex Business Travel', 'Wedding Planners Co', 'Conference Bureau', 'Sunset Tour Operators', 'Harbor Row Events', 'Crown Hills Golf Club', 'Airport Shuttle Partners'],
   music: ['StreamBay', 'Aurex FM', 'Old Grid Jazz Club', 'Ironport warehouse nights', 'Indie artists', 'Midtown ad agencies', 'Sunset Open Air', 'Crown Hills Film Festival', 'Podcast networks'],
+  newspaper: ['Harbor Row newsstands', 'Aurex City subscribers', 'Crown Hills home delivery', 'Midtown coffee bars', 'Ironport commuters', 'Hotel lobbies', 'Old Grid library', 'Sunset Strand kiosks', 'Online readers'],
   vineyard: ['Cellar Door wine merchants', 'Crown Hills Golf Club', 'Marina Bay restaurants', 'Wine club members', 'Sunset Strand beach bars', 'Aurex Bay Hotel', 'Tasting room visitors', 'Wedding Planners Co', 'Duty-free at the airport'],
   film: ['Grand Cinema Midtown', 'Harbor Row Drive-in', 'StreamBay', 'Crown Hills Film Festival', 'Old Grid Arthouse', 'Nevus Media Network', 'Sunset Open Air', 'Aurex TV', 'Lagoon IMAX']
 };
@@ -719,10 +724,38 @@ export const CARRIERS = [
 // The house ad: one advertisement run by the administrator / system (never by players). It shows in the
 // Gazette box on the Market tab and stays fixed on The Aurex Gazette website. Change it here.
 export const HOUSE_AD = { img: 'img/x-bergwald-s7.jpg', pos: '50% 60%', from: 'Bergwald', head: 'Bergwald cars is coming to Aurex Bay', line: 'See you soon' };
+// pictures the administrator can pick for the house ad (paths under img/)
+export const HOUSE_PICS = [['x-bergwald-s7', 'Bergwald S7'], ['x-bergwald-x7', 'Bergwald X7'], ['x-bergwald-gt', 'Bergwald GT'], ['x-bergwald-crown', 'Bergwald Crown Hills'], ['x-tuner-gtrs', 'Valtor GT-RS'], ['x-c4', 'Vellano V9'], ['c-gazette', 'The Aurex Gazette'], ['c-bankofaurex', 'Bank of Aurex'], ['h1-watch', 'Watches'], ['h1-wine', 'Wine'], ['h1-art', 'Art'], ['h1-ext', 'Villa'], ['map', 'Aurex Bay']];
+
+// The Aurex Gazette as a company (gazette.js): its owner runs the city's ad desk, prints press releases and picks the front page
+export const PAPER = {
+  id: 'L33',                       // The Aurex Gazette site in Aurex City
+  rate: [0.5, 2], rateStep: 0.25,  // ad price multiplier the owner sets (1 = the normal Marketing price)
+  press: [0.05, 0.5], pressStart: 0.1, pressStep: 0.05, // price of one press release (M)
+  pressWeeks: 4,                   // one press release per company every 4 weeks
+  pressRep: 3, pressCust: 0.02,    // what a press release does for the company
+  reviewWait: 1 / 48,              // ads waiting for approval: the autopilot approves after one week
+  front: { rep: 4, cust: 0.04, paperRep: 1, cands: 3 }, // the front page story of the week
+  PRESS: {
+    open: ['{co} opens its doors', '{owner} invites Aurex Bay to {co} in {d}.'],
+    grow: ['{co} is growing', 'More {thing} for Aurex Bay: {co} in {d} expands.'],
+    hire: ['{co} is hiring', '{co} in {d} is looking for new people.'],
+    thanks: ['{co} thanks its customers', 'A year of {thing} in {d}. {owner} says thank you.'],
+    news: ['Big news from {co}', 'Something new is coming from {co} in {d}. Watch this space.']
+  },
+  PRESS_LABEL: { open: 'Grand opening', grow: 'We are growing', hire: 'We are hiring', thanks: 'Thank you', news: 'Big news' },
+  FRONT: [
+    ['{co} is the talk of {d}', 'Customers queue around the block at {co}.'],
+    ['Inside {co}', 'A day with the team behind {thing} in {d}.'],
+    ['How {co} won {d}', '{owner} on building one of the busiest {type} businesses in town.'],
+    ['{co}: a {d} success story', 'Readers vote it the best place for {thing} this season.'],
+    ['The people of {co}', 'Meet the staff who keep {co} running.']
+  ]
+};
 export const AD = { perWeek: 0.04, weeks: [2, 4, 8], cust: 0.015, rep: 0.5, lift: 0.004, head: 1.5, botMax: 4,
   tones: [['irony', 'Ironic'], ['sarcasm', 'Sarcastic'], ['wink', 'Tongue-in-cheek']] };
 // what each business sells, for the ad copy
-export const AD_NOUN = { bank: 'banking', dealer: 'cars', restaurant: 'dinner', autorepair: 'repairs', clothing: 'clothes', fashion: 'fashion', hotel: 'hotel rooms', metal: 'steel', car: 'cars', finance: 'investments', chip: 'microchips', data: 'software', pharma: 'medicine', music: 'music', film: 'films', vineyard: 'wine' };
+export const AD_NOUN = { bank: 'banking', dealer: 'cars', restaurant: 'dinner', autorepair: 'repairs', clothing: 'clothes', fashion: 'fashion', hotel: 'hotel rooms', metal: 'steel', car: 'cars', finance: 'investments', chip: 'microchips', data: 'software', pharma: 'medicine', music: 'music', film: 'films', vineyard: 'wine', newspaper: 'the news' };
 // besides what it makes itself, a company may advertise pieces from the owner's collection that fit its trade
 export const AD_CATS = { dealer: ['car'], autorepair: ['car'], car: ['car'], vineyard: ['wine'], restaurant: ['wine'], hotel: ['wine', 'art'], fashion: ['watch', 'art'], clothing: ['watch'], bank: ['art', 'watch'], finance: ['art', 'watch'], film: ['art'], music: ['art'] };
 // [headline, line]. {co} company, {d} district, {thing} what it sells, {type} kind of business, {item} {maker} {year} a piece, {owner} the tycoon

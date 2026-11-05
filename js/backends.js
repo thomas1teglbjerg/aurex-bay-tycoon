@@ -50,6 +50,7 @@ export function createLocalBackend(opts = {}) {
     tick() { const w = city.wk, over = city.over; E.advance(city, Date.now()); save(); if (city.wk !== w || city.over !== over) emit(); },
     async setSpeed(s) { E.setSpeed(city, s, Date.now()); save(true); emit(); },
     async moveListing(lid, p) { if (!adminDemo) return { ok: false, msg: 'Only an admin can move companies on the map.' }; const r = E.moveListing(city, lid, p); save(true); emit(); return r; },
+    async setHouseAd(a) { if (!adminDemo) return { ok: false, msg: 'Only an admin can change the house ad.' }; const r = E.setHouseAd(city, a); save(true); emit(); return r; },
     async reset() { store.del(CITY_KEY); store.del(ME_KEY); city = E.createCity(Date.now(), { speed: city.clock.speed }); me = null; save(true); emit(); },
     subscribe(f) { subs.add(f); },
     snapshot() { return { city, me }; }
@@ -108,7 +109,7 @@ export async function createOnlineBackend(cfg) {
   let as = E.AS_IDS.includes(store.get(AS_KEY)) ? store.get(AS_KEY) : null; // the administrator or the test player
   const self = () => (city && uid() && city.players[uid()] ? uid() : null);
   const acting = () => (as && admin && self() && city && city.players[as] ? as : self());
-  const OWN = ['sync', 'join', 'adminPlay', 'adminSpeed', 'adminMove']; // these never run as the administrator
+  const OWN = ['sync', 'join', 'adminPlay', 'adminSpeed', 'adminMove', 'adminHouseAd']; // these never run as the administrator
   const meta = () => (session && session.user.user_metadata) || {};
   async function call(action, args = {}) {
     if (!session) return { ok: false, msg: 'Log in first.' };
@@ -278,6 +279,7 @@ export async function createOnlineBackend(cfg) {
     tick() { /* the server owns time; the client only interpolates live numbers */ },
     async setSpeed(speed) { return admin ? call('adminSpeed', { speed }) : { ok: false, msg: 'Only an admin can change the game speed.' }; },
     async moveListing(lid, p) { return admin ? call('adminMove', { lid, p }) : { ok: false, msg: 'Only an admin can move companies on the map.' }; },
+    async setHouseAd(a) { return admin ? call('adminHouseAd', a) : { ok: false, msg: 'Only an admin can change the house ad.' }; },
     async reset() { return { ok: false, msg: 'Seasons are reset on the server.' }; },
     subscribe(f) { subs.add(f); }, snapshot() { return null; }
   };
