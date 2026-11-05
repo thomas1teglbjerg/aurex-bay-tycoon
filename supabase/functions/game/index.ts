@@ -65,11 +65,11 @@ Deno.serve(async (req) => {
     }
 
     const city = row.state;
-    const weekBefore = city.wk;
+    const weekBefore = city.wk, agendaBefore = (city.agenda ?? []).length;
     Engine.advance(city, now);
 
     let result: unknown = { ok: true };
-    let changed = city.wk !== weekBefore; // the engine moves in weekly steps
+    let changed = city.wk !== weekBefore || (city.agenda ?? []).length !== agendaBefore; // weekly steps, or something on the agenda fired mid-week
     if (action === 'join') {
       if (!city.players[userId!]) {
         // New tycoons sign up with e-mail and password; the avatar name (first + last) comes with the account.
