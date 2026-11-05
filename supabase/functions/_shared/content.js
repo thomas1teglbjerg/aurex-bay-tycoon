@@ -308,7 +308,8 @@ export const GOODS = {
   energy: { name: 'Energy', base: 0.002, unit: 'MWh', producer: null },
   textiles: { name: 'Textiles', base: 0.003, unit: 'bales', producer: 'textile' },
   chemicals: { name: 'Chemicals', base: 0.007, unit: 'drums', producer: 'chemical' },
-  concrete: { name: 'Concrete', base: 0.0025, unit: 't', producer: 'concrete' },
+  // fresh: real ms a batch keeps before it hardens and is thrown out (OPS.freshStep)
+  concrete: { name: 'Concrete', base: 0.0025, unit: 't', producer: 'concrete', fresh: 48 * 3600 * 1000 },
   cement: { name: 'Cement', base: 0.003, unit: 't', producer: null },
   gravel: { name: 'Gravel', base: 0.0004, unit: 't', producer: null },
   sand: { name: 'Sand', base: 0.0004, unit: 't', producer: null },

@@ -46,4 +46,17 @@ assert(!E.apply(city, 'u', 'buySupply', { lid: l.id, g: 'cement', qty: 10 }, t).
 // an older save: the plant gets its starting stock once
 const ops = l.ops; delete ops.yardV; ops.inv.sand = 3; E.advance(city, t + 1);
 assert(ops.inv.sand === 1000 && ops.yardV === 1, 'older saves fill the yard to half once');
+// fresh concrete: 48 real hours to ship it, oldest batch first, then it hardens
+{ const H = 3600 * 1000, T = 2_000_000_000_000, o = l.ops, notes = [], ctx = { notify: (c, x, t) => notes.push(t) };
+  o.inv.concrete = 0; o.fg = 0; o.lots = {}; o.batch = null; o.mixed = 0;
+  O.mixStart(l, 30, T); O.mixEnd(l, true, T + 30_000); O.mixStart(l, 20, T + 10 * H); O.mixEnd(l, true, T + 10 * H + 20_000);
+  assert(o.inv.concrete === 50 && O.lotsOf(l, 'concrete', 'inv').length === 2, 'two batches wait in the yard');
+  o.inv.concrete -= 25; o.fg -= 25; O.freshStep(city, ctx, l, T + 20 * H);
+  assert(O.lotsOf(l, 'concrete', 'inv')[0].q === 5, 'what is shipped comes off the oldest batch');
+  O.listGoods(city, l, 'concrete', 10, 0.003, false); O.freshStep(city, ctx, l, T + 47 * H);
+  assert(o.inv.concrete + city.book.filter((x) => x.lid === l.id).reduce((a, x) => a + x.qty, 0) === 25, 'listed concrete is still counted in the yard');
+  O.freshStep(city, ctx, l, T + 49 * H);
+  assert(Math.abs(o.inv.concrete + city.book.filter((x) => x.lid === l.id).reduce((a, x) => a + x.qty, 0) - 20) < 1e-9 && Math.abs(o.fg - 20) < 1e-9 && notes.some((t) => /hardened/.test(t)), `after 48 hours the first batch hardens and is thrown out (${notes[0]})`);
+  O.freshStep(city, ctx, l, T + 59 * H);
+  assert(o.inv.concrete + city.book.filter((x) => x.lid === l.id).reduce((a, x) => a + x.qty, 0) < 1e-9 && o.fg < 1e-9, 'the second batch hardens 48 hours after it was mixed'); }
 console.log('all concrete tests passed');

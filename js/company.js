@@ -239,12 +239,19 @@ function pressBox(c, l, ro, inDept) {
 }
 const AD_CATS_TXT = Object.fromEntries(Object.entries(AD_CATS).map(([k, cs]) => [k, cs.map((x) => ({ car: 'cars', wine: 'wine', watch: 'watches', art: 'art' }[x])).join(' and ')]));
 
+// fresh goods (concrete): each batch with the time it has left before it hardens
+function lotsLine(l, g) {
+  const lots = O.lotsOf(l, g, 'inv').filter((x) => x.q >= 0.5); if (!lots.length) return '';
+  const left = (x) => Math.max(0, x.at + GOODS[g].fresh - Date.now()), hrs = (ms) => ms >= 3600000 ? `${Math.floor(ms / 3600000)} h ${Math.floor(ms % 3600000 / 60000)} min` : `${Math.max(1, Math.round(ms / 60000))} min`;
+  return `<div class="chips" style="margin-top:5px;flex-wrap:wrap">${lots.slice(0, 6).map((x) => { const ms = left(x); return `<span class="chip ${ms < 6 * 3600000 ? 'bad' : ms < 24 * 3600000 ? 'warn' : ''}" title="Hardens ${esc(new Date(x.at + GOODS[g].fresh).toLocaleString())}">${N(x.q)} ${esc(GOODS[g].unit)} · ${hrs(ms)} left</span>`; }).join('')}${lots.length > 6 ? `<span class="chip">+${lots.length - 6} more</span>` : ''}</div>
+    <span style="font-size:12.5px" class="muted">Ship it within ${Math.round(GOODS[g].fresh / 3600000)} hours of mixing, or it hardens and is thrown out. The oldest batch goes first.</span>`;
+}
 // Warehouse: what the yard holds (RECIPES[type].yard: good -> most it holds); a manual plant mixes batches here
 function yardBox(c, l, ro) {
   const rec = RECIPES[l.type]; if (!rec.yard) return '';
   const o = l.ops, man = O.isManual(l), out = Object.keys(rec.out)[0], unit = out ? GOODS[out].unit : 'units';
   const row = (g, cap) => { const stock = o.inv[g] || 0, way = E.LOG.onTheWay(c, l, g), f = stock / cap, made = g in rec.out;
-    return `<div class="row"><div class="grow"><b>${esc(GOODS[g].name)}</b><span>${N(stock)} of ${N(cap)} ${esc(GOODS[g].unit)}${made ? ' finished, ready to sell' : ' in the yard'}${way ? ` · +${N(way)} on the way` : ''}</span><div class="bar" style="margin-top:4px"><i style="width:${Math.min(100, f * 100)}%;background:${made ? (f > 0.9 ? 'var(--bad)' : 'var(--gold)') : f < 0.1 ? 'var(--bad)' : f < 0.25 ? 'var(--gold)' : 'var(--good)'}"></i></div></div><span class="chip ${made ? (f > 0.9 ? 'bad' : '') : f < 0.1 ? 'bad' : f < 0.25 ? 'warn' : 'good'}">${Math.round(f * 100)}%</span></div>`; };
+    return `<div class="row"><div class="grow"><b>${esc(GOODS[g].name)}</b><span>${N(stock)} of ${N(cap)} ${esc(GOODS[g].unit)}${made ? ' finished, ready to sell' : ' in the yard'}${way ? ` · +${N(way)} on the way` : ''}</span>${made && GOODS[g].fresh ? lotsLine(l, g) : ''}<div class="bar" style="margin-top:4px"><i style="width:${Math.min(100, f * 100)}%;background:${made ? (f > 0.9 ? 'var(--bad)' : 'var(--gold)') : f < 0.1 ? 'var(--bad)' : f < 0.25 ? 'var(--gold)' : 'var(--good)'}"></i></div></div><span class="chip ${made ? (f > 0.9 ? 'bad' : '') : f < 0.1 ? 'bad' : f < 0.25 ? 'warn' : 'good'}">${Math.round(f * 100)}%</span></div>`; };
   const rows = Object.entries(rec.yard).sort(([a], [b]) => (a in rec.out) - (b in rec.out)).map(([g, cap]) => row(g, cap)).join('');
   const max = man ? O.mixMax(l) : 0, cap = Math.floor(O.capacity(l)), done = Math.round(o.mixed || 0);
   const mixer = man ? `<div class="cap" style="margin-top:8px">Mix ${esc(GOODS[out].name.toLowerCase())}</div>

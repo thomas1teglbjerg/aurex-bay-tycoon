@@ -468,6 +468,7 @@ export function advance(city, now) {
   Object.values(city.players).forEach((p) => { if (!p.bot && !p.admin && !(p.career && p.career.seeded)) CAR.seed(city, p, cctx(city)); });
   mailSync(city);
   if (city.over) return;
+  city.listings.forEach((l) => OPS.freshStep(city, CTX, l, now));
   const target = gameTime(city, now);
   let loops = 0;
   // the city moves in weekly steps (4 per game month); every 4th step closes the month
