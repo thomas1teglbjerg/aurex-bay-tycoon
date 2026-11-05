@@ -313,7 +313,7 @@ export const GOODS = {
   cement: { name: 'Cement', base: 0.003, unit: 't', producer: null },
   gravel: { name: 'Gravel', base: 0.0004, unit: 't', producer: null },
   sand: { name: 'Sand', base: 0.0004, unit: 't', producer: null },
-  water: { name: 'Water', base: 0.00005, unit: 'm³', producer: null },
+  water: { name: 'Water', base: 0.00005, unit: 'm³', producer: null, mains: true }, // from the mains: paid as used, never stocked
   food: { name: 'Food & beverages', base: 0.002, unit: 'crates', producer: null }
 };
 
@@ -336,7 +336,7 @@ export const RECIPES = {
   // yard: what the company's Warehouse box holds at most, raw materials and finished goods (raw materials start half full).
   // manual: nothing is used by the month; the owner mixes batches by hand (OPS.mixStart/mixEnd, a slider game in js/mixer.js)
   concrete: { cap: 600, unit: 't mixed', in: { cement: 1 / 7.5, sand: 2 / 7.5, gravel: 4 / 7.5, water: 0.5 / 7.5, energy: 0.02 }, out: { concrete: 1 }, yard: { gravel: 4000, sand: 2000, cement: 1000, concrete: 2000 }, manual: true,
-    mixNote: 'Recipe: 1 part cement, 2 parts sand, 4 parts gravel and ½ part water, plus 20 kWh of power per tonne.' },
+    mixNote: 'Recipe: 1 part cement, 2 parts sand, 4 parts gravel and ½ part water, plus 20 kWh of power per tonne. Water comes straight from the mains and is paid as you mix.' },
   textile: { cap: 40, unit: 'loom runs', in: { energy: 0.5, chemicals: 0.1 }, out: { textiles: 1 } },
   clothing: { cap: 40, unit: 'garment drops', in: { textiles: 1, energy: 0.2 }, out: {} },
   fashion: { cap: 20, unit: 'collections', in: { textiles: 3, media: 0.3 }, out: {} },
