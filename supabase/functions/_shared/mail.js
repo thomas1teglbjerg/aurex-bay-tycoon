@@ -1,7 +1,7 @@
 // Mail (Empire › Mail): staff, specialists, rivals and the Gazette write to a tycoon. Many mails ask for an answer;
 // a mail that waits too long is answered by the autopilot (cautious picks the safe answer, bold the other one).
 // Mails live on the player (p.mail, newest first). Read/unread is kept in the browser, not in the city.
-import { TYPES, MAIL_NAMES, GAZETTE } from './content.js';
+import { TYPES, MAIL_NAMES, GAZETTE, INSIGHT, STOCKS } from './content.js';
 
 export const MAX = 40;            // mails kept per player (open ones are kept first)
 export const WAIT = 2 / 48;       // two game weeks before the autopilot answers a staff mail
@@ -70,4 +70,17 @@ export function newsletter(city, m, liveAds) {
   const ads = (liveAds || []).slice().sort((a, b) => (a.bot ? 1 : 0) - (b.bot ? 1 : 0));
   const ad = ads.length ? ads[m % ads.length] : null;
   return { items, ad: ad ? { id: ad.id, lid: ad.lid, kind: ad.kind, cid: ad.cid, tone: ad.tone, head: ad.head, line: ad.line } : null };
+}
+
+// the research note on the next world card, in the specialist's own words: what they hear per sector
+// (strong moves first), sometimes an unconfirmed rumour about another sector, the big picture and special warnings. Never the card itself.
+export function insightBody(card, rnd = Math.random) {
+  const any = (a) => a[Math.floor(rnd() * a.length)];
+  const hit = Object.entries(card.shock || {}).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+  const lines = hit.map(([id, v]) => `${INSIGHT.hint[id][v >= 0 ? 0 : 1]} ${Math.abs(v) >= 0.15 ? any(INSIGHT.strong) : any(INSIGHT.weak)}`);
+  const quiet = STOCKS.filter((s) => !(s.id in (card.shock || {})));
+  if (quiet.length && rnd() < 0.5) lines.push(INSIGHT.rumour.replace('{x}', INSIGHT.hint[any(quiet).id][rnd() < 0.5 ? 0 : 1]));
+  if (!hit.length) lines.push('Honestly, my contacts are quiet. No sector stands out.');
+  const fx = card.fx && INSIGHT.fx[card.fx];
+  return [any(INSIGHT.open), ...lines, ...(fx ? [fx] : []), INSIGHT.macro[card.econ] || INSIGHT.macro.none, any(INSIGHT.close)].join('\n');
 }

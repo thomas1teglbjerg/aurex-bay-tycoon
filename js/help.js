@@ -23,7 +23,7 @@ const TERMS = {
   'profit / yr (est.)': h('Your money', 'Expected yearly profit for your whole empire: contract income plus company sales from last month, scaled to a year, minus all running costs.'),
   'wages, budgets, interest': h('Your money', 'What your empire pays every year: worker wages, department budgets, specialists, warehouse upkeep, your own salary, maintenance and loan interest.'),
   influence: h('Standing', 'Influence is your clout in Aurex Bay. It adds directly to your score in the city ranking.', 'You gain it from film and music hits, established tech companies, specialists like a PR & Media Officer or Logistics Planner, prestige and some decisions.'),
-  'next world card in': h('Economy', 'Time until the next World Card. Once a quarter a card hits the whole city and can switch the economy between boom, stable, recession and crisis.', 'A Market Research Associate in your team, or in your network, shows the next card early.'),
+  'latest world card': h('Economy', 'The last World Card that hit the city. About once a quarter, at a moment nobody announces, a new card can switch the economy between boom, stable, recession and crisis and move share prices.', 'A Market Research Associate in your team mails you a research note with the signals before each card. Read them yourself, and forward the note to your network if you want.'),
   // Bank
   debt: h('Bank of Aurex', 'What you owe the bank in total.'),
   rate: h('Bank of Aurex', 'Yearly interest on your loans. A bank or finance company in your portfolio, prestige and some specialists lower it.'),
@@ -141,7 +141,7 @@ const BOXES = {
   'your offers': h('Market', 'Supplies you have listed for sale. Buyers pay when they buy. Withdraw to take them back.'),
   'bank of aurex': h('Bank', 'Borrow money for growth and repay when you can. Interest is charged every year on what you owe.'),
   'aurex bay gazette': h('News', 'City news: World Cards, big deals, hits and what other players do.'),
-  network: h('Network', 'Players you are connected with. Network partners can sign supply contracts and share market insight.'),
+  network: h('Network', 'Players you are connected with. Network partners can sign supply contracts and forward market research to each other.'),
   'waiting for you': h('Network', 'Network requests and supply contract offers that need your answer.'),
   'your network': h('Network', 'Players you are connected with. Partners whose companies fit yours can sign supply contracts for synergy bonuses.'),
   'supply contracts': h('Network', 'Contracts between your company and a partner\'s company. The pair counts as a portfolio synergy, as if you owned both.'),
@@ -314,7 +314,7 @@ export function helpAt(el, where = {}) {
   if ((x = q('#tabs [data-tab]'))) return { t: text(x), ...TABS[x.dataset.tab] };
   if (q('.who-c')) return { t: 'Players in the city', k: 'Top bar', d: 'Players online now, with their logo and initials. Dimmed means they have not done anything for 10 minutes.', tip: 'Right-click an icon to chat with that player.' };
   if ((x = q('.money > div'))) return term(text(x.querySelector('small')));
-  if (q('#econ')) return { t: `Economy: ${c ? c.econ : ''}`, k: 'Economy', d: `${c ? ECON_TXT[c.econ] || '' : ''} A World Card can change it once a quarter.`, tip: 'See the Market tab for the latest card.' };
+  if (q('#econ')) return { t: `Economy: ${c ? c.econ : ''}`, k: 'Economy', d: `${c ? ECON_TXT[c.econ] || '' : ''} A World Card can change it about once a quarter.`, tip: 'See the Market tab for the latest card.' };
   if (q('#datelbl, .brand')) return { t: 'Game date', k: 'Time', d: `The date in Aurex Bay. W is the week of the month. At live speed one game year lasts one real week, so a month is about 14 hours.`, tip: 'Companies produce and sell every month; supplies and share prices move every week.' };
   if ((x = q('#speed'))) return { t: 'Game speed', k: 'Time', d: `How fast time runs. ${SPEEDS.map((s) => `${s.label}: ${s.note}`).join('. ')}.`, tip: 'Online, only the administrator changes the speed for everyone.' };
   if (q('#mylogo')) return { t: 'Your parent company', k: 'Brand', d: 'The logo of the parent company that owns your businesses. Click to open your empire.' };
