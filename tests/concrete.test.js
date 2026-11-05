@@ -33,11 +33,17 @@ assert(O.mixMax(l) <= O.mixCap(l) - 75, 'a month mixes at most what the plant ca
 assert(!E.apply(city, 'u', 'mixStart', { lid: l.id, qty: 10 }, t + 1000).ok, 'one batch at a time');
 assert(!E.apply(city, 'u', 'mixEnd', { lid: l.id, ok: true }, t + 30_000).ok && l.ops.batch, 'a batch cannot finish before 1 second per tonne');
 let e = E.apply(city, 'u', 'mixEnd', { lid: l.id, ok: true }, t + 75_000);
-assert(e.ok && !e.ruined && l.ops.inv.concrete === 75 && !l.ops.batch, `held right for 75 seconds: 75 t of concrete (${e.msg})`);
-E.apply(city, 'u', 'mixStart', { lid: l.id, qty: 20 }, t + 80_000); const before = l.ops.inv.cement;
-e = E.apply(city, 'u', 'mixEnd', { lid: l.id, ok: false }, t + 85_000);
+const ready = t + 75_000 + 75 * O.MIX.drumT * 1000;
+assert(e.ok && !e.ruined && !l.ops.inv.concrete && l.ops.batch.drum && l.ops.batch.ready === ready, `held right for 75 seconds: the drum mixes it 5 s per tonne (${e.msg})`);
+assert(!O.mixStart(l, 10, ready - 1000).ok && /drum/.test(O.mixStart(l, 10, ready - 1000).msg), 'no new mix while the drum is still turning');
+assert(!O.mixStep(l, ready - 1000) && !l.ops.inv.concrete, 'nothing in the yard before the drum is done');
+// (the engine runs the same step on every advance; called directly here so the fast test clock does not run months on)
+assert(O.mixStep(l, ready + 500) === 75 && l.ops.inv.concrete === 75 && !l.ops.batch && l.ops.poured.qty === 75 && O.lotsOf(l, 'concrete', 'inv').some((x) => x.at === ready), `then 75 t of concrete is in the yard, fresh from when it was done (${e.msg})`);
+const t2 = ready + 1000;
+O.mixStart(l, 20, t2); const before = l.ops.inv.cement;
+e = O.mixEnd(l, false, t2 + 5000);
 assert(e.ok && e.ruined && l.ops.inv.concrete === 75 && l.ops.inv.cement === before, `a failed mix is thrown out (${e.msg})`);
-{ const c0 = l.ops.inv.concrete; O.mixStart(l, 10, t + 90_000); const late = O.mixEnd(l, true, t + 90_000 + 10_000 + O.MIX.grace + 1000);
+{ const c0 = l.ops.inv.concrete; O.mixStart(l, 10, t2 + 10_000); const late = O.mixEnd(l, true, t2 + 10_000 + 10_000 + O.MIX.grace + 1000);
   assert(late.ruined && l.ops.inv.concrete === c0 && !l.ops.batch, 'a batch left too long sets in the drum'); }
 l.ops.mixed = 0; l.ops.inv.concrete = 1995; assert(O.mixMax(l) === 5, 'finished concrete stops at 2000 t');
 const b = E.apply(city, 'u', 'buySupply', { lid: l.id, g: 'cement', qty: 900 }, t);
@@ -55,7 +61,7 @@ ops.inv.sand = 0; assert(/sand/.test(O.mixBlock(l)), 'the box says what is missi
 // fresh concrete: 48 real hours to ship it, oldest batch first, then it hardens
 { const H = 3600 * 1000, T = 2_000_000_000_000, o = l.ops, notes = [], ctx = { notify: (c, x, t) => notes.push(t) };
   o.inv.concrete = 0; o.fg = 0; o.lots = {}; o.batch = null; o.mixed = 0;
-  O.mixStart(l, 30, T); O.mixEnd(l, true, T + 30_000); O.mixStart(l, 20, T + 10 * H); O.mixEnd(l, true, T + 10 * H + 20_000);
+  O.mixStart(l, 30, T); O.mixEnd(l, true, T + 30_000); O.mixStep(l, T + H); O.mixStart(l, 20, T + 10 * H); O.mixEnd(l, true, T + 10 * H + 20_000); O.mixStep(l, T + 11 * H);
   assert(o.inv.concrete === 50 && O.lotsOf(l, 'concrete', 'inv').length === 2, 'two batches wait in the yard');
   o.inv.concrete -= 25; o.fg -= 25; O.freshStep(city, ctx, l, T + 20 * H);
   assert(O.lotsOf(l, 'concrete', 'inv')[0].q === 5, 'what is shipped comes off the oldest batch');

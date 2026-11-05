@@ -76,11 +76,16 @@ export function mixBlock(l) {
   return short.length ? `Not enough ${short.join(' and ')} for a batch. Buy more under Production & supplies.` : null;
 }
 // hand mixing (manual plants): the supplies go into the mixer at the start, the owner keeps the mixture right in
-// the browser for MIX.perT seconds per tonne (js/mixer.js), then mixEnd pours finished stock or throws the batch out
-export const MIX = { perT: 1, grace: 5 * 60 * 1000 };
+// the browser for MIX.perT seconds per tonne (js/mixer.js); mixEnd either throws the batch out or leaves it in the
+// drum for MIX.drumT seconds per tonne (b.drum = started, b.ready = done). mixStep (every advance) then puts it in
+// the yard. Nothing new can be mixed until the drum is empty.
+export const MIX = { perT: 1, drumT: 5, grace: 5 * 60 * 1000 };
 export const mixDue = (b) => b.at + b.qty * MIX.perT * 1000;
+export const drumLeft = (b, now) => (b && b.drum ? Math.max(0, b.ready - now) : 0);
 export function mixStart(l, qty, now, city, ctx) {
   const o = l.ops, rec = RECIPES[l.type]; if (!isManual(l)) return { ok: false, msg: 'This company runs by itself.' };
+  mixStep(l, now);
+  if (o.batch && o.batch.drum) return { ok: false, msg: `The drum is still mixing the last batch: ready in ${Math.ceil(drumLeft(o.batch, now) / 1000)} seconds.` };
   if (o.batch && now < mixDue(o.batch) + MIX.grace) return { ok: false, msg: 'The mixer is already running.' };
   o.batch = null; // a batch left in the mixer too long has set and is lost
   const max = mixMax(l), n = Math.min(Math.floor(Number(qty) || 0), max);
@@ -92,15 +97,25 @@ export function mixStart(l, qty, now, city, ctx) {
 }
 export function mixEnd(l, good, now) {
   const o = l.ops, rec = RECIPES[l.type], b = o.batch; if (!b) return { ok: false, msg: 'There is no batch in the mixer.' };
+  if (b.drum) return { ok: false, msg: 'The batch is already in the drum.' };
   const what = Object.keys(rec.out).map((g) => GOODS[g].name.toLowerCase()).join(', ');
   if (!good) { o.batch = null; return { ok: true, msg: `The mix went wrong: ${b.qty} t of ${what} was thrown out.`, ruined: true }; }
   if (now < mixDue(b) - 2000) return { ok: false, msg: 'The batch is still mixing.' };
-  o.batch = null;
-  if (now > mixDue(b) + MIX.grace) return { ok: true, msg: `The batch set in the mixer: ${b.qty} t of ${what} was thrown out.`, ruined: true };
+  if (now > mixDue(b) + MIX.grace) { o.batch = null; return { ok: true, msg: `The batch set in the mixer: ${b.qty} t of ${what} was thrown out.`, ruined: true }; }
+  // the mixture is right: the drum keeps turning MIX.drumT seconds per tonne before it goes to the yard
+  b.drum = now; b.ready = now + b.qty * MIX.drumT * 1000;
+  const s = b.qty * MIX.drumT;
+  return { ok: true, msg: `The mixture is right. The drum mixes ${b.qty} t of ${what} for ${s >= 60 ? `${Math.floor(s / 60)} min ${s % 60 ? `${s % 60} s` : ''}`.trim() : `${s} s`} before it goes to the yard.`, n: b.qty, ready: b.ready };
+}
+// a batch whose drum time is over goes into the yard (as a fresh lot from the moment it was done)
+export function mixStep(l, now) {
+  const o = l.ops, b = o && o.batch; if (!b || !b.drum || now < b.ready) return null;
+  const rec = RECIPES[l.type]; o.batch = null;
   Object.entries(rec.out).forEach(([g, q]) => { o.inv[g] = Math.min(yardCap(l, g), (o.inv[g] || 0) + q * b.qty); });
   o.fg = (o.fg || 0) + b.qty;
-  Object.keys(rec.out).filter((g) => GOODS[g].fresh).forEach((g) => { lotsOf(l, g, 'inv').push({ q: rec.out[g] * b.qty, at: now }); lotsOf(l, g, 'fg').push({ q: b.qty, at: now }); });
-  return { ok: true, msg: `${b.qty} t of ${what} is ready in the yard. Ship it within ${Math.round(GOODS[Object.keys(rec.out)[0]].fresh / 3600000)} hours before it hardens.`, n: b.qty };
+  Object.keys(rec.out).filter((g) => GOODS[g].fresh).forEach((g) => { lotsOf(l, g, 'inv').push({ q: rec.out[g] * b.qty, at: b.ready }); lotsOf(l, g, 'fg').push({ q: b.qty, at: b.ready }); });
+  o.poured = { qty: b.qty, at: b.ready };
+  return b.qty;
 }
 // fresh goods (GOODS[g].fresh): each batch is a lot with its time. Whatever leaves the yard (orders, market,
 // exports, deals) comes off the oldest lot first; a lot past its time hardens and is thrown out.
