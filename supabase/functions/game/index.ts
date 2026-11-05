@@ -44,6 +44,7 @@ Deno.serve(async (req) => {
   const isAdmin = !!user && !user.is_anonymous && ADMINS.includes(String(user.email ?? '').toLowerCase());
   if (action === 'adminSpeed' && !isAdmin) return json({ result: { ok: false, msg: 'Only an admin can change the game speed.' } });
   if (action === 'adminMove' && !isAdmin) return json({ result: { ok: false, msg: 'Only an admin can move companies on the map.' } });
+  if (action === 'adminHouseAd' && !isAdmin) return json({ result: { ok: false, msg: 'Only an admin can change the house ad.' } });
   // The administrator (unlimited money) and the test player: only admin accounts may create them or act as them.
   const asId = Engine.AS_IDS.includes(String(body.as)) ? String(body.as) : null;
   const asAdmin = asId === Engine.ADMIN_ID;
@@ -99,6 +100,12 @@ Deno.serve(async (req) => {
       result = Engine.moveListing(city, String(args.lid ?? ''), args.p as number[]);
       if (!(result as { ok: boolean }).ok) return out({ result, city });
       console.log(JSON.stringify({ city: cityId, admin: user?.email, moved: args.lid, p: args.p }));
+      changed = true;
+    } else if (action === 'adminHouseAd') {
+      // the one ad the administrator runs on The Aurex Gazette and its box on the Market tab
+      result = Engine.setHouseAd(city, args);
+      if (!(result as { ok: boolean }).ok) return out({ result, city });
+      console.log(JSON.stringify({ city: cityId, admin: user?.email, houseAd: args }));
       changed = true;
     } else if (action !== 'sync' && action !== 'tick') {
       if (asId) Engine.ensureAs(city, asId, now);

@@ -1,6 +1,6 @@
 // Company dashboard: one page per company with production, supplies, orders and departments
 import * as E from '../supabase/functions/_shared/engine.js';
-import { TYPES, SIZES, GOODS, RECIPES, DEPTS, STAFF, WORKER, MARKET_KIND, CLIENT_RULES, LIFE as LC, CRAFT, AD, AD_CATS } from '../supabase/functions/_shared/content.js';
+import { TYPES, SIZES, GOODS, RECIPES, DEPTS, STAFF, WORKER, MARKET_KIND, CLIENT_RULES, LIFE as LC, CRAFT, AD, AD_CATS, PAPER } from '../supabase/functions/_shared/content.js';
 import { adHTML } from './web.js';
 import { carrierPicker, deliveriesBox } from './freight.js';
 import { money, cardHTML } from './life.js';
@@ -153,7 +153,9 @@ export function companyHTML(lid, ui = {}) {
     <div class="col">
       ${ro ? '' : `<div class="box"><h2>To-do<small>${tasks.length}</small></h2><div class="in">${taskHTML}<p class="empty" style="font-size:13px">Tasks appear when a department has no staff. Hire workers to hand the work over.</p></div></div>`}
       ${cellarBox(c, l, ro)}
+      ${newsroomBox(c, l, ro)}
       ${adBox(c, l, ro, ui)}
+      ${pressBox(c, l, ro)}
       <div class="box" id="orders-box"><h2>${hotel ? 'Bookings' : 'Customer orders'}<small>${ords.length} OPEN</small></h2><div class="in">
         ${!ro && ready && !hotel ? `<button class="btn navy" data-a="deliverOpen" data-lid="${l.id}">Open delivery map · ${ready} ready</button>` : ''}
         ${ords.length ? `<div class="orders">${ords.map((od) => orderCard(c, l, od, ro)).join('')}</div>` : `<p class="empty">${hotel ? (O.automation(l, 'sales') >= 1 ? 'Reservations confirms every booking. Guests check in by themselves.' : 'No open bookings. Travel agents and tour operators book every month.') : O.automation(l, 'sales') >= 1 ? 'Your sales team answers and ships every order.' : 'No open orders. New orders arrive every month from your clients.'}</p>`}
@@ -196,7 +198,7 @@ function adBox(c, l, ro, ui) {
   }
   const st = Object.assign({ subj: 'co', tone: 'wink', n: 0, weeks: AD.weeks[1] }, (ui.ad && ui.ad[l.id]) || {});
   const p = me(), prods = E.ADS.products(c, p, l), pr = prods.find((x) => x.uid === st.subj), cid = pr ? pr.cid : null, subj = pr ? pr.uid : 'co';
-  const t = A.copy(l, st.tone, st.n, cid, p.name), cost = A.cost(l, st.weeks), cash = l.owner.k === 'h' ? c.holdings[l.owner.id].treasury : p.cash;
+  const t = A.copy(l, st.tone, st.n, cid, p.name), cost = A.cost(l, st.weeks, c), cash = l.owner.k === 'h' ? c.holdings[l.owner.id].treasury : p.cash;
   const preview = adHTML({ lid: l.id, kind: cid ? 'item' : 'co', cid, uid: pr ? pr.uid : null, tone: st.tone, head: t.head, line: t.line }, 'wide', true);
   const subjects = [['co', `The company · ${lname(l)}`], ...prods.map((x) => [x.uid, `${E.LIFE.ITEM[x.cid].name}${x.where === 'cellar' ? ' · estate cellar' : ' · your collection'}`])];
   return head('MARKETING') + `<p style="margin:0 0 10px">Buy ad space on the city’s websites for a few weeks. The ad uses your picture and a line in the tone you choose.</p>
@@ -207,6 +209,32 @@ function adBox(c, l, ro, ui) {
     <div class="adprev">${preview}</div>
     <div class="btns" style="margin-top:10px"><button class="btn sm" data-a="adNext" data-lid="${l.id}">Another line</button><button class="btn gold" data-a="adLaunch" data-lid="${l.id}" data-subj="${esc(subj)}" data-tone="${st.tone}" data-n="${t.n}" data-weeks="${st.weeks}" ${cash < cost ? 'disabled' : ''}>Launch campaign · ${M(cost)}</button></div>
     <p class="empty" style="font-size:13px">${cid ? `While it runs the piece gains about ${Math.round(AD.lift * A.strength(l) * 1000) / 10}% in market value a week.` : `While it runs: customers +${Math.round(AD.cust * A.strength(l) * 1000) / 10}% and reputation +${AD.rep * A.strength(l)} every week.`}${A.strength(l) > 1 ? ' Your head of marketing makes it 50% stronger.' : ' A head of marketing (Sofia Lindström) makes campaigns 50% stronger.'} Paid ${l.owner.k === 'h' ? 'from the coop treasury' : 'from company cash'}, shown under department budgets.</p></div></div>`;
+}
+// The Aurex Gazette: the owner's newsroom (ad desk, press release price, front page)
+function newsroomBox(c, l, ro) {
+  if (!E.GZ.isPaper(l)) return '';
+  const gz = c.gz || {}, q = gz.queue || [], f = gz.front, fl = f && E.listing(c, f.lid);
+  const step = (a, v, label, dis) => `<button data-a="${a}" data-v="${v}" ${dis ? 'disabled' : ''} aria-label="${label}">${v > 0 ? '+' : '−'}</button>`;
+  return `<div class="box"><h2>Newsroom<small>THE AUREX GAZETTE</small></h2><div class="in">
+    <div class="stats"><div class="stat"><small>Ads booked</small><b class="num">${N(gz.sold || 0)}</b></div><div class="stat"><small>Press releases</small><b class="num">${N(gz.pressN || 0)}</b></div><div class="stat"><small>Earned from ads & press</small><b class="num up">${M(gz.earned || 0)}</b></div></div>
+    ${ro ? '' : `<div class="set"><span class="cap">Ad price</span><div class="stepper">${step('gzRate', -PAPER.rateStep, 'Lower ad price', gz.rate <= PAPER.rate[0])}<output class="num">×${gz.rate || 1}</output>${step('gzRate', PAPER.rateStep, 'Raise ad price', gz.rate >= PAPER.rate[1])}</div><span class="muted" style="font-size:12.5px">of the normal Marketing price. Every campaign in the city pays the paper.</span></div>
+    <div class="set"><span class="cap">Press release</span><div class="stepper">${step('gzFee', -PAPER.pressStep, 'Lower press release price', gz.press <= PAPER.press[0])}<output class="num">${M(gz.press || PAPER.pressStart)}</output>${step('gzFee', PAPER.pressStep, 'Raise press release price', gz.press >= PAPER.press[1])}</div><span class="muted" style="font-size:12.5px">what tycoons pay to print a story about their company.</span></div>
+    <div class="set"><span class="cap">New ads</span>${seg('gzHand', '', [[0, 'Go live at once'], [1, 'I approve them']], gz.hand ? 1 : 0)}</div>`}
+    ${q.length ? `<div class="cap" style="margin-top:8px">Waiting for your approval</div>${q.map((ad) => { const co = E.listing(c, ad.lid); return co ? `<div style="margin:8px 0">${adHTML(ad, 'wide', true)}<div class="btns" style="margin-top:6px"><span class="muted" style="align-self:center;font-size:13px">${esc(lname(co))} · ${ad.weeks} weeks · ${M(ad.cost)}</span>${ro ? '' : `<button class="btn sm gold" data-a="gzReview" data-id="${ad.id}" data-ok="1">Approve</button><button class="btn sm" data-a="gzReview" data-id="${ad.id}" data-ok="0">Reject</button>`}</div></div>` : ''; }).join('')}` : ''}
+    <div class="cap" style="margin-top:10px">Front page</div>
+    ${f && fl ? `<p style="margin:2px 0"><b>${esc(f.t)}</b> · ${esc(lname(fl))}, ${esc(dateLabel(Math.floor(f.g * 12)))}</p>` : '<p class="empty" style="margin:2px 0">No front page story yet.</p>'}
+    <p class="empty" style="font-size:13px">Every week the newsroom mails you three stories about other tycoons' companies. The one you pick leads the paper: that company gets reputation +${PAPER.front.rep} and more customers. If you do not pick, the editor does. The paper never runs bad stories about other players.</p>
+    <div class="btns"><button class="btn sm" data-a="web" data-u="aurexgazette.ab">Open The Aurex Gazette</button></div></div></div>`;
+}
+// any company: pay The Aurex Gazette to print a short story about it
+function pressBox(c, l, ro) {
+  if (ro || !l.ops || E.GZ.isPaper(l)) return '';
+  const fee = E.GZ.pressFee(c), ready = E.GZ.pressReady(c, l), cash = l.owner.k === 'h' ? c.holdings[l.owner.id].treasury : me().cash;
+  const left = ready ? 0 : Math.max(1, Math.ceil((l.ops.pressG + PAPER.pressWeeks / 48 - c.g) * 48 - 1e-6));
+  return `<div class="box"><h2>Press release<small>${M(fee)}</small></h2><div class="in">
+    <p style="margin:0 0 8px">Pay The Aurex Gazette to print a short story about ${esc(lname(l))}. It shows in the city news and gives reputation +${PAPER.pressRep} and a few more customers.</p>
+    <div class="btns">${Object.entries(PAPER.PRESS_LABEL).map(([k, t]) => `<button class="btn sm" data-a="gzPress" data-lid="${l.id}" data-kind="${k}" ${!ready || cash < fee ? 'disabled' : ''}>${esc(t)}</button>`).join('')}</div>
+    <p class="empty" style="font-size:13px">${ready ? `One story every ${PAPER.pressWeeks} weeks per company.` : `Next press release in ${left} week${left === 1 ? '' : 's'}.`} The money goes to the owner of the paper.</p></div></div>`;
 }
 const AD_CATS_TXT = Object.fromEntries(Object.entries(AD_CATS).map(([k, cs]) => [k, cs.map((x) => ({ car: 'cars', wine: 'wine', watch: 'watches', art: 'art' }[x])).join(' and ')]));
 

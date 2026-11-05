@@ -9,7 +9,7 @@ import { stocksHTML, stockModal, livePrice, liveH, PX } from './stocks.js';
 import { deliveryHTML, warehouseHTML, MODE_LABEL } from './interact.js';
 import { SCENES, startScene, endScene, sceneFor, tickScenes, sceneTitle } from './scenes.js';
 import { WAREHOUSE_SITES, HOMES, TAKEOVER as GC_T } from '../supabase/functions/_shared/content.js';
-import { webHTML, parseUrl, HOME_URL } from './web.js';
+import { webHTML, parseUrl, HOME_URL, gazetteBox } from './web.js';
 import { teamBoxHTML, talentModal, talentStep } from './team.js';
 import { lifeHTML, lifeModal, newDinner, startDinner, dinnerHTML, money, bidBase } from './life.js';
 import { logoMark, logoFull, symbolIcon } from './brand.js';
@@ -416,7 +416,7 @@ function liveUpdate() {
   tickScenes((st) => { toast(`${sceneTitle(st)}: your call`, 'good'); renderAll(); });
   if (UI.modal && UI.modal.t === 'dinner') tickDinner();
   // share prices tick between weekly closes: refresh the exchange views every second or so
-  if (Date.now() - lastTicker > 1200) { lastTicker = Date.now(); if ((UI.tab === 'stocks' || UI.tab === 'market') && !UI.company && !$('panel').hidden) renderPanel(); if (UI.modal && UI.modal.t === 'stock') openStock(UI.modal.id); }
+  if (Date.now() - lastTicker > 1200) { lastTicker = Date.now(); if (UI.tab === 'market' && !UI.company && !$('panel').hidden) renderPanel(); if (UI.modal && UI.modal.t === 'stock') openStock(UI.modal.id); }
   const t = now();
   document.querySelectorAll('[data-live]').forEach((el) => {
     const [k, id] = el.dataset.live.split(':');
@@ -507,9 +507,10 @@ function openProfile(pid) {
 }
 function setTab(t) {
   if (t === 'coop') t = 'network'; // Coop and Network are one tab now
+  if (t === 'stocks') t = 'market'; // so are Market and Stocks
   UI.company = null;
   UI.tab = t;
-  document.querySelectorAll('#tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
+  document.querySelectorAll('#tabs button[data-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
   if (t === 'life') UI.life.room = null;
   $('panel').classList.toggle('dark', t === 'life');
   hideMapCard(); $('mapnav').hidden = t !== 'map';
@@ -519,7 +520,7 @@ function renderPanel() {
   if (UI.tab === 'map' || !me()) return;
   const el = $('panel'), st = el.scrollTop, active = document.activeElement && el.contains(document.activeElement) && document.activeElement.tagName === 'INPUT';
   if (active) return; // never wipe a field someone is typing in
-  const html = UI.tab === 'empire' && String(UI.company || '').startsWith('mail') ? mailPageHTML(UI) : UI.tab === 'network' && String(UI.company || '').startsWith('profile:') ? profilePageHTML(UI) : (UI.tab === 'empire' || UI.tab === 'network') && UI.company ? companyHTML(UI.company, UI) : { empire: empireHTML, market: marketHTML, stocks: () => stocksHTML(UI), network: () => coopHTML() + networkHTML(), life: () => lifeHTML(UI) }[UI.tab]();
+  const html = UI.tab === 'empire' && String(UI.company || '').startsWith('mail') ? mailPageHTML(UI) : UI.tab === 'network' && String(UI.company || '').startsWith('profile:') ? profilePageHTML(UI) : (UI.tab === 'empire' || UI.tab === 'network') && UI.company ? companyHTML(UI.company, UI) : { empire: empireHTML, market: marketHTML, network: () => coopHTML() + networkHTML(), life: () => lifeHTML(UI) }[UI.tab]();
   el.innerHTML = `<div class="panel-in">${html}</div>`;
   applyCollapsed(el);
   el.scrollTop = st; liveUpdate();
@@ -587,10 +588,11 @@ function marketHTML() {
         <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Supply</th><th>Price</th><th>vs normal</th><th>Trend</th><th>Import</th><th>Export</th><th>On offer</th><th>Bought last mo</th><th>Imported</th></tr></thead><tbody>${supplies}</tbody></table></div></div></div>
       ${myOffers ? `<div class="box"><h2>Your offers<small>OPEN</small></h2><div class="in"><div class="rows">${myOffers}</div></div></div>` : ''}
     </div><div class="col">
+      ${gazetteBox()}
       <div class="box"><h2>Bank of Aurex</h2><div class="in"><div class="stats"><div class="stat"><small>Debt</small><b class="num down">${M(-debt)}</b></div><div class="stat"><small>Rate</small><b class="num">${E.loanRate(c, p)}%</b></div><div class="stat"><small>Interest / yr</small><b class="num">${M(-r.interest)}</b></div><div class="stat"><small>Credit limit</small><b class="num">${M(E.loanCap(c, p))}</b></div></div>
         <div class="btns"><button class="btn navy" data-a="webGo" data-u="bankofaurex.ab/loans">Manage loans at bankofaurex.ab ›</button></div></div></div>
-      <div class="box"><h2>Aurex Bay Gazette<small>CITY NEWS</small></h2><div class="in">${feedHTML(c.news, 16)}</div></div>
-    </div></div>`;
+    </div></div>
+    ${stocksHTML(UI)}`;
 }
 function networkHTML() {
   const c = city(), p = me(), st = E.standings(c);
@@ -796,6 +798,12 @@ async function onClick(e) {
     case 'mailAnswer': await act('mailAnswer', { id: d.id, opt: Number(d.opt) }); return;
     case 'adCo': closeWeb(); hideMapCard(); openListing(d.lid); return;
     // ---- Marketing: ad campaigns
+    case 'gzRate': await act('gzSet', { rate: Math.round(((city().gz && city().gz.rate) || 1) * 100 + Number(d.v) * 100) / 100 }); return;
+    case 'gzFee': await act('gzSet', { press: Math.round(((city().gz && city().gz.press) || 0.1) * 100 + Number(d.v) * 100) / 100 }); return;
+    case 'gzHand': await act('gzSet', { hand: d.v === '1' }); return;
+    case 'gzReview': await act('gzReview', { id: d.id, ok: d.ok === '1' }); return;
+    case 'gzPress': await act('gzPress', { lid: d.lid, kind: d.kind }); return;
+    case 'houseAd': { const r = await B.setHouseAd({ [d.v]: true }); toast(r && r.msg ? r.msg : 'Saved.', r && r.ok === false ? 'bad' : 'good'); renderAll(); renderWeb(); return; }
     case 'adSet': adUI(d.lid)[d.k] = d.k === 'weeks' ? Number(d.v) : d.v; if (d.k === 'tone') adUI(d.lid).n = 0; renderPanel(); return;
     case 'adNext': adUI(d.lid).n = (adUI(d.lid).n || 0) + 1; renderPanel(); return;
     case 'adLaunch': { const r = await act('adLaunch', { lid: d.lid, subj: d.subj, tone: d.tone, n: Number(d.n), weeks: Number(d.weeks) }); if (r && r.ok !== false && UI.ad) delete UI.ad[d.lid]; return; }
@@ -1005,7 +1013,7 @@ function renderWeb(top) {
   const el = $('web'); if (!UI.web || el.hidden) return;
   const act0 = document.activeElement; if (!top && act0 && el.contains(act0) && act0.tagName === 'INPUT') return;
   const pg = $('wpage'), sc = pg ? pg.scrollTop : 0;
-  el.innerHTML = webHTML(UI.web); if (!top) $('wpage').scrollTop = sc;
+  UI.web.admin = !!B.admin; el.innerHTML = webHTML(UI.web); if (!top) $('wpage').scrollTop = sc;
 }
 // ---------------------------------------------------------------- back / forward (mouse buttons, browser, phone)
 // Every view change (tab, company, map district, Life room, in-game web page, card) becomes a browser history entry,
@@ -1111,6 +1119,8 @@ async function boot(hot) {
     if (wf) { e.preventDefault(); const v = wf.querySelector('input').value.trim(); wf.querySelector('input').blur(); if (wf.dataset.form === 'addr') navWeb(v || HOME_URL); else { UI.web.q = v; renderWeb(true); } return; }
     const ob = e.target.closest('[data-form="auth"], [data-form="avatar"], [data-form="password"], [data-form="secure"]');
     if (ob) { e.preventDefault(); await obSubmit(ob.dataset.form); return; }
+    const hf = e.target.closest('[data-form="house"]');
+    if (hf) { e.preventDefault(); const v = (n) => (hf.elements[n] ? hf.elements[n].value : ''); const r = await B.setHouseAd({ pic: v('pic'), from: v('from'), head: v('head'), line: v('line') }); toast(r && r.msg ? r.msg : 'Saved.', r && r.ok === false ? 'bad' : 'good'); if (r && r.ok !== false && UI.web) navWeb('aurexgazette.ab'); renderAll(); return; }
     const f = e.target.closest('[data-form="post"]'); if (!f) return; e.preventDefault();
     const inp = f.querySelector('input'), text = inp.value.trim(); if (!text) return;
     inp.value = ''; inp.blur(); await act('post', { lid: f.dataset.lid, text }, 'Posted to the company board.');
@@ -1123,7 +1133,7 @@ async function boot(hot) {
     const r = await B.setSpeed(sp.id); renderAll();
     if (r && r.ok === false) toast(r.msg, 'bad'); else toast(B.mode === 'online' ? `Admin: everyone now plays at ${sp.note}` : sp.note, 'good');
   });
-  document.querySelectorAll('#tabs button').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); setTab(b.dataset.tab); }));
+  document.querySelectorAll('#tabs button[data-tab]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); setTab(b.dataset.tab); }));
   $('modal').addEventListener('click', (e) => { if (e.target.id === 'modal' && UI.modal && UI.modal.t !== 'ob') closeModal(); });
   B.subscribe(() => { renderAll(); if (UI.modal && ['listing', 'wh', 'deliv', 'home', 'lot'].includes(UI.modal.t)) refreshModal(); if (city().over && me() && !shownSeasonEnd) { shownSeasonEnd = true; showSeasonEnd(); } });
   updatePins();

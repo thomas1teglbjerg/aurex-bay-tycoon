@@ -577,7 +577,6 @@ button.who-c { border: 0; padding: 0; font: inherit; cursor: pointer; }
 .who-more { font-size: 12px; font-weight: 800; color: var(--ink-2); padding: 0 2px; white-space: nowrap; }
 @media (min-width: 721px) { .money { min-width: max-content; } }
 @media (max-width: 720px) { .who { order: 4; padding: 4px 6px; gap: 5px; } .who-c { width: 30px; height: 30px; } .who-c > svg { width: 22px; height: 22px; } .who-c > b { font-size: 12px; } }
-.webbtn { width: 46px; display: grid; place-items: center; color: var(--ink); padding: 0; }
 .lnav .webnav { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; border-color: rgba(240,200,120,0.5); color: #f3d28a; }
 #web { position: absolute; inset: 0; z-index: 25; background: rgba(6,10,16,0.55); display: flex; align-items: stretch; justify-content: center; }
 .wwin { flex: 1; display: flex; flex-direction: column; background: #fff; overflow: hidden; max-width: 1180px; }
@@ -699,6 +698,23 @@ a.adv:hover .adv-t em { text-decoration: underline; }
 .bh-l { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; padding: 4px 0; border-bottom: 1px dashed #dde8e7; } .bh-l span { color: #5f7a77; }
 .bh-btn { background: #0e8a7e; color: #fff; padding: 12px; border-radius: 10px; font-weight: 800; font-size: 16px; margin-top: 6px; } .bh-btn[disabled] { opacity: 0.45; } .bh-small { font-size: 12.5px; color: #5f7a77; margin: 0; }
 /* Gazette */
+/* Gazette clipping on the Market tab: same paper, fonts and colours as aurexgazette.ab */
+.gzbox { display: block; container-type: inline-size; background: #f4f1ea; color: #111 !important; font-family: Georgia, 'Times New Roman', serif; border: 1px solid #c9c3b6; border-radius: 14px; overflow: hidden; text-decoration: none !important; padding-bottom: 14px; box-shadow: 0 6px 18px rgba(0,0,0,0.08); transition: transform 0.15s, box-shadow 0.15s; }
+.gzbox:hover { transform: translateY(-1px); box-shadow: 0 10px 24px rgba(0,0,0,0.14); }
+.gzbox .gz-mast { margin: 0 14px; padding: 14px 0 8px; } .gzbox .gz-mast h1 { font-size: clamp(28px, 9cqi, 44px); line-height: 1.05; margin: 0; color: #111; } .gzbox .gz-mast span { font-size: 10.5px; }
+.gzbox .gz-cols { grid-template-columns: 1fr; padding: 12px 14px; gap: 12px; } .gzbox .gz-cols aside { border-left: 0; padding-left: 0; }
+@container (min-width: 520px) { .gzbox .gz-cols { grid-template-columns: 3fr 2fr; } .gzbox .gz-cols aside { border-left: 1px solid #c9c3b6; padding-left: 14px; } }
+.gzbox .gz-h { font-family: 'Playfair Display', Georgia, serif; font-size: 23px; line-height: 1.15; color: #111; margin: 0; }
+.gzbox .gz-lead h4 { font-size: 16px; color: #111; margin: 10px 0 2px; } .gzbox .gz-lead p { font-size: 14px; line-height: 1.4; color: #2a2a2a; }
+.gzbox .gz-cols aside h3 { margin-top: 0; color: #111; }
+.gzbox .adv { margin: 0 14px; min-height: 110px; } .gzbox .adv .adv-img { min-height: 110px; }
+.gzbox .gz-more { display: block; margin: 12px 14px 0; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; text-align: right; }
+.gz-wc { margin: 0 18px; padding: 10px 0 12px; border-bottom: 1px solid #111; text-align: center; display: flex; flex-direction: column; gap: 3px; } .gz-wc small { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: #6b5f4a; } .gz-wc b { font-family: 'Playfair Display', Georgia, serif; font-size: clamp(19px, 4.4vw, 26px); line-height: 1.15; }
+.gzbox .gz-wc { margin: 0 14px; } .gzbox .gz-wc b { font-size: clamp(18px, 5.5cqi, 24px); }
+.gz-form { display: flex; flex-direction: column; gap: 12px; max-width: 520px; } .gz-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; }
+.gz-form input, .gz-form select { font: 16px Georgia, serif; padding: 8px 10px; border: 1px solid #111; background: #fffdf7; color: #111; border-radius: 0; text-transform: none; letter-spacing: 0; }
+.gz-fb { display: flex; gap: 8px; flex-wrap: wrap; } .gz-fb button { font: 700 13px Georgia, serif; letter-spacing: 0.06em; text-transform: uppercase; padding: 9px 14px; border: 1px solid #111; background: #fffdf7; color: #111; cursor: pointer; } .gz-fb button[type=submit] { background: #111; color: #f4f1ea; }
+.adv.house { --adv-bg: #1d1e22; --adv-acc: #d9d4c7; }
 .s-aurexgazette { background: #f4f1ea; color: #111; font-family: Georgia, 'Times New Roman', serif; }
 .gz-mast { text-align: center; padding: 18px 18px 10px; border-bottom: 3px double #111; margin: 0 18px; display: flex; flex-direction: column; gap: 4px; } .gz-mast h1 { font-family: 'Playfair Display', Georgia, serif; font-size: clamp(32px, 9vw, 60px); font-weight: 800; } .gz-mast span { font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; }
 .gz-cols { display: grid; grid-template-columns: 1fr; gap: 18px; padding: 16px 18px; max-width: 1100px; margin: 0 auto; } @media (min-width: 820px) { .gz-cols { grid-template-columns: 2fr 1fr; } }
@@ -1064,7 +1080,6 @@ em.s { color: #b07a10; font-style: normal; font-weight: 700; } em.m { color: var
     <div class="brand glass"><div><h1>Aurex Bay</h1><small id="datelbl">Year 1 · January</small></div><span class="econ" id="econ"><i></i>Stable</span><span class="demotag" id="demotag" hidden title="This city runs only in your browser">Offline demo</span></div>
     <button class="mylogo glass" id="mylogo" data-a="tab" data-v="empire" aria-label="Your parent company" hidden></button>
     <div class="speed glass" id="speed" role="group" aria-label="Game speed"></div>
-    <button class="webbtn glass" data-a="web" aria-label="Open the web browser" title="Browse the web"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.6 3.9 5.6 3.9 9s-1.3 6.4-3.9 9c-2.6-2.6-3.9-5.6-3.9-9S9.4 5.6 12 3Z"/></svg></button>
     <div class="money glass">
       <div class="cash"><small>Cash</small><b class="num" data-live="cash">$0</b></div>
       <div><small>Income / yr</small><b class="num" id="t-inc">0 M</b></div>
@@ -1082,9 +1097,9 @@ em.s { color: #b07a10; font-style: normal; font-weight: 700; } em.m { color: var
     <button role="tab" data-tab="map" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="M9 4v14M15 6v14"/></svg>Map</button>
     <button role="tab" data-tab="empire" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 21h18M5 21V8l7-4 7 4v13M9 21v-5h6v5"/></svg>Empire<span class="dot" id="dot-empire" hidden></span></button>
     <button role="tab" data-tab="market" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 7h11v10H3zM14 10h4l3 3v4h-7"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg>Market</button>
-    <button role="tab" data-tab="stocks" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 20V10M10 20V5M16 20v-8M22 20H2"/></svg>Stocks</button>
     <button role="tab" data-tab="network" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="6" cy="7" r="2.6"/><circle cx="18" cy="7" r="2.6"/><circle cx="12" cy="17" r="2.6"/><path d="M8.3 8.3l2.4 6.4M15.7 8.3l-2.4 6.4M8.6 7h6.8"/></svg>Network<span class="dot" id="dot-network" hidden></span></button>
     <button role="tab" data-tab="life" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 11V8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v3"/><path d="M2 17v-4a2 2 0 0 1 4 0v1h12v-1a2 2 0 0 1 4 0v4zM5 17v2M19 17v2"/></svg>Personal<span class="dot" id="dot-life" hidden></span></button>
+    <button class="webtab" data-a="web" aria-label="Open the web browser" title="Browse the web"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.6 3.9 5.6 3.9 9s-1.3 6.4-3.9 9c-2.6-2.6-3.9-5.6-3.9-9S9.4 5.6 12 3Z"/></svg>Web</button>
   </nav>
 
   <div id="web" hidden></div>

@@ -4,6 +4,7 @@
 import { TYPES, SIZES, AD, AD_NOUN, AD_CATS, AD_COPY } from './content.js';
 import * as LIFE from './life.js';
 import { roleOn, selfLv, hasSp } from './ops.js';
+import { rate as paperRate } from './gazette.js';
 
 const r4 = (v) => Math.round(v * 1e4) / 1e4;
 const rand = Math.random;
@@ -12,7 +13,8 @@ const ok = (msg) => ({ ok: true, msg });
 const err = (msg) => ({ ok: false, msg });
 
 export const coName = (l) => l.title || TYPES[l.type].name;
-export const cost = (l, weeks) => r4(AD.perWeek * SIZES[l.size].mult * weeks * (selfLv(l, 'social') >= 6 ? 0.9 : 1));
+// the price follows the rate The Aurex Gazette's owner sets for the ad desk (gazette.js)
+export const cost = (l, weeks, city) => r4(AD.perWeek * SIZES[l.size].mult * weeks * (selfLv(l, 'social') >= 6 ? 0.9 : 1) * (city ? paperRate(city) : 1));
 export const TONES = AD.tones.map(([k]) => k);
 export const live = (city, g = city.g) => (city.ads || []).filter((a) => a.until > g + 1e-9);
 export const running = (city, lid, g) => live(city, g).find((a) => a.lid === lid);
@@ -53,7 +55,7 @@ export function launch(city, p, l, a, payer) {
     const pr = products(city, p, l).find((x) => x.uid === a.subj); if (!pr) return err('That piece is not yours to advertise.');
     kind = 'item'; cid = pr.cid; pu = pr.uid;
   }
-  const c = cost(l, weeks); if (payer.cash < c) return err(`A ${weeks}-week campaign costs ${c} M.`);
+  const c = cost(l, weeks, city); if (payer.cash < c) return err(`A ${weeks}-week campaign costs ${c} M.`);
   payer.cash -= c; o.cur.ads = r4((o.cur.ads || 0) + c);
   const t = copy(l, tone, a.n, cid, p.name);
   const ad = { id: uid(), lid: l.id, by: p.id, kind, cid, uid: pu, tone, head: t.head, line: t.line, weeks, from: city.g, until: r4(city.g + weeks / 48), cost: c, views: 0 };
