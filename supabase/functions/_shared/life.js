@@ -2,7 +2,7 @@
 // Your own wallet (separate from the empire), homes as investments, and collections of art, wine,
 // watches and cars that gain or lose value over time. Collections and homes add up to Prestige,
 // which gives perks back in the business game. Pure functions over the city object, like the engine.
-import { HOMES, ROOMS, LIFESTYLES, SALARIES, TAX, LIFE, RARITY, PRESTIGE_TIERS, COLLECT_CATS, COLLECTIBLES, SETS, DINNER, VINTAGE, SIZES, CRAFT } from './content.js';
+import { HOMES, ROOMS, LIFESTYLES, SALARIES, TAX, LIFE, RARITY, PRESTIGE_TIERS, COLLECT_CATS, COLLECTIBLES, SETS, DINNER, VINTAGE, SIZES, CRAFT, CENTRAL } from './content.js';
 
 const r2 = (v) => Math.round(v * 100) / 100;
 const r4 = (v) => Math.round(v * 10000) / 10000;
@@ -96,8 +96,10 @@ export function incomeTax(gross) {
   for (const [top, rate] of TAX.brackets) { const part = Math.max(0, Math.min(gross, top) - prev); tax += part * rate; prev = top; if (gross <= top) break; }
   return tax;
 }
-export function savingsRate(city) { return { Boom: 3.5, Stable: 2.5, Recession: 1.5, Crisis: 1 }[city.econ] || 2.5; }
-export function mortgageRate(city) { return LIFE.mortgageBase + ({ Boom: 0.5, Stable: 0, Recession: -0.5, Crisis: 1 }[city.econ] || 0); }
+// personal rates follow the economy and, in part, the Bank of Aurex bank rate (CENTRAL.start is the neutral point)
+const cbShift = (city, k) => (city.cb ? (city.cb.rate - CENTRAL.start) * CENTRAL[k] : 0);
+export function savingsRate(city) { return Math.max(0.25, ({ Boom: 3.5, Stable: 2.5, Recession: 1.5, Crisis: 1 }[city.econ] || 2.5) + cbShift(city, 'savings')); }
+export function mortgageRate(city) { return Math.max(0.5, LIFE.mortgageBase + ({ Boom: 0.5, Stable: 0, Recession: -0.5, Crisis: 1 }[city.econ] || 0) + cbShift(city, 'mortgage')); }
 function payment(bal, ratePct, monthsLeft) { const r = ratePct / 100 / 12; if (bal <= 0) return 0; if (monthsLeft <= 1) return bal * (1 + r); return bal * r / (1 - Math.pow(1 + r, -monthsLeft)); }
 export function monthly(city, p) {
   const L = p.life, rate = mortgageRate(city), sets = completeSets(p);

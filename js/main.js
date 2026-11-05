@@ -450,6 +450,7 @@ function listingActions(l) {
   const c = city(), p = me(), o = ownerLabel(c, l), out = [];
   if (!l.owner) {
     const price = E.listingPrice(l);
+    if (E.CB.isBank(l)) { const e = E.cbEligible(c, p); out.push(`<p class="empty" style="font-size:13.5px">The national bank: its owner sets the bank rate and levies for the whole city. ${e.ok ? '' : esc(e.why)} <a href="#" data-a="webGo" data-u="bankofaurex.ab/policy">How it works ›</a></p>`); if (!e.ok) return out.join(''); }
     out.push(`<button class="btn gold" data-a="buy" data-lid="${l.id}" ${p.cash < price ? 'disabled' : ''}>Buy for ${M(price)}${p.cash < price ? ` · you have ${M(p.cash)}` : ''}</button>`);
     E.myHoldings(c, p.id).forEach((h) => out.push(`<button class="btn coop" data-a="buyas" data-lid="${l.id}" data-hid="${h.id}" ${h.treasury < price ? 'disabled' : ''}>Buy with ${esc(h.name)} · treasury ${M(h.treasury)}</button>`));
   } else if (o.mine && !o.coop) {
@@ -587,7 +588,7 @@ function marketHTML() {
       ${myOffers ? `<div class="box"><h2>Your offers<small>OPEN</small></h2><div class="in"><div class="rows">${myOffers}</div></div></div>` : ''}
     </div><div class="col">
       <div class="box"><h2>Bank of Aurex</h2><div class="in"><div class="stats"><div class="stat"><small>Debt</small><b class="num down">${M(-debt)}</b></div><div class="stat"><small>Rate</small><b class="num">${E.loanRate(c, p)}%</b></div><div class="stat"><small>Interest / yr</small><b class="num">${M(-r.interest)}</b></div><div class="stat"><small>Credit limit</small><b class="num">${M(E.loanCap(c, p))}</b></div></div>
-        <div class="btns"><button class="btn navy" data-a="loan" data-v="5">Borrow 5 M</button><button class="btn navy" data-a="loan" data-v="20">Borrow 20 M</button><button class="btn" data-a="repay" data-v="5" ${debt ? '' : 'disabled'}>Repay 5 M</button><button class="btn" data-a="repay" data-v="999" ${debt ? '' : 'disabled'}>Repay all</button></div></div></div>
+        <div class="btns"><button class="btn navy" data-a="webGo" data-u="bankofaurex.ab/loans">Manage loans at bankofaurex.ab ›</button></div></div></div>
       <div class="box"><h2>Aurex Bay Gazette<small>CITY NEWS</small></h2><div class="in">${feedHTML(c.news, 16)}</div></div>
     </div></div>`;
 }
@@ -905,6 +906,8 @@ async function onClick(e) {
     case 'editLogo': editLogo(); return;
     case 'signOut': await B.signOut(); return;
     case 'buy': await act('buy', { lid: d.lid }); return;
+    case 'cbRate': await act('cbRate', { target: Number(d.v) }); return;
+    case 'cbLevy': await act('cbLevy', { sector: d.sector || null, sp: Number(d.sp) || 0, supply: d.supply || null, gp: Number(d.gp) || 0 }); return;
     case 'buyas': await act('buy', { lid: d.lid, as: d.hid }); return;
     case 'sell': await act('sell', { lid: d.lid }); return;
     case 'upgrade': await act('upgrade', { lid: d.lid }); return;

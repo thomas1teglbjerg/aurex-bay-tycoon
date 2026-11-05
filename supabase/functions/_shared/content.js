@@ -67,7 +67,7 @@ export const LISTINGS = [
   ['hotel', 'marina', 'L', 0.2, 0.3], ['hotel', 'marina', 'M', 0.42, 0.4], ['hotel', 'sunset', 'S', 0.45, 0.4, null, 'c-hotel-sunset'],
   ['metal', 'harbor', 'L', 0.4, 0.53], ['metal', 'ironport', 'S', 0.08, 0.1], ['metal', 'harbor', 'M', 0.44, 0.66],
   ['car', 'harbor', 'L', 0.53, 0.46], ['dealer', 'ironport', 'M', 0.42, 0.83, 'Kazen Motors'], ['car', 'aurex', 'S', 0.3, 0.84],
-  ['finance', 'aurex', 'L', 0.5, 0.34], ['finance', 'aurex', 'M', 0.76, 0.36], ['bank', 'ironport', 'S', 0.48, 0.44, 'Aurex Bank'],
+  ['finance', 'aurex', 'L', 0.5, 0.34, 'Bank of Aurex', 'c-bankofaurex'], ['finance', 'aurex', 'M', 0.76, 0.36], ['bank', 'ironport', 'S', 0.48, 0.44, 'Aurex Bank'],
   ['chip', 'nevus', 'L', 0.44, 0.25], ['chip', 'greenfield', 'M', 0.28, 0.17], ['chip', 'harbor', 'S', 0.47, 0.36],
   ['data', 'aurex', 'L', 0.24, 0.26], ['data', 'aurex', 'M', 0.9, 0.58], ['data', 'nevus', 'S', 0.62, 0.42],
   ['pharma', 'nevus', 'L', 0.78, 0.63], ['pharma', 'greenfield', 'M', 0.43, 0.3], ['pharma', 'crown', 'S', 0.86, 0.38],
@@ -76,6 +76,22 @@ export const LISTINGS = [
   ['restaurant', 'ironport', 'S', 0.62, 0.6, 'Ground Café'],
   ['vineyard', 'greenfield', 'S', 0.66, 0.2, 'Greenfield Hill Vines'], ['vineyard', 'crown', 'M', 0.815, 0.6, 'Aurex Bay Vineyard'], ['vineyard', 'nevus', 'L', 0.33, 0.42, 'Nevus Cliff Estate']
 ].map(([type, d, size, px, py, title, img], i) => ({ id: 'L' + (i + 1), type, d, p: [px, py], district: DISTRICT[d].name, size, ...(title ? { title } : {}), ...(img ? { img } : {}), ...placeOn(d, [px, py]) }));
+
+// the national bank: the Bank of Aurex site in Aurex City (bankofaurex.ab in the in-game browser)
+export const CENTRAL_BANK = 'L13';
+// national bank rules (central.js): the bank rate the governor steers, levies, and how both move the economy
+export const CENTRAL = {
+  start: 8, min: 2, max: 10, step: 0.25, moveMax: 0.5, neutral: 6, quarter: 3,
+  calm: [5, 8],                  // between these the rate leaves the economy alone
+  ownerCut: 0.1,                 // the bank earns this share of the interest other tycoons pay on bank loans
+  levyMax: 10, levyPick: 3,      // up to 10% on one of the 3 most crowded sectors and one of the 3 most traded supplies
+  levyLoad: 8,                   // levies above this (sector % + supply % / 2) weigh on the economy
+  tiltMax: 0.25,                 // at most this much extra chance that a world card moves the economy one step
+  px: [0.85, 1.25], pxMove: 0.012, // supply price index: cheap money lifts it, dear money lowers it (per month at the extremes)
+  extreme: [3, 9], extremeMonths: 12, ministry: 0.2, // a year outside 3–9% and the Finance Ministry may step in each month
+  needTier: 3, needFinance: 6,   // Elite prestige and Finance level 6 to buy the bank
+  mortgage: 0.5, savings: 0.3    // personal mortgage and savings rates follow the bank rate by this share
+};
 
 export const STAFF = [
   { id: 'michael', role: 'Junior Financial Analyst', name: 'Michael Turner', cost: 1.5, upkeep: 0.5, passive: ['Loan Bonus', 'Gain +0.5 M when taking a loan. Your interest drops 1 M a year.'], hq: 'Head of Finance: running costs −5% in that company.', tags: 'Finance · Risk' },
