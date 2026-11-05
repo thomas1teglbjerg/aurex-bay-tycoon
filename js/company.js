@@ -126,7 +126,7 @@ export function companyHTML(lid, ui = {}) {
   const ords = (o.orders || []).slice().sort((a, b) => ['new', 'accepted', 'renegotiating', 'cancelled'].indexOf(a.status) - ['new', 'accepted', 'renegotiating', 'cancelled'].indexOf(b.status));
   const clients = (o.clients || []).filter((x) => x.status === 'active').sort((a, b) => b.weight - a.weight);
   const left = (o.clients || []).filter((x) => x.status === 'left').length;
-  const depts = O.deptsFor(l).map((d) => ro ? deptCardRO(l, d) : deptCard(l, d)).join('');
+  const depts = O.deptsFor(l).map((d) => ro ? deptCardRO(l, d) : deptCard(l, d, ui)).join('');
   const ready = ords.filter((x) => x.status === 'accepted').length;
 
   return `<div class="crumbs"><button class="btn sm" data-a="back">‹ ${ro ? 'Coop' : 'Empire'}</button><span class="muted">${coop ? `${esc(coop.name)} · co-owned · costs come out of the coop treasury` : ro ? `${esc(owner.name)}'s company` : 'Company dashboard'}</span></div>
@@ -154,8 +154,8 @@ export function companyHTML(lid, ui = {}) {
       ${ro ? '' : `<div class="box"><h2>To-do<small>${tasks.length}</small></h2><div class="in">${taskHTML}<p class="empty" style="font-size:13px">Tasks appear when a department has no staff. Hire workers to hand the work over.</p></div></div>`}
       ${cellarBox(c, l, ro)}
       ${newsroomBox(c, l, ro)}
-      ${adBox(c, l, ro, ui)}
-      ${pressBox(c, l, ro)}
+      ${o.depts.social && !ro ? '' : adBox(c, l, ro, ui)}
+      ${o.depts.social ? '' : pressBox(c, l, ro)}
       <div class="box" id="orders-box"><h2>${hotel ? 'Bookings' : 'Customer orders'}<small>${ords.length} OPEN</small></h2><div class="in">
         ${!ro && ready && !hotel ? `<button class="btn navy" data-a="deliverOpen" data-lid="${l.id}">Open delivery map · ${ready} ready</button>` : ''}
         ${ords.length ? `<div class="orders">${ords.map((od) => orderCard(c, l, od, ro)).join('')}</div>` : `<p class="empty">${hotel ? (O.automation(l, 'sales') >= 1 ? 'Reservations confirms every booking. Guests check in by themselves.' : 'No open bookings. Travel agents and tour operators book every month.') : O.automation(l, 'sales') >= 1 ? 'Your sales team answers and ships every order.' : 'No open orders. New orders arrive every month from your clients.'}</p>`}
@@ -185,10 +185,10 @@ export function companyHTML(lid, ui = {}) {
   </div>`;
 }
 // Marketing: ad campaigns on the city's websites, for the company or one piece it makes or the owner holds
-function adBox(c, l, ro, ui) {
+function adBox(c, l, ro, ui, inDept) {
   const A = E.ADS, o = l.ops, mk = O.deptFor(l, 'social').name, run = A.running(c, l.id);
   if ((ro || !o.depts.social) && !run) return ''; // only companies with a Marketing department advertise
-  const head = (n) => `<div class="box adbox"><h2>Ad campaigns<small>${n}</small></h2><div class="in">`;
+  const head = (n) => (inDept ? `<div class="dsub adbox"><h3>Ad campaigns<small>${n}</small></h3><div>` : `<div class="box adbox"><h2>Ad campaigns<small>${n}</small></h2><div class="in">`);
   if (run) {
     const left = Math.min(run.weeks, Math.max(0, Math.ceil((run.until - c.g) * 48 - 1e-6))), what = run.kind === 'co' ? esc(lname(l)) : esc((E.LIFE.ITEM[run.cid] || {}).name || 'a piece');
     return head('RUNNING') + `${adHTML(run, 'wide', true)}
@@ -227,11 +227,11 @@ function newsroomBox(c, l, ro) {
     <div class="btns"><button class="btn sm" data-a="web" data-u="aurexgazette.ab">Open The Aurex Gazette</button></div></div></div>`;
 }
 // any company: pay The Aurex Gazette to print a short story about it
-function pressBox(c, l, ro) {
+function pressBox(c, l, ro, inDept) {
   if (ro || !l.ops || E.GZ.isPaper(l)) return '';
   const fee = E.GZ.pressFee(c), ready = E.GZ.pressReady(c, l), cash = l.owner.k === 'h' ? c.holdings[l.owner.id].treasury : me().cash;
   const left = ready ? 0 : Math.max(1, Math.ceil((l.ops.pressG + PAPER.pressWeeks / 48 - c.g) * 48 - 1e-6));
-  return `<div class="box"><h2>Press release<small>${M(fee)}</small></h2><div class="in">
+  return `${inDept ? `<div class="dsub"><h3>Press release<small>${M(fee)}</small></h3><div>` : `<div class="box"><h2>Press release<small>${M(fee)}</small></h2><div class="in">`}
     <p style="margin:0 0 8px">Pay The Aurex Gazette to print a short story about ${esc(lname(l))}. It shows in the city news and gives reputation +${PAPER.pressRep} and a few more customers.</p>
     <div class="btns">${Object.entries(PAPER.PRESS_LABEL).map(([k, t]) => `<button class="btn sm" data-a="gzPress" data-lid="${l.id}" data-kind="${k}" ${!ready || cash < fee ? 'disabled' : ''}>${esc(t)}</button>`).join('')}</div>
     <p class="empty" style="font-size:13px">${ready ? `One story every ${PAPER.pressWeeks} weeks per company.` : `Next press release in ${left} week${left === 1 ? '' : 's'}.`} The money goes to the owner of the paper.</p></div></div>`;
@@ -264,7 +264,7 @@ function deptCardRO(l, d) {
   const state = O.deptState(l, d.id), dd = l.ops.depts[d.id];
   return `<article class="dept">${deptHeader(l, d, state, true)}<div class="dept-in"><p class="muted" style="font-size:13.5px">${dd ? `${dd.w} workers · ${Math.round(O.automation(l, d.id) * 100)}% automated${dd.head ? ` · has a head` : ''}` : 'Not opened'}</p></div></article>`;
 }
-function deptCard(l, d) {
+function deptCard(l, d, ui) {
   const o = l.ops, state = O.deptState(l, d.id), dd = o.depts[d.id], p = me();
   if (!dd) return `<article class="dept">${deptHeader(l, d, 'closed', true)}<div class="dept-in"><p>${esc(d.desc)}</p><p class="muted" style="font-size:13px">Without it: ${esc(d.without)}</p><button class="btn navy" data-a="deptOpen" data-lid="${l.id}" data-dept="${d.id}" ${(l.owner.k === 'h' ? city().holdings[l.owner.id].treasury : p.cash) < O.deptOpenCost(l, d.id) ? 'disabled' : ''}>Open department · ${M(O.deptOpenCost(l, d.id))}</button></div></article>`;
   const need = O.needWorkers(l, d.id), a = O.automation(l, d.id);
@@ -289,6 +289,7 @@ function deptCard(l, d) {
     <p class="muted" style="font-size:13px">${esc(a >= 1 ? d.auto : d.without)} Hiring costs ${M(WORKER.hireFee)} per worker, wages ${M(WORKER.salary)} a year each.</p>
     ${heads}${dd.head !== 'self' ? selfHeadHTML(l, d, dd) : ''}${settings}
     ${manualAvail ? `<button class="btn${manualDone ? ' done' : ''}" data-a="${d.manual.id === 'restock' ? 'gotoSupplies' : 'scene'}" data-lid="${l.id}" data-task="${d.manual.id}">${esc(d.manual.label)}<span class="muted" style="font-weight:600"> · ${esc(manualDone ? 'Done for this month' : d.manual.note)}</span></button>` : ''}
+    ${d.id === 'social' ? adBox(city(), l, false, ui || {}, true) + pressBox(city(), l, false, true) : ''}
     ${d.id !== 'ops' ? `<button class="linkbtn" data-a="deptClose" data-lid="${l.id}" data-dept="${d.id}">Close department</button>` : ''}
   </div></article>`;
 }
