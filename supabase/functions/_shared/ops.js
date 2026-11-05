@@ -117,8 +117,10 @@ export function ensureMarket(city) {
   if (!city.market) { city.market = {}; Object.entries(GOODS).forEach(([g, d]) => (city.market[g] = { p: d.base, h: [d.base], bought: 0, imported: 0, exported: 0, sold: 0 })); }
   if (!city.book) city.book = [];
 }
-export function importPrice(city, g) { let p = GOODS[g].base * (GOODS[g].producer ? 1.5 : 1.1); if (g === 'energy' && city.fx && city.fx.id === 'energy') p *= 1.8; return r4(p); }
-export function exportPrice(city, g) { return r4(GOODS[g].base * 0.7); }
+// cb.px: the national bank's price index (cheap money lifts supply prices, dear money lowers them)
+const pxOf = (city) => (city.cb && city.cb.px) || 1;
+export function importPrice(city, g) { let p = GOODS[g].base * pxOf(city) * (GOODS[g].producer ? 1.5 : 1.1); if (g === 'energy' && city.fx && city.fx.id === 'energy') p *= 1.8; return r4(p); }
+export function exportPrice(city, g) { return r4(GOODS[g].base * pxOf(city) * 0.7); }
 export function offersFor(city, g) { return city.book.filter((o) => o.g === g && o.qty > 0.001).sort((a, b) => a.price - b.price); }
 export function listedQty(city, g) { return city.book.filter((o) => o.g === g).reduce((a, o) => a + o.qty, 0); }
 
@@ -140,6 +142,9 @@ export function buyGoods(city, ctx, buyerL, g, qty, policy, opts) {
     city.book = city.book.filter((o) => o.qty > 0.001);
   }
   const imported = Math.max(0, left); cost += imported * imp;
+  // a national bank levy on this supply is paid on top and goes to the city treasury
+  const levy = city.cb && city.cb.levy && city.cb.levy.supply === g ? cost * city.cb.levy.gp / 100 : 0;
+  if (levy) { cost += levy; city.cb.gl = (city.cb.gl || 0) + levy; }
   mk.bought += fromBook; mk.imported += imported;
   // human-run companies receive goods by carrier: they arrive later and freight is paid now
   if (opts && opts.carrier && ctx.book && !buyerL.ops.managed) {
@@ -271,7 +276,7 @@ export function marketMonth(city) {
     const imp = importPrice(city, g), exp = exportPrice(city, g), listed = listedQty(city, g), demandQ = mk.bought + mk.imported;
     if (mk.imported > 0.5) mk.p += (imp - mk.p) * 0.25 * Math.min(1, mk.imported / Math.max(1, demandQ));
     else if (listed > demandQ * 0.5 + 1) mk.p -= (mk.p - exp) * 0.15;
-    else mk.p += (GOODS[g].base - mk.p) * 0.05;
+    else mk.p += (GOODS[g].base * pxOf(city) - mk.p) * 0.05;
     mk.p = r4(Math.max(exp, Math.min(imp, mk.p * (1 + (rand() - 0.5) * 0.03))));
     mk.h.push(mk.p); if (mk.h.length > 48) mk.h.shift();
     mk.last = { bought: r2(mk.bought), imported: r2(mk.imported), exported: r2(mk.exported), listed: r2(listed) };
@@ -480,6 +485,9 @@ export function quote(city, l, g, qty, policy, cid) {
     for (const o of offers) { if (left <= 0) break; const q = Math.min(left, o.qty); cost += q * o.price; bookCost += q * o.price; left -= q; fromBook += q; }
   }
   const imported = Math.max(0, left); cost += imported * imp;
+  // a national bank levy on this supply is paid on top and goes to the city treasury
+  const levy = city.cb && city.cb.levy && city.cb.levy.supply === g ? cost * city.cb.levy.gp / 100 : 0;
+  if (levy) { cost += levy; city.cb.gl = (city.cb.gl || 0) + levy; }
   let freight = 0, minDays = 0, maxDays = 0;
   if (cid && freightQuote) { [[fromBook, bookCost, 'local'], [imported, imported * imp, 'import']].forEach(([q, v, route]) => { if (q > 0.001) { const f = freightQuote(cid, v, q, route); freight += f.cost; minDays = Math.max(minDays, f.minDays); maxDays = Math.max(maxDays, f.maxDays); } }); }
   return { cost: r4(cost + freight), goods: r4(cost), freight: r4(freight), minDays, maxDays, fromBook: Math.round(fromBook), imported: Math.round(imported), avg: qty ? r4(cost / qty) : 0 };

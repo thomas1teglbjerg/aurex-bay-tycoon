@@ -26,7 +26,7 @@ const TERMS = {
   'latest world card': h('Economy', 'The last World Card that hit the city. About once a quarter, at a moment nobody announces, a new card can switch the economy between boom, stable, recession and crisis and move share prices.', 'A Market Research Associate in your team mails you a research note with the signals before each card. Read them yourself, and forward the note to your network if you want.'),
   // Bank
   debt: h('Bank of Aurex', 'What you owe the bank in total.'),
-  rate: h('Bank of Aurex', 'Yearly interest on your loans. A bank or finance company in your portfolio, prestige and some specialists lower it.'),
+  rate: h('Bank of Aurex', 'Yearly interest on your loans. It starts from the bank rate set by the Bank of Aurex. A bank or finance company in your portfolio, prestige and some specialists lower it.'),
   'interest / yr': h('Bank of Aurex', 'Interest you pay on your debt each year. It is taken from your cash continuously.'),
   'credit limit': h('Bank of Aurex', 'The most you can owe the bank. It grows with the value of the companies you own.'),
   // Coop
@@ -139,7 +139,7 @@ const BOXES = {
   'world economy': h('Economy', 'The economy everyone in the city shares. Booms raise Trade income, recessions and crises cut it. World Cards change it once a quarter.'),
   'supplies market': h('Market', 'The city-wide market for supplies. Every company buys and sells here. Prices float between the export floor and the import ceiling.'),
   'your offers': h('Market', 'Supplies you have listed for sale. Buyers pay when they buy. Withdraw to take them back.'),
-  'bank of aurex': h('Bank', 'Borrow money for growth and repay when you can. Interest is charged every year on what you owe.'),
+  'bank of aurex': h('Bank', 'The national bank. Borrow for growth at bankofaurex.ab. Its owner sets the bank rate and levies for the whole city, which tilts the economy.'),
   'aurex bay gazette': h('News', 'City news: World Cards, big deals, hits and what other players do.'),
   network: h('Network', 'Players you are connected with. Network partners can sign supply contracts and forward market research to each other.'),
   'waiting for you': h('Network', 'Network requests and supply contract offers that need your answer.'),

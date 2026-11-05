@@ -79,6 +79,19 @@ export const LISTINGS = [
 
 // the national bank: the Bank of Aurex site in Aurex City (bankofaurex.ab in the in-game browser)
 export const CENTRAL_BANK = 'L13';
+// national bank rules (central.js): the bank rate the governor steers, levies, and how both move the economy
+export const CENTRAL = {
+  start: 8, min: 2, max: 10, step: 0.25, moveMax: 0.5, neutral: 6, quarter: 3,
+  calm: [5, 8],                  // between these the rate leaves the economy alone
+  ownerCut: 0.1,                 // the bank earns this share of the interest other tycoons pay on bank loans
+  levyMax: 10, levyPick: 3,      // up to 10% on one of the 3 most crowded sectors and one of the 3 most traded supplies
+  levyLoad: 8,                   // levies above this (sector % + supply % / 2) weigh on the economy
+  tiltMax: 0.25,                 // at most this much extra chance that a world card moves the economy one step
+  px: [0.85, 1.25], pxMove: 0.012, // supply price index: cheap money lifts it, dear money lowers it (per month at the extremes)
+  extreme: [3, 9], extremeMonths: 12, ministry: 0.2, // a year outside 3–9% and the Finance Ministry may step in each month
+  needTier: 3, needFinance: 6,   // Elite prestige and Finance level 6 to buy the bank
+  mortgage: 0.5, savings: 0.3    // personal mortgage and savings rates follow the bank rate by this share
+};
 
 export const STAFF = [
   { id: 'michael', role: 'Junior Financial Analyst', name: 'Michael Turner', cost: 1.5, upkeep: 0.5, passive: ['Loan Bonus', 'Gain +0.5 M when taking a loan. Your interest drops 1 M a year.'], hq: 'Head of Finance: running costs −5% in that company.', tags: 'Finance · Risk' },
