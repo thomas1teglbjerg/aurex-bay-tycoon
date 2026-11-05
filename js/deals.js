@@ -6,7 +6,7 @@ import { city, me, esc, M, K, N, lname } from './util.js';
 import { cicon } from './freight.js';
 
 const D = E.DEAL;
-export const DUI = { deal: {} }; // the buyer's and seller's picks per deal, until they press the button
+export const DUI = { deal: {}, run: {} }; // the buyer's and seller's picks per deal, until they press the button
 const daysTxt = (a, b) => (a === b ? `${a}d` : `${a}–${b}d`);
 const what = (d) => `${N(d.qty)} ${esc(GOODS[d.g].unit)} of ${esc(GOODS[d.g].name.toLowerCase())}`;
 const nameOf = (pid) => esc((city().players[pid] || {}).name || 'A tycoon');
@@ -20,6 +20,20 @@ function carriers(d, action, cur, self) {
     ${self ? `<button class="carrier" data-a="${action}" data-id="${d.id}" data-v="self" aria-pressed="${cur === 'self'}" style="--cc:#8a6d1f"><span class="cn">✋ Seller delivers</span><span class="cq">${M(D.fee())} · as soon as possible</span></button>` : ''}</div>`;
 }
 
+// the seller's own delivery: a short drive across the city, then the goods are in the buyer's stock
+export const RUN_S = 10;
+const RUN_LINES = (d, sl, bl) => [
+  ['You', `Loading ${what(d)} into the van at ${sl ? esc(lname(sl)) : 'the company'}.`],
+  ['Dispatcher', `Route is clear through ${bl ? esc(bl.district) : 'the city'}. Go.`],
+  ['You', 'On the road. Traffic is light.'],
+  [bl ? esc(lname(bl)) : 'Buyer', `Pull up at the back door, we will sign for it.`]];
+export function deliveryRun(d) {
+  const c = city(), sl = E.listing(c, d.lid), bl = E.listing(c, d.blid), t = Math.min(1, (Date.now() - DUI.run[d.id]) / (RUN_S * 1000));
+  const lines = RUN_LINES(d, sl, bl), shown = Math.max(1, Math.min(lines.length, Math.ceil(t * lines.length))), cols = ['#8a6d1f', '#2f6fb0'];
+  const bubs = lines.slice(Math.max(0, shown - 2), shown).map(([n, x], j) => { const i = Math.max(0, shown - 2) + j; return `<div class="bub ${i % 2 ? 'r' : ''}"><span class="av" style="background:${cols[i % 2]};--avc:${cols[i % 2]}">${esc(n[0])}</span><div><b>${n}</b><p>${x}</p></div></div>`; }).join('');
+  return `<div class="iscene run" data-dealrun="${d.id}" style="--tint:#8a6d1f"><div class="is-head"><span class="is-ic">🚚</span><div class="grow"><b>Delivering ${what(d)}</b><span>To ${nameOf(d.to)} · ${bl ? esc(lname(bl)) : ''}</span></div><span class="chip">${t >= 1 ? 'Arriving' : `${Math.ceil(RUN_S * (1 - t))} s`}</span></div>
+    <div class="bar is-bar"><i style="width:${(t * 100).toFixed(1)}%"></i></div><div class="bubs" aria-live="polite">${bubs}</div></div>`;
+}
 // one deal, from where you stand: buyer or seller
 export function dealCard(d, ui = DUI) {
   const c = city(), p = me(), sl = E.listing(c, d.lid), st = (ui.deal && ui.deal[d.id]) || {};
@@ -29,18 +43,19 @@ export function dealCard(d, ui = DUI) {
     return `<div class="deal"><div class="deal-h"><b>${nameOf(d.from)} offers ${what(d)}</b><span>${K(d.price)} each · ${M(D.total(d))} · from ${esc(sl ? lname(sl) : '')} · answer within ${weeksLeft(d)} wk</span></div>
       ${cos.length ? `<span class="cap">Deliver to</span><div class="seg" role="group">${cos.map((l) => `<button data-a="dealCo" data-id="${d.id}" data-v="${l.id}" aria-pressed="${co && co.id === l.id}">${esc(lname(l))} · ${esc(l.district)}</button>`).join('')}</div>
       <span class="cap">How it travels</span>${carriers(d, 'dealHow', how, true)}
-      <p class="empty" style="font-size:13px">${how === 'self' ? `${nameOf(d.from)} gets a mail and drives it over as soon as possible for ${M(D.fee())}. Your ${M(cost)} is held until it leaves, and comes back if nothing is sent within ${DEALS.deliverWeeks} weeks.` : `You pay the goods and the freight now. The seller is paid at once.`}</p>
+      <p class="empty" style="font-size:13px">${how === 'self' ? `${nameOf(d.from)} gets a mail and delivers it in person as soon as possible for ${M(D.fee())}. Your ${M(cost)} is held until it is there, and comes back if nothing is sent within ${DEALS.deliverWeeks} weeks.` : `You pay the goods and the freight now. The seller is paid at once.`}</p>
       <div class="btns"><button class="btn gold" data-a="dealAccept" data-id="${d.id}" data-co="${co.id}" data-how="${how}">Buy · ${M(cost)}</button><button class="btn" data-a="dealDecline" data-id="${d.id}">Decline</button></div>`
       : `<p class="empty">None of your companies uses ${esc(GOODS[d.g].name.toLowerCase())}.</p><div class="btns"><button class="btn" data-a="dealDecline" data-id="${d.id}">Decline</button></div>`}</div>`;
   }
   if (d.from === p.id && d.status === 'deliver') {
-    const bl = E.listing(c, d.blid), sl2 = E.listing(c, d.lid), days = bl && sl2 ? Math.max(1, Math.round(E.LOG.truckDays(sl2, bl))) : 1;
-    return `<div class="deal urgent"><div class="deal-h"><b>Deliver ${what(d)} to ${nameOf(d.to)}</b><span>To ${esc(bl ? lname(bl) : '')}${bl ? ` in ${esc(bl.district)}` : ''} · ${M(d.paid)} is yours when it leaves (incl. ${M(d.fee || 0)} delivery) · ${weeksLeft(d)} wk left</span></div>
-      <div class="btns"><button class="btn gold" data-a="dealDeliver" data-id="${d.id}">Deliver now in your own truck · about ${days} day${days > 1 ? 's' : ''}</button></div></div>`;
+    const bl = E.listing(c, d.blid);
+    if (DUI.run[d.id]) return deliveryRun(d);
+    return `<div class="deal urgent"><div class="deal-h"><b>Deliver ${what(d)} to ${nameOf(d.to)}</b><span>To ${esc(bl ? lname(bl) : '')}${bl ? ` in ${esc(bl.district)}` : ''} · ${M(d.paid)} is yours when it is there (incl. ${M(d.fee || 0)} delivery) · ${weeksLeft(d)} wk left</span></div>
+      <div class="btns"><button class="btn gold" data-a="dealDeliver" data-id="${d.id}">Deliver it yourself · takes ${RUN_S} seconds</button></div></div>`;
   }
-  if (d.to === p.id && d.status === 'deliver') return `<div class="deal"><div class="deal-h"><b>Waiting for ${nameOf(d.from)} to deliver ${what(d)}</b><span>${M(d.paid)} held · on its way as soon as ${nameOf(d.from)} can · money back if nothing is sent within ${weeksLeft(d)} wk</span></div></div>`;
+  if (d.to === p.id && d.status === 'deliver') return `<div class="deal"><div class="deal-h"><b>Waiting for ${nameOf(d.from)} to deliver ${what(d)}</b><span>${M(d.paid)} held · ${nameOf(d.from)} delivers it in person as soon as they can · money back if nothing is sent within ${weeksLeft(d)} wk</span></div></div>`;
   if (d.from === p.id && d.status === 'open') return `<div class="deal"><div class="deal-h"><b>Offer to ${nameOf(d.to)}: ${what(d)}</b><span>${K(d.price)} each · ${M(D.total(d))} · waiting for an answer, ${weeksLeft(d)} wk left</span></div><div class="btns"><button class="btn sm" data-a="dealWithdraw" data-id="${d.id}">Withdraw</button></div></div>`;
-  const label = { shipped: d.how === 'self' ? 'Delivered by the seller' : `Sent with ${(E.LOG.CARRIER[d.carrier] || {}).name || 'a carrier'}`, declined: 'Declined', withdrawn: 'Withdrawn', expired: 'No answer in time', lapsed: 'Not delivered in time: refunded' }[d.status] || d.status;
+  const label = { delivered: 'Delivered by the seller', shipped: `Sent with ${(E.LOG.CARRIER[d.carrier] || {}).name || 'a carrier'}`, declined: 'Declined', withdrawn: 'Withdrawn', expired: 'No answer in time', lapsed: 'Not delivered in time: refunded' }[d.status] || d.status;
   return `<div class="deal done"><div class="deal-h"><b>${d.from === p.id ? `To ${nameOf(d.to)}` : `From ${nameOf(d.from)}`}: ${what(d)}</b><span>${label} · ${M(D.total(d))}</span></div></div>`;
 }
 

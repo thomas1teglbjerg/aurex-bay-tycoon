@@ -40,10 +40,10 @@ const b1 = B.cash;
 r = E.apply(city, 'b', 'dealAccept', { id: d.id, blid: hotel.id, how: 'self' }, now); assert(r.ok && d.status === 'deliver', 'buyer lets the seller deliver');
 assert(Math.abs(b1 - B.cash - 0.07) < 1e-6 && Math.abs(d.paid - 0.07) < 1e-9, 'buyer pays price + 10 k delivery fee, held');
 assert(A.mail.some((x) => x.deal === d.id && /deliver/i.test(x.subj)), 'seller is asked to deliver');
-const a1 = A.cash;
-r = E.apply(city, 'a', 'dealDeliver', { id: d.id }, now); assert(r.ok && d.status === 'shipped', 'seller delivers: ' + r.msg);
+const a1 = A.cash, h0 = hotel.ops.inv.media || 0;
+r = E.apply(city, 'a', 'dealDeliver', { id: d.id }, now); assert(r.ok && d.status === 'delivered', 'seller delivers: ' + r.msg);
 assert(Math.abs(A.cash - a1 - 0.07) < 1e-6, 'seller gets price + delivery fee, no freight bill');
-const tr = city.shipments.find((s) => s.id === d.sid); assert(tr && tr.mode === 'truck' && !tr.carrier && tr.to.id === hotel.id, 'own truck drives it to the hotel');
+assert(d.status === 'delivered' && Math.abs(hotel.ops.inv.media - h0 - 5) < 1e-9, 'goods land in the hotel stock at once');
 
 // seller never delivers: buyer gets the money back, goods go back
 r = offer(); d = city.deals[city.deals.length - 1]; const st0 = film.ops.inv.media;

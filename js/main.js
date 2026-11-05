@@ -15,7 +15,7 @@ import { teamBoxHTML, talentModal, talentStep } from './team.js';
 import { lifeHTML, lifeModal, newDinner, startDinner, dinnerHTML, money, bidBase } from './life.js';
 import { logoMark, logoFull, symbolIcon } from './brand.js';
 import { initChat, openChat, unreadFrom, inboxOf } from './chat.js';
-import { dealsToDo, dealsNeedingMe, newDealHTML, DUI } from './deals.js';
+import { dealsToDo, dealsNeedingMe, newDealHTML, deliveryRun, DUI, RUN_S } from './deals.js';
 import { mailBoxHTML, mailPageHTML, mails, isRead as mailRead, markRead } from './mail.js';
 import { profilePageHTML, portraitUrl, canView } from './profile.js';
 import { authHTML, avatarHTML, passwordHTML, secureHTML, foundHTML, foundPreview, newFound } from './onboard.js';
@@ -875,7 +875,11 @@ async function onClick(e) {
     case 'dealAccept': await act('dealAccept', { id: d.id, blid: d.co, how: d.how }); return;
     case 'dealDecline': await act('dealDecline', { id: d.id }); return;
     case 'dealWithdraw': await act('dealWithdraw', { id: d.id }); return;
-    case 'dealDeliver': await act('dealDeliver', { id: d.id }); return;
+    case 'dealDeliver': { // a 10-second drive in the browser, then the goods land in the buyer's stock
+      const id = d.id; if (DUI.run[id]) return; DUI.run[id] = Date.now(); renderAll();
+      const tick = setInterval(() => { const dl = (city().deals || []).find((x) => x.id === id); document.querySelectorAll(`[data-dealrun="${id}"]`).forEach((el) => { if (dl) el.outerHTML = deliveryRun(dl); }); }, 400);
+      setTimeout(async () => { clearInterval(tick); try { await act('dealDeliver', { id }); } finally { delete DUI.run[id]; renderAll(); } }, RUN_S * 1000);
+      return; }
     case 'assignHead': await act('assignHead', { lid: d.lid, dept: d.dept, spec: d.spec, coop: d.coop }); return;
     case 'unassignHead': await act('unassignHead', { spec: d.spec, coop: d.coop }, 'Head removed.'); return;
     case 'approveAll': await act('approveAll', {}); return;

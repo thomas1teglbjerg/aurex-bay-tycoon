@@ -59,7 +59,7 @@ export const cctx = (city) => { CCTX.city = city; return CCTX; };
 export function contacts(city, pid) { const p = city.players[pid]; if (!p) return []; const ids = new Set(p.net || []); Object.values(city.holdings || {}).forEach((h) => { if (h.members[pid]) Object.keys(h.members).forEach((id) => ids.add(id)); }); ids.delete(pid); return [...ids].filter((id) => city.players[id] && !city.players[id].bot && !city.players[id].admin); }
 export const dctx = (city) => ({ listing: (id) => listing(city, id), canRun: (pid, l) => canRun(city, pid, l), contacts: (pid) => contacts(city, pid), name: (l) => MAIL.coName(l),
   credit: (o, v) => credit(city, o, v), debit: (o, v) => debit(city, o, v), cashOf: (o) => (o.k === 'p' ? (city.players[o.id] || { cash: 0 }).cash : (city.holdings[o.id] || { treasury: 0 }).treasury),
-  book: (l, o) => CTX.book(city, l, o), truck: (sl, bl, o) => { LOG.ensureWarehouses(city); return LOG.truck(city, { ...o, from: { k: 'l', id: sl.id }, to: { k: 'l', id: bl.id }, owner: bl.owner.id, gNow: city.g }); }, mail: (pid, x) => MAIL.send(city.players[pid], { g: city.g, m: city.m, ...x }) });
+  book: (l, o) => CTX.book(city, l, o), mail: (pid, x) => MAIL.send(city.players[pid], { g: city.g, m: city.m, ...x }) });
 // the stock market's sectors, for career XP from stock profit
 const STOCK_SECTOR = { pharma: 'health', ai: 'tech', oil: 'industry', gold: 'finance', energy: 'industry', diamonds: 'finance', military: 'industry', streaming: 'media', taxi: 'service', airline: 'service', fashion: 'media', watches: 'media' };
 // a player leading this department themselves steps down (a specialist or a co-owner takes the seat, or it closes)

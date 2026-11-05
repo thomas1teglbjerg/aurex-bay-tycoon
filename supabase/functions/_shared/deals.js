@@ -1,7 +1,7 @@
 // Aurex Bay Tycoon — direct sales between tycoons.
 // A seller offers goods their company made to someone in their network (or a co-owner) at their own price.
 // The buyer picks one of their companies and a carrier, or lets the seller deliver. In that case the seller
-// gets a mail and drives the goods over in their own truck as soon as they can. The buyer pays a fixed
+// gets a mail and delivers the goods themselves (a 10-second task in the browser): they land in the buyer's stock at once. The buyer pays a fixed
 // delivery fee (DEALS.selfFee) that goes to the seller with the price.
 // Deals live in city.deals: { id, g, qty, price, from, lid, so, to, m, at, due, status, ... }
 //   status: open → shipped (carrier, or the seller delivered) | deliver (waiting for the seller) → shipped
@@ -89,13 +89,12 @@ export function deliver(city, p, a, ctx) {
   const d = ensure(city).find((x) => x.id === a.id && x.status === 'deliver'); if (!d) return err('Nothing to deliver.');
   const sl = ctx.listing(d.lid); if (!sl || !ctx.canRun(p.id, sl) || !same(sl.owner, d.so)) return err('You no longer run the company that sold it.');
   const bl = ctx.listing(d.blid); if (!bl || !same(bl.owner, d.bo)) { lapse(city, d, ctx, 'The buyer no longer owns the company it was for.'); return err('The buyer no longer owns that company. The deal is off and the money went back.'); }
-  // the seller's own truck: no carrier, no freight bill; the buyer's delivery fee goes to the seller with the price
-  const b = ctx.truck(sl, bl, { g: d.g, qty: d.qty, value: total(d) });
-  d.status = 'shipped'; d.carrier = null; d.freight = 0; d.sid = b.sh.id; d.sent = city.g;
-  pay(d, sl, d.paid, ctx); d.paid = 0; d.dby = p.id;
-  const days = Math.max(1, Math.round(b.days));
-  ctx.mail(d.to, { from: { n: p.name, r: `${ctx.name(sl)} · seller`, k: 'player', pid: p.id }, subj: `On its way: ${what(d)}`, body: `Your ${what(d)} left ${ctx.name(sl)} in my own truck. It should reach ${ctx.name(bl)} in about ${days} day${days > 1 ? 's' : ''}.`, deal: d.id, kind: 'good' });
-  return ok(`On the road in your own truck: ${r4(total(d) + (d.fee || 0))} M is yours. Arrives in about ${days} day${days > 1 ? 's' : ''}.`);
+  // the seller drives it over themselves: no carrier, no travel time, no freight bill; the buyer's delivery fee goes to the seller with the price
+  bl.ops.inv[d.g] = (bl.ops.inv[d.g] || 0) + d.qty;
+  d.status = 'delivered'; d.carrier = null; d.freight = 0; d.sent = city.g;
+  const got = d.paid; pay(d, sl, d.paid, ctx); d.paid = 0; d.dby = p.id;
+  ctx.mail(d.to, { from: { n: p.name, r: `${ctx.name(sl)} · seller`, k: 'player', pid: p.id }, subj: `Delivered: ${what(d)}`, body: `I just dropped off your ${what(d)} at ${ctx.name(bl)} myself. It is in your stock now.`, deal: d.id, kind: 'good' });
+  return ok(`Delivered to ${ctx.name(bl)}. ${r4(got)} M is yours.`);
 }
 
 // ---------------------------------------------------------------- every week: offers and deliveries that waited too long

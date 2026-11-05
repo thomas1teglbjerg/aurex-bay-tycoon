@@ -207,7 +207,7 @@ const ACTIONS = {
   dealAccept: h('Buy from a contact', 'Buy at the asked price. With a carrier you pay goods and freight now. If the seller delivers, you pay 10 k for it and your money is held until the goods leave.'),
   dealDecline: h('Buy from a contact', 'Say no. The goods go back to the seller.'),
   dealWithdraw: h('Sell to a contact', 'Take the offer back. The units return to stock.'),
-  dealDeliver: h('Deliver yourself', 'Drive the goods over in your own truck. You get the price and the 10 k delivery fee at once.'),
+  dealDeliver: h('Deliver yourself', 'Drive the goods over yourself: a 10-second trip, then they are in the buyer\'s stock and you get the price plus the 10 k delivery fee.'),
   deliverOpen: h('Orders', 'Open the delivery map to send accepted orders to your clients.'),
   order: h('Orders', 'Answer the order: accept it, reject it or ask for a better price.'),
   loan: h('Bank', 'Borrow money from the Bank of Aurex. Interest is charged every year on what you owe.'),
