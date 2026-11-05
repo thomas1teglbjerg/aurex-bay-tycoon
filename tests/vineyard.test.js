@@ -35,6 +35,11 @@ let r; do { r = L.vintage(city, l, { heads: [], name: l.title }); } while (!r.de
 const d = r.def, cid = d.id;
 assert(l.cellar.filter((x) => x.cid === cid).length === d.ed && d.ed >= 1, `${d.ed} cases of ${d.name} (${d.rarity}) in the estate cellar`);
 assert(L.available(city, cid) === 0, 'cases in the cellar are not for sale anywhere else');
+const lab = VINTAGE.labels.find((x) => x.id === d.label);
+assert(lab && lab.rarity === d.rarity && d.name === lab.name && d.pic, `bottled under a ${lab && lab.maker} label with its own picture`);
+assert(!city.life.dealer.some((x) => VINTAGE.labels.some((y) => y.id === x)), 'the house labels are never sold by the dealer');
+for (const r of ['Common', 'Rare', 'Epic', 'Legendary']) assert(VINTAGE.labels.some((x) => x.rarity === r), `a label for ${r}`);
+assert(!VINTAGE.labels.some((x) => x.maker.startsWith('Crown') && x.rarity === 'Common') && !VINTAGE.labels.some((x) => x.maker.startsWith('Bayline') && (x.rarity === 'Epic' || x.rarity === 'Legendary')), 'Bayline is everyday to mid, Crown Hills is fine wine');
 assert(Math.abs(L.itemValue(city, cid) / d.v - city.life.items[cid].f * city.life.ix.wine) < 0.01, 'a new vintage is worth its base value');
 
 // survives a save and a reload in another process

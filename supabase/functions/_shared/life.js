@@ -463,8 +463,9 @@ export function vintage(city, l, o) {
     const pool = V.models.filter((k) => k.rar.includes(rarity)), mo = pick(pool.length ? pool : V.models);
     def = { ...base, v: r4(base.v * (mo.vx || 1)), name: `${mo.name} ${pick(V.trims[rarity])}`, model: mo.id, pic: mo.pic, medium: `${mo.body} · built Y${year} by ${o.name}` };
   } else {
-    const [style, color] = pick(V.styles[rarity]);
-    def = { ...base, name: `${o.name} ${style} Y${year}`, peak: r2(g + (color === 'sparkling' ? 2 + rand() * 3 : 3 + rand() * 7)), medium: `Case of 6 · ${color} · bottled Y${year}` };
+    // a wine: one of the house labels (Bayline, Château Vaillon, Crown Hills) that comes in this rarity
+    const lab = pick(V.labels.filter((k) => k.rarity === rarity));
+    def = { ...base, name: lab.name, maker: lab.maker, label: lab.id, pic: lab.pic, peak: r2(g + (lab.color === 'sparkling' ? 2 + rand() * 3 : 3 + rand() * 7)), medium: `Case of 6 · ${lab.color} · bottled by ${o.name}, Y${year}` };
   }
   city.life.made[id] = def; ITEM[id] = def;
   city.life.items[id] = { f: r4(0.92 + rand() * 0.16), h: [] }; city.life.items[id].h.push(r4(itemValue(city, id)));

@@ -576,8 +576,8 @@ export const COLLECTIBLES = [
   { id: 'a8', cat: 'art', name: 'Neon Grid I', maker: 'Sasha Ruiz', year: 2009, rarity: 'Common', v: 0.12, ed: 5, medium: 'Screen print' },
   { id: 'a9', cat: 'art', name: 'Silver Dial', maker: 'Sasha Ruiz', year: 2014, rarity: 'Rare', v: 0.6, ed: 1, medium: 'Mixed media' },
   { id: 'w1', cat: 'wine', name: 'Château Vaillon Grand Vin 2020', maker: 'Château Vaillon', year: 2020, rarity: 'Rare', v: 0.045, ed: 12, set: 'verlaine', peak: 9, medium: 'Saint-Émilion Grand Cru · wooden case', img: '58% 62%' },
-  { id: 'w7', cat: 'wine', name: 'Château Vaillon 2010', maker: 'Château Vaillon', year: 2010, rarity: 'Rare', v: 0.05, ed: 12, set: 'verlaine', peak: 9, medium: 'Case of 6 · red' },
-  { id: 'w6', cat: 'wine', name: 'Château Vaillon 1990', maker: 'Château Vaillon', year: 1990, rarity: 'Legendary', v: 0.24, ed: 3, set: 'verlaine', peak: 2, medium: 'Case of 6 · red' },
+  { id: 'w7', cat: 'wine', name: 'Château Vaillon 2010', maker: 'Château Vaillon', year: 2010, rarity: 'Rare', v: 0.05, ed: 12, set: 'verlaine', peak: 9, medium: 'Case of 6 · red', img: 'center 40%' },
+  { id: 'w6', cat: 'wine', name: 'Château Vaillon 1990', maker: 'Château Vaillon', year: 1990, rarity: 'Legendary', v: 0.24, ed: 3, set: 'verlaine', peak: 2, medium: 'Case of 6 · red', img: 'center 40%' },
   { id: 'w2', cat: 'wine', name: 'Domaine Aubrac Grand Cru 2010', maker: 'Domaine Aubrac', year: 2010, rarity: 'Epic', v: 0.11, ed: 6, peak: 7, medium: 'Case of 6 · red' },
   { id: 'w3', cat: 'wine', name: 'Sol Alto Reserva 2015', maker: 'Bodega Sol Alto', year: 2015, rarity: 'Common', v: 0.012, ed: 40, peak: 4, medium: 'Case of 6 · red' },
   { id: 'w4', cat: 'wine', name: 'Ridgeback Cabernet 2012', maker: 'Ridgeback Estate', year: 2012, rarity: 'Rare', v: 0.03, ed: 20, peak: 5, medium: 'Case of 6 · red' },
@@ -608,7 +608,21 @@ export const VINTAGE = {
   top: { S: 'Epic', M: 'Legendary', L: 'Legendary' },
   cases: { Common: 10, Rare: 6, Epic: 3, Legendary: 1 },
   value: { Common: [0.012, 0.02], Rare: [0.025, 0.05], Epic: [0.08, 0.12], Legendary: [0.2, 0.3] },
-  styles: { Common: [['Table Red', 'red'], ['Rosé', 'rosé'], ['Coastal White', 'white']], Rare: [['Reserve', 'red'], ['Pinot Noir', 'red'], ['Brut', 'sparkling']], Epic: [['Grand Reserve', 'red'], ['Single Vineyard', 'red'], ['Blanc de Blancs', 'sparkling']], Legendary: [['Grand Cru', 'red'], ['Cuvée Héritage', 'red']] }
+  // the labels a vineyard can bottle, by rarity. Three houses: Bayline (everyday to mid), Château Vaillon (every tier), Crown Hills (only the fine end).
+  // pic = picture img/<pic>.jpg. These wines are never sold by the dealer or the auction house: only players' vineyards make them.
+  labels: [
+    { id: 'pb1', rarity: 'Common', maker: 'Bayline Vineyards', name: 'Bayline Cabernet Sauvignon 2018', color: 'red', pic: 'x-pb1' },
+    { id: 'pb2', rarity: 'Common', maker: 'Bayline Vineyards', name: 'Aurex Bay Cabernet Sauvignon 2015', color: 'red', pic: 'x-pb2' },
+    { id: 'pv1', rarity: 'Common', maker: 'Château Vaillon', name: 'Château Vaillon Saint-Émilion', color: 'red', pic: 'x-w7' },
+    { id: 'pb3', rarity: 'Rare', maker: 'Bayline Vineyards', name: 'Bayline Estate Reserve 2018', color: 'red', pic: 'x-pb3' },
+    { id: 'pb4', rarity: 'Rare', maker: 'Bayline Vineyards', name: 'Bayline Silver Edition 2020', color: 'red', pic: 'x-pb4' },
+    { id: 'pv2', rarity: 'Rare', maker: 'Château Vaillon', name: 'Château Vaillon Grand Vin', color: 'red', pic: 'x-w7' },
+    { id: 'pc1', rarity: 'Rare', maker: 'Crown Hills Vineyards', name: 'Crown Hills Cabernet Sauvignon 2018', color: 'red', pic: 'x-pc1' },
+    { id: 'pv3', rarity: 'Epic', maker: 'Château Vaillon', name: 'Château Vaillon Grand Cru Réserve', color: 'red', pic: 'x-w7' },
+    { id: 'pc2', rarity: 'Epic', maker: 'Crown Hills Vineyards', name: 'Crown Hills Cabernet Sauvignon 2000', color: 'red', pic: 'x-pc2' },
+    { id: 'pv4', rarity: 'Legendary', maker: 'Château Vaillon', name: 'Château Vaillon Grand Cru 1990', color: 'red', pic: 'x-pv4' },
+    { id: 'pc3', rarity: 'Legendary', maker: 'Crown Hills Vineyards', name: 'Crown Hills Cabernet Sauvignon 1970', color: 'red', pic: 'x-pc3' }
+  ]
 };
 // Auto repair shops build a collectible tuner car once a year for the Aurex Bay Tuner Show. Same odds model as VINTAGE;
 // the rarity picks the model (each model has the rarities it can come in) and a trim. builds = how many cars of one run.
