@@ -363,6 +363,8 @@ export const DEPTS = [
     manual: { id: 'reviewContracts', label: 'Review contracts', note: 'Go through clauses with your lawyer' },
     auto: 'Strict compliance makes this company immune to regulation fines.', without: 'Fines hit unless you review contracts yourself.' }
 ];
+// Small companies run lean: no HR, Finance, R&D or Legal. The owner looks after the few people there are.
+export const SMALL_SKIP = ['hr', 'finance', 'rnd', 'legal'];
 export const DEPT_DEFAULTS = { ops: { shifts: 1 }, procurement: { policy: 'cheapest', stock: 1, carrier: 'ridge' }, sales: { price: 'standard', b2b: 'market' }, social: { intensity: 'normal' }, hr: { wages: 'market', training: 'off' }, finance: { costs: 'normal' }, rnd: { budget: 'low' }, legal: { level: 'basic' } };
 export const WORKER = { salary: 0.08, hireFee: 0.02 };
 
@@ -766,7 +768,7 @@ export const PAPER = {
     ['The people of {co}', 'Meet the staff who keep {co} running.']
   ]
 };
-export const AD = { perWeek: 0.04, weeks: [2, 4, 8], cust: 0.015, rep: 0.5, lift: 0.004, head: 1.5, botMax: 4,
+export const AD = { perWeek: 0.04, weeks: [2, 4, 8], cust: 0.015, rep: 0.5, lift: 0.004, head: 1.5,
   tones: [['irony', 'Ironic'], ['sarcasm', 'Sarcastic'], ['wink', 'Tongue-in-cheek']] };
 // what each business sells, for the ad copy
 export const AD_NOUN = { bank: 'banking', dealer: 'cars', restaurant: 'dinner', autorepair: 'repairs', clothing: 'clothes', fashion: 'fashion', hotel: 'hotel rooms', metal: 'steel', textile: 'fabric', chemical: 'chemicals', car: 'cars', finance: 'investments', chip: 'microchips', data: 'software', pharma: 'medicine', music: 'music', film: 'films', vineyard: 'wine', newspaper: 'the news' };

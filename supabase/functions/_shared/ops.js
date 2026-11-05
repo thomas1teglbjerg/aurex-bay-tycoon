@@ -3,7 +3,7 @@
 // output, sells to customers and puts surplus supplies on the city market.
 // Bots and coops run in "managed" mode (fully staffed); human-owned companies run
 // exactly as well as their departments are staffed — or as attentive as the owner is.
-import { TYPES, SIZES, GOODS, RECIPES, DEPTS, DEPT_DEFAULTS, WORKER, MARKET_KIND, CLIENT_RULES, CLIENT_NAMES, DISTRICTS, VIP_GUESTS, DEPT_LOOK, SCENE_LOOK, INTERACTIONS, SOMMELIER } from './content.js';
+import { TYPES, SIZES, GOODS, RECIPES, DEPTS, DEPT_DEFAULTS, SMALL_SKIP, WORKER, MARKET_KIND, CLIENT_RULES, CLIENT_NAMES, DISTRICTS, VIP_GUESTS, DEPT_LOOK, SCENE_LOOK, INTERACTIONS, SOMMELIER } from './content.js';
 
 const r2 = (v) => Math.round(v * 100) / 100;
 const r4 = (v) => Math.round(v * 10000) / 10000;
@@ -15,7 +15,9 @@ export function deptFor(l, id) {
   const b = DEPT[id], x = l && DEPT_LOOK[l.type] && DEPT_LOOK[l.type][id]; if (!b || !x) return b;
   return { ...b, ...x, manual: b.manual && { ...b.manual, ...(x.manual || {}) }, settings: b.settings.map((st) => ({ ...st, ...((x.settings || {})[st.k] || {}) })) };
 }
-export const deptsFor = (l) => DEPTS.map((d) => deptFor(l, d.id));
+// which departments a company can have at all: small companies skip the four office departments
+export function deptAllowed(l, dept) { return !!DEPT[dept] && !(l && l.size === 'S' && SMALL_SKIP.includes(dept)); }
+export const deptsFor = (l) => DEPTS.filter((d) => deptAllowed(l, d.id)).map((d) => deptFor(l, d.id));
 export function interactionFor(l, task) { const b = INTERACTIONS[task], x = l && SCENE_LOOK[l.type] && SCENE_LOOK[l.type][task]; return b && x ? { ...b, ...x } : b; }
 const ECON_DEMAND = { Boom: 1.15, Stable: 1, Recession: 0.85, Crisis: 0.75 };
 const PRICE = { budget: { mult: 0.85, demand: 1.25 }, standard: { mult: 1, demand: 1 }, premium: { mult: 1.25, demand: 0.75 } };
@@ -53,7 +55,7 @@ export function newOps(l, managed) {
   const ops = { managed: !!managed, depts: { ops: { w: managed ? needWorkers(l, 'ops') : 0, set: { ...DEPT_DEFAULTS.ops }, head: null } }, inv: {}, customers: 100, rep: 50, morale: 70, rp: 0, tech: 0, eff: 1,
     pending: [], fg: 0, cur: { b2c: 0, goods: 0, sup: 0 }, hist: [], cd: {}, booksM: -1, legalUntil: -1, overtimeM: -1, board: [] };
   if (!managed) ensureClientsFor(l, ops);
-  if (managed) ['procurement', 'sales', 'social', 'hr', 'finance'].forEach((k) => (ops.depts[k] = { w: needWorkers(l, k), set: { ...DEPT_DEFAULTS[k] }, head: null }));
+  if (managed) ['procurement', 'sales', 'social', 'hr', 'finance'].filter((k) => deptAllowed(l, k)).forEach((k) => (ops.depts[k] = { w: needWorkers(l, k), set: { ...DEPT_DEFAULTS[k] }, head: null }));
   // a starter month of supplies so a new owner sees production running before the first restock
   Object.entries(RECIPES[l.type].in).forEach(([g, q]) => (ops.inv[g] = Math.ceil(q * baseCap(l) * 1.25)));
   return ops;
@@ -236,7 +238,8 @@ export function produce(city, ctx, l, m) {
     tgt -= [0, 0, 10, 20][setting(l, 'ops', 'shifts')] * (selfLv(l, 'ops') >= 9 ? 0.5 : 1);
     if (o.depts.finance && setting(l, 'finance', 'costs') === 'lean') tgt -= 8;
     if (roleOn(o.depts.hr)) tgt += 8;
-    const hr = automation(l, 'hr');
+    // a small company has no HR: the owner knows everyone and morale settles halfway as fast
+    const hr = l.size === 'S' ? 0.5 : automation(l, 'hr');
     o.morale += hr > 0 ? (tgt - o.morale) * 0.3 * hr : (tgt - 15 - o.morale) * 0.15;
     if (o.overtimeM === m) o.morale -= 8;
     o.morale = Math.max(selfLv(l, 'hr') >= 9 ? 50 : 0, Math.min(100, o.morale));
@@ -522,7 +525,7 @@ export function tasks(city, l) {
   if (automation(l, 'procurement') < 1 && coverMonths(l) < 1.05) out.push({ id: 'restock', dept: 'procurement', label: coverMonths(l) < 0.05 ? 'Production is stopped: buy supplies' : `Supplies last ${coverMonths(l).toFixed(1)} months: restock`, urgent: coverMonths(l) < 0.5 });
   if (automation(l, 'sales') < 1 && o.cd.findCustomers !== m) out.push({ id: 'findCustomers', dept: 'sales', label: hotel ? 'Find new booking partners' : 'Find new clients', interactive: true });
   if (o.depts.social && automation(l, 'social') === 0 && o.cd.postCampaign !== m) out.push({ id: 'postCampaign', dept: 'social', label: 'Shoot a marketing campaign', interactive: true });
-  if (automation(l, 'hr') === 0 && o.morale < 70 && o.cd.teamMeeting !== m) out.push({ id: 'teamMeeting', dept: 'hr', label: `Morale is ${Math.round(o.morale)}: hold a team meeting`, urgent: o.morale < 35, interactive: true });
+  if (automation(l, 'hr') === 0 && o.morale < (l.size === 'S' ? 50 : 70) && o.cd.teamMeeting !== m) out.push({ id: 'teamMeeting', dept: 'hr', label: `Morale is ${Math.round(o.morale)}: hold a team meeting`, urgent: o.morale < 35, interactive: true });
   if (o.depts.finance && automation(l, 'finance') === 0 && o.booksM !== m) out.push({ id: 'reviewBooks', dept: 'finance', label: 'Close the monthly books', interactive: true });
   if (o.depts.rnd && automation(l, 'rnd') === 0 && o.cd.runExperiment !== m) out.push({ id: 'runExperiment', dept: 'rnd', label: 'Run an R&D experiment', interactive: true });
   if (o.depts.legal && automation(l, 'legal') === 0 && o.legalUntil < m) out.push({ id: 'reviewContracts', dept: 'legal', label: 'Review contracts', interactive: true });
@@ -600,9 +603,10 @@ export function doTask(city, ctx, l, task, a = {}) {
   }
 }
 export function legallyCovered(l) {
+  if (l.size === 'S') return true; // below the auditors' threshold
   const o = l.ops; if (!o) return false; if (o.managed) return rand() < 0.5;
   const d = o.depts.legal; if (!d) return false;
   return roleOn(d) || (setting(l, 'legal', 'level') === 'strict' && automation(l, 'legal') > 0) || o.legalUntil >= o.curM;
 }
-export function cyberProtected(l) { const o = l.ops; if (!o) return false; if (o.managed) return rand() < 0.5; const d = o.depts.rnd; return !!((d && (d.head === 'anika' || automation(l, 'rnd') >= 1)) || selfLv(l, 'rnd') >= 9 || hasSp(l, 'guard')); }
+export function cyberProtected(l) { const o = l.ops; if (!o) return false; if (o.managed || l.size === 'S') return rand() < 0.5; const d = o.depts.rnd; return !!((d && (d.head === 'anika' || automation(l, 'rnd') >= 1)) || selfLv(l, 'rnd') >= 9 || hasSp(l, 'guard')); }
 export const DEPTS_BY_HEAD = Object.fromEntries(DEPTS.filter((d) => d.head).map((d) => [d.head, d.id]));
