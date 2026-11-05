@@ -239,17 +239,25 @@ function pressBox(c, l, ro, inDept) {
 }
 const AD_CATS_TXT = Object.fromEntries(Object.entries(AD_CATS).map(([k, cs]) => [k, cs.map((x) => ({ car: 'cars', wine: 'wine', watch: 'watches', art: 'art' }[x])).join(' and ')]));
 
+// fresh goods (concrete): each batch with the time it has left before it hardens
+function lotsLine(l, g) {
+  const lots = O.lotsOf(l, g, 'inv').filter((x) => x.q >= 0.5); if (!lots.length) return '';
+  const left = (x) => Math.max(0, x.at + GOODS[g].fresh - Date.now()), hrs = (ms) => ms >= 3600000 ? `${Math.floor(ms / 3600000)} h ${Math.floor(ms % 3600000 / 60000)} min` : `${Math.max(1, Math.round(ms / 60000))} min`;
+  return `<div class="chips" style="margin-top:5px;flex-wrap:wrap">${lots.slice(0, 6).map((x) => { const ms = left(x); return `<span class="chip ${ms < 6 * 3600000 ? 'bad' : ms < 24 * 3600000 ? 'warn' : ''}" title="Hardens ${esc(new Date(x.at + GOODS[g].fresh).toLocaleString())}">${N(x.q)} ${esc(GOODS[g].unit)} · ${hrs(ms)} left</span>`; }).join('')}${lots.length > 6 ? `<span class="chip">+${lots.length - 6} more</span>` : ''}</div>
+    <span style="font-size:12.5px" class="muted">Ship it within ${Math.round(GOODS[g].fresh / 3600000)} hours of mixing, or it hardens and is thrown out. The oldest batch goes first.</span>`;
+}
 // Warehouse: what the yard holds (RECIPES[type].yard: good -> most it holds); a manual plant mixes batches here
 function yardBox(c, l, ro) {
   const rec = RECIPES[l.type]; if (!rec.yard) return '';
   const o = l.ops, man = O.isManual(l), out = Object.keys(rec.out)[0], unit = out ? GOODS[out].unit : 'units';
   const row = (g, cap) => { const stock = o.inv[g] || 0, way = E.LOG.onTheWay(c, l, g), f = stock / cap, made = g in rec.out;
-    return `<div class="row"><div class="grow"><b>${esc(GOODS[g].name)}</b><span>${N(stock)} of ${N(cap)} ${esc(GOODS[g].unit)}${made ? ' finished, ready to sell' : ' in the yard'}${way ? ` · +${N(way)} on the way` : ''}</span><div class="bar" style="margin-top:4px"><i style="width:${Math.min(100, f * 100)}%;background:${made ? (f > 0.9 ? 'var(--bad)' : 'var(--gold)') : f < 0.1 ? 'var(--bad)' : f < 0.25 ? 'var(--gold)' : 'var(--good)'}"></i></div></div><span class="chip ${made ? (f > 0.9 ? 'bad' : '') : f < 0.1 ? 'bad' : f < 0.25 ? 'warn' : 'good'}">${Math.round(f * 100)}%</span></div>`; };
+    return `<div class="row"><div class="grow"><b>${esc(GOODS[g].name)}</b><span>${N(stock)} of ${N(cap)} ${esc(GOODS[g].unit)}${made ? ' finished, ready to sell' : ' in the yard'}${way ? ` · +${N(way)} on the way` : ''}</span>${made && GOODS[g].fresh ? lotsLine(l, g) : ''}<div class="bar" style="margin-top:4px"><i style="width:${Math.min(100, f * 100)}%;background:${made ? (f > 0.9 ? 'var(--bad)' : 'var(--gold)') : f < 0.1 ? 'var(--bad)' : f < 0.25 ? 'var(--gold)' : 'var(--good)'}"></i></div></div><span class="chip ${made ? (f > 0.9 ? 'bad' : '') : f < 0.1 ? 'bad' : f < 0.25 ? 'warn' : 'good'}">${Math.round(f * 100)}%</span></div>`; };
   const rows = Object.entries(rec.yard).sort(([a], [b]) => (a in rec.out) - (b in rec.out)).map(([g, cap]) => row(g, cap)).join('');
   const max = man ? O.mixMax(l) : 0, cap = Math.floor(O.capacity(l)), done = Math.round(o.mixed || 0);
   const mixer = man ? `<div class="cap" style="margin-top:8px">Mix ${esc(GOODS[out].name.toLowerCase())}</div>
-    <p class="muted" style="font-size:13px;margin:2px 0 8px">${rec.mixNote ? esc(rec.mixNote) + ' ' : ''}The plant only runs when you start a batch. Mixed this month: ${N(done)} of ${N(cap)} ${esc(unit)}.</p>
-    ${ro ? '' : `<div class="btns">${[50, 100, 250].filter((n) => n < max).map((n) => `<button class="btn sm" data-a="mixBatch" data-lid="${l.id}" data-v="${n}">Mix ${n} ${esc(unit)}</button>`).join('')}<button class="btn sm gold" data-a="mixBatch" data-lid="${l.id}" data-v="${max}" ${max < 1 ? 'disabled' : ''}>Mix ${max < 1 ? '' : `all ${N(max)} `}${esc(unit)}</button></div>`}` : '';
+    <p class="muted" style="font-size:13px;margin:2px 0 8px">${rec.mixNote ? esc(rec.mixNote) + ' ' : ''}The plant only runs when you mix. You keep the mixture right with sliders while the drum turns; if the mix fails, the batch is thrown out. Mixed this month: ${N(done)} of ${N(cap)} ${esc(unit)}.</p>
+    ${ro ? '' : o.batch ? `<div class="btns"><span class="chip warn">Mixer running · ${N(o.batch.qty)} t</span><button class="btn sm gold" data-a="mixOpen" data-lid="${l.id}">Open the mixer</button></div>`
+      : `<div class="btns" style="align-items:flex-end"><div class="field" style="margin:0"><label for="mix-qty-${l.id}" style="font-size:12.5px">Tonnes to mix</label><input id="mix-qty-${l.id}" type="number" inputmode="numeric" min="1" max="${max}" step="10" value="${Math.min(100, max)}" style="width:110px" ${max < 1 ? 'disabled' : ''}></div><button class="btn gold" data-a="mixStart" data-lid="${l.id}" ${max < 1 ? 'disabled' : ''}>Mix concrete</button><span class="muted" style="font-size:12.5px;align-self:center">Up to ${N(max)} ${esc(unit)} now · 1 second per ${esc(unit)}</span></div>`}` : '';
   return `<div class="box" id="yard-box"><h2>Warehouse<small>YARD</small></h2><div class="in"><div class="rows">${rows}</div>${mixer}
     <p class="empty" style="font-size:13px">Orders stop at what the yard holds. Buy raw materials under Production &amp; supplies.</p></div></div>`;
 }

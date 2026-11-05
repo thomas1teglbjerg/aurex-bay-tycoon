@@ -14,6 +14,7 @@ import { teamBoxHTML, talentModal, talentStep } from './team.js';
 import { lifeHTML, lifeModal, newDinner, startDinner, dinnerHTML, money, bidBase } from './life.js';
 import { logoMark, logoFull, symbolIcon } from './brand.js';
 import { initChat, openChat, unreadFrom, inboxOf } from './chat.js';
+import { openMixer } from './mixer.js';
 import { dealsToDo, dealsNeedingMe, newDealHTML, deliveryRun, DUI, RUN_S } from './deals.js';
 import { mailBoxHTML, mailPageHTML, mails, isRead as mailRead, markRead } from './mail.js';
 import { profilePageHTML, portraitUrl, canView } from './profile.js';
@@ -846,7 +847,8 @@ async function onClick(e) {
     }
     case 'order': await act('order', { lid: d.lid, op: d.op, oid: d.oid, ask: Number(d.ask) || undefined }); return;
     case 'buyQty': UI.buyQty[d.g] = Math.max(10, (UI.buyQty[d.g] || Number(t.parentElement.querySelector('output').textContent)) + Number(d.v)); renderPanel(); return;
-    case 'mixBatch': await act('mixBatch', { lid: d.lid, qty: Number(d.v) }); return;
+    case 'mixStart': { const inp = document.getElementById('mix-qty-' + d.lid), r = await act('mixStart', { lid: d.lid, qty: Number(inp && inp.value) || 0 }); if (r && r.ok) openMixer(d.lid, act); return; }
+    case 'mixOpen': openMixer(d.lid, act); return;
     case 'buySupply': await act('buySupply', { lid: d.lid, g: d.g, qty: Number(d.q), carrier: d.c }); return;
     case 'carrier': UI.carrier[d.lid] = d.v; renderPanel(); return;
     case 'acctPeriod': UI.acct = UI.acct || {}; UI.acct[d.lid] = d.v; renderPanel(); return;

@@ -468,6 +468,7 @@ export function advance(city, now) {
   Object.values(city.players).forEach((p) => { if (!p.bot && !p.admin && !(p.career && p.career.seeded)) CAR.seed(city, p, cctx(city)); });
   mailSync(city);
   if (city.over) return;
+  city.listings.forEach((l) => OPS.freshStep(city, CTX, l, now));
   const target = gameTime(city, now);
   let loops = 0;
   // the city moves in weekly steps (4 per game month); every 4th step closes the month
@@ -1204,7 +1205,7 @@ function applyAs(city, pid, p, action, a, now) {
     }
     case 'fire': { p.staff = p.staff.filter((s) => s !== a.id); unassign(city, p, a.id); return ok(); }
     // ---------------- company management (human-owned companies)
-    case 'deptOpen': case 'deptClose': case 'workers': case 'deptSet': case 'task': case 'listGoods': case 'mixBatch': case 'exportGoods': case 'assignHead': case 'order': case 'buySupply': {
+    case 'deptOpen': case 'deptClose': case 'workers': case 'deptSet': case 'task': case 'listGoods': case 'mixStart': case 'mixEnd': case 'exportGoods': case 'assignHead': case 'order': case 'buySupply': {
       const l = listing(city, a.lid); if (!l || !canRun(city, pid, l)) return err('You do not run this company.');
       if (!l.ops) l.ops = OPS.newOps(l, false);
       // a coop's company is paid for from the coop treasury, not the pocket of the owner pressing the button
@@ -1222,7 +1223,8 @@ function applyAs(city, pid, p, action, a, now) {
       if (action === 'deptSet') { const dd = o.depts[a.dept]; if (!dd) return err('Open the department first.'); const st = d.settings.find((x) => x.k === a.k); if (!st || !st.opts.some(([v]) => String(v) === String(a.v))) return err('Unknown setting.'); dd.set[a.k] = st.opts.find(([v]) => String(v) === String(a.v))[0]; return ok(); }
       if (action === 'task') { const r = OPS.doTask(city, CTX, l, a.task, a); if (r && r.ok) CAR.task(city, p, l, a.task, cctx(city)); return r; }
       if (action === 'order') { const r = OPS.orderAction(city, CTX, l, a.op, a); if (r && r.ok && a.op === 'deliver') CAR.task(city, p, l, 'deliver', cctx(city)); return r; }
-      if (action === 'mixBatch') return OPS.mix(l, a.qty);
+      if (action === 'mixStart') return OPS.mixStart(l, a.qty, now);
+      if (action === 'mixEnd') return OPS.mixEnd(l, a.ok === true, now);
       if (action === 'buySupply') return OPS.buySupply(city, CTX, l, a.g, Number(a.qty) || 1, LOG.CARRIER[a.carrier] ? a.carrier : undefined);
       if (action === 'listGoods') { const g = a.g; if (!GOODS[g]) return err('Unknown supply.'); const qty = Math.min(Number(a.qty) || o.inv[g] || 0, o.inv[g] || 0); if (qty < 1) return err('Nothing in stock.'); const price = Number(a.price) || city.market[g].p; OPS.listGoods(city, l, g, qty, price, false); return ok(`Listed ${Math.round(qty)} ${GOODS[g].unit} of ${GOODS[g].name.toLowerCase()} at ${(price * 1000).toFixed(1)} k each.`); }
       if (action === 'exportGoods') { const g = a.g; if (!GOODS[g]) return err('Unknown supply.'); const cid = LOG.CARRIER[a.carrier] ? a.carrier : OPS.setting(l, 'procurement', 'carrier'); const r = OPS.exportGoods(city, CTX, l, g, Number(a.qty) || o.inv[g] || 0, cid); if (!r) return err('Nothing in stock.'); return ok(`Export booked with ${LOG.CARRIER[cid].name}. ${r.value} M arrives on delivery in about ${Math.round(r.days)} days (freight $${Math.round(r.freight * 1000)}k).`); }

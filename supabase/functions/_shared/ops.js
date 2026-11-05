@@ -57,15 +57,61 @@ export const yardRoom = (city, ctx, l, g) => Math.max(0, yardCap(l, g) - ((l.ops
 // manual plants (RECIPES[type].manual) only produce when the owner mixes a batch; bot-run ones still run by the month
 export const isManual = (l) => !!RECIPES[l.type].manual && !!l.ops && !l.ops.managed;
 export function mixMax(l) { const o = l.ops, rec = RECIPES[l.type]; let n = Math.max(0, capacity(l) - (o.mixed || 0)); Object.entries(rec.in).forEach(([g, q]) => { n = Math.min(n, (o.inv[g] || 0) / q); }); Object.entries(rec.out).forEach(([g, q]) => { n = Math.min(n, Math.max(0, yardCap(l, g) - (o.inv[g] || 0)) / q); }); return Math.floor(n); }
-export function mix(l, qty) {
+// hand mixing (manual plants): the supplies go into the mixer at the start, the owner keeps the mixture right in
+// the browser for MIX.perT seconds per tonne (js/mixer.js), then mixEnd pours finished stock or throws the batch out
+export const MIX = { perT: 1, grace: 5 * 60 * 1000 };
+export const mixDue = (b) => b.at + b.qty * MIX.perT * 1000;
+export function mixStart(l, qty, now) {
   const o = l.ops, rec = RECIPES[l.type]; if (!isManual(l)) return { ok: false, msg: 'This company runs by itself.' };
+  if (o.batch && now < mixDue(o.batch) + MIX.grace) return { ok: false, msg: 'The mixer is already running.' };
+  o.batch = null; // a batch left in the mixer too long has set and is lost
   const max = mixMax(l), n = Math.min(Math.floor(Number(qty) || 0), max);
   if (n < 1) return { ok: false, msg: capacity(l) - (o.mixed || 0) < 1 ? 'The mixers are booked out this month.' : Object.keys(rec.out).some((g) => yardCap(l, g) - (o.inv[g] || 0) < 1) ? 'The yard is full of finished stock. Sell some first.' : `Not enough ${Object.entries(rec.in).filter(([g, q]) => (o.inv[g] || 0) < q).map(([g]) => GOODS[g].name.toLowerCase()).join(', ') || 'supplies'} for a batch.` };
   Object.entries(rec.in).forEach(([g, q]) => { o.inv[g] = Math.max(0, (o.inv[g] || 0) - q * n); });
-  Object.entries(rec.out).forEach(([g, q]) => { o.inv[g] = (o.inv[g] || 0) + q * n; });
-  o.fg = (o.fg || 0) + n; o.mixed = (o.mixed || 0) + n;
-  return { ok: true, msg: `Mixed ${n} ${Object.keys(rec.out).map((g) => GOODS[g].unit).join('') || 'units'} of ${Object.keys(rec.out).map((g) => GOODS[g].name.toLowerCase()).join(', ')}.`, n };
+  o.mixed = (o.mixed || 0) + n; o.batch = { qty: n, at: now };
+  return { ok: true, msg: `The mixer is running: ${n} t. Keep the mixture right for ${n * MIX.perT} seconds.`, n };
 }
+export function mixEnd(l, good, now) {
+  const o = l.ops, rec = RECIPES[l.type], b = o.batch; if (!b) return { ok: false, msg: 'There is no batch in the mixer.' };
+  const what = Object.keys(rec.out).map((g) => GOODS[g].name.toLowerCase()).join(', ');
+  if (!good) { o.batch = null; return { ok: true, msg: `The mix went wrong: ${b.qty} t of ${what} was thrown out.`, ruined: true }; }
+  if (now < mixDue(b) - 2000) return { ok: false, msg: 'The batch is still mixing.' };
+  o.batch = null;
+  if (now > mixDue(b) + MIX.grace) return { ok: true, msg: `The batch set in the mixer: ${b.qty} t of ${what} was thrown out.`, ruined: true };
+  Object.entries(rec.out).forEach(([g, q]) => { o.inv[g] = Math.min(yardCap(l, g), (o.inv[g] || 0) + q * b.qty); });
+  o.fg = (o.fg || 0) + b.qty;
+  Object.keys(rec.out).filter((g) => GOODS[g].fresh).forEach((g) => { lotsOf(l, g, 'inv').push({ q: rec.out[g] * b.qty, at: now }); lotsOf(l, g, 'fg').push({ q: b.qty, at: now }); });
+  return { ok: true, msg: `${b.qty} t of ${what} is ready in the yard. Ship it within ${Math.round(GOODS[Object.keys(rec.out)[0]].fresh / 3600000)} hours before it hardens.`, n: b.qty };
+}
+// fresh goods (GOODS[g].fresh): each batch is a lot with its time. Whatever leaves the yard (orders, market,
+// exports, deals) comes off the oldest lot first; a lot past its time hardens and is thrown out.
+// Two pools are kept: the supply stock (inv[g]) and the finished stock for customer orders (fg).
+export const freshGoods = (l) => Object.keys(RECIPES[l.type].out).filter((g) => GOODS[g].fresh);
+export function lotsOf(l, g, pool) { const o = l.ops; o.lots = o.lots || {}; o.lots[g] = o.lots[g] || {}; return (o.lots[g][pool] = o.lots[g][pool] || []); }
+function syncLots(lots, have, now) {
+  let sum = lots.reduce((a, x) => a + x.q, 0);
+  if (have > sum + 1e-6) { lots.push({ q: have - sum, at: now }); return; }
+  let gone = sum - have; while (gone > 1e-6 && lots.length) { const x = lots[0], d = Math.min(x.q, gone); x.q -= d; gone -= d; if (x.q <= 1e-6) lots.shift(); }
+}
+export function freshStep(city, ctx, l, now) {
+  const o = l.ops; if (!o) return; const lost = {};
+  freshGoods(l).forEach((g) => {
+    const life = GOODS[g].fresh, offers = (city.book || []).filter((x) => x.lid === l.id && x.g === g);
+    // concrete listed on the city market still sits in the yard until a buyer takes it
+    const listed = () => offers.reduce((a, x) => a + x.qty, 0);
+    const pools = [['inv', () => (o.inv[g] || 0) + listed(), (d) => { const a = Math.min(d, o.inv[g] || 0); o.inv[g] = (o.inv[g] || 0) - a; d -= a; offers.forEach((x) => { const b = Math.min(d, x.qty); x.qty -= b; d -= b; }); }],
+      ['fg', () => o.fg || 0, (d) => { o.fg = Math.max(0, (o.fg || 0) - d); }]];
+    pools.forEach(([pool, have, take]) => {
+      const lots = lotsOf(l, g, pool); syncLots(lots, have(), now);
+      let old = 0; while (lots.length && now - lots[0].at >= life) old += lots.shift().q;
+      if (old > 0) { take(old); if (pool === 'inv') lost[g] = old; }
+    });
+  });
+  if (city.book) city.book = city.book.filter((x) => x.qty > 0.001);
+  Object.entries(lost).forEach(([g, q]) => { if (q >= 0.5 && ctx && ctx.notify) ctx.notify(city, l, `${Math.round(q)} ${GOODS[g].unit} of ${GOODS[g].name.toLowerCase()} hardened at ${l.title || TYPES[l.type].name}`, `It was not shipped within ${Math.round(GOODS[g].fresh / 3600000)} hours and was thrown out.`, 'bad'); });
+}
+// the oldest finished batch that still waits in the yard: when it hardens (ms), or null
+export function nextHardens(l) { const g = freshGoods(l)[0]; if (!g || !l.ops) return null; const a = lotsOf(l, g, 'inv')[0], b = lotsOf(l, g, 'fg')[0], t = [a, b].filter(Boolean).map((x) => x.at); return t.length ? Math.min(...t) + GOODS[g].fresh : null; }
 // a yard company that never had its starting stock (older saves): fill each raw material to half
 export function fillYard(l) { const rec = RECIPES[l.type], y = rec.yard; if (!y || !l.ops || l.ops.yardV) return; Object.entries(y).forEach(([g, cap]) => { if (g in rec.in) l.ops.inv[g] = Math.max(l.ops.inv[g] || 0, cap / 2); }); l.ops.yardV = 1; }
 export function newOps(l, managed) {
