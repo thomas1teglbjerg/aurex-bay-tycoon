@@ -29,7 +29,7 @@ assert(l.ops.last.units === 0 && !l.ops.mixed, `two months pass and nothing is m
 Object.assign(l.ops.inv, { cement: 500, gravel: 2000, sand: 1000, water: 50, energy: 10 });
 const r = E.apply(city, 'u', 'mixStart', { lid: l.id, qty: 75 }, t), used = (g, start) => Math.round((start - l.ops.inv[g]) * 100) / 100;
 assert(r.ok && !l.ops.inv.concrete && used('cement', 500) === 10 && used('sand', 1000) === 20 && used('gravel', 2000) === 40 && used('water', 50) === 5 && used('energy', 10) === 1.5, `75 t takes 10 t cement, 20 sand, 40 gravel, 5 water and 1.5 MWh into the mixer (${r.msg})`);
-assert(O.mixMax(l) <= O.capacity(l) - 75, 'a month mixes at most what the plant can make');
+assert(O.mixMax(l) <= O.mixCap(l) - 75, 'a month mixes at most what the plant can make');
 assert(!E.apply(city, 'u', 'mixStart', { lid: l.id, qty: 10 }, t + 1000).ok, 'one batch at a time');
 assert(!E.apply(city, 'u', 'mixEnd', { lid: l.id, ok: true }, t + 30_000).ok && l.ops.batch, 'a batch cannot finish before 1 second per tonne');
 let e = E.apply(city, 'u', 'mixEnd', { lid: l.id, ok: true }, t + 75_000);
@@ -45,7 +45,12 @@ assert(b.ok && Math.abs(E.LOG.onTheWay(city, l, 'cement') + l.ops.inv.cement - 1
 assert(!E.apply(city, 'u', 'buySupply', { lid: l.id, g: 'cement', qty: 10 }, t).ok, 'a full yard refuses more');
 // an older save: the plant gets its starting stock once
 const ops = l.ops; delete ops.yardV; ops.inv.sand = 3; E.advance(city, t + 1);
-assert(ops.inv.sand === 1000 && ops.yardV === 1, 'older saves fill the yard to half once');
+assert(ops.inv.sand === 1000 && ops.yardV === 2, 'older saves fill the yard to half once');
+ops.yardV = 1; ops.inv.water = 0; ops.inv.sand = 3; O.fillYard(l);
+assert(ops.inv.water > 0 && ops.inv.sand === 3 && ops.yardV === 2, 'a plant bought before water was in the recipe gets a starter month of water');
+ops.depts.ops.w = 0; ops.mixed = 0; ops.batch = null; ops.inv.concrete = 0; Object.assign(ops.inv, { cement: 500, sand: 1000, gravel: 2000, water: 100, energy: 30 });
+assert(O.mixMax(l) >= Math.floor(O.baseCap(l)) - 1 && !O.mixBlock(l), `no staff needed to mix (${O.mixMax(l)} t)`);
+ops.inv.water = 0; assert(/water/.test(O.mixBlock(l)), 'the box says what is missing'); ops.inv.water = 100;
 // fresh concrete: 48 real hours to ship it, oldest batch first, then it hardens
 { const H = 3600 * 1000, T = 2_000_000_000_000, o = l.ops, notes = [], ctx = { notify: (c, x, t) => notes.push(t) };
   o.inv.concrete = 0; o.fg = 0; o.lots = {}; o.batch = null; o.mixed = 0;

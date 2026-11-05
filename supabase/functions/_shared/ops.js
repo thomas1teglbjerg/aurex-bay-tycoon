@@ -56,7 +56,17 @@ export const yardCap = (l, g) => { const y = RECIPES[l.type].yard; return y && y
 export const yardRoom = (city, ctx, l, g) => Math.max(0, yardCap(l, g) - ((l.ops && l.ops.inv[g]) || 0) - (ctx && ctx.onTheWay ? ctx.onTheWay(city, l, g) : 0));
 // manual plants (RECIPES[type].manual) only produce when the owner mixes a batch; bot-run ones still run by the month
 export const isManual = (l) => !!RECIPES[l.type].manual && !!l.ops && !l.ops.managed;
-export function mixMax(l) { const o = l.ops, rec = RECIPES[l.type]; let n = Math.max(0, capacity(l) - (o.mixed || 0)); Object.entries(rec.in).forEach(([g, q]) => { n = Math.min(n, (o.inv[g] || 0) / q); }); Object.entries(rec.out).forEach(([g, q]) => { n = Math.min(n, Math.max(0, yardCap(l, g) - (o.inv[g] || 0)) / q); }); return Math.floor(n); }
+// the owner mixes by hand, so a manual plant needs no staff: a month holds the plant's full base capacity
+export const mixCap = (l) => baseCap(l);
+export function mixMax(l) { const o = l.ops, rec = RECIPES[l.type]; let n = Math.max(0, mixCap(l) - (o.mixed || 0)); Object.entries(rec.in).forEach(([g, q]) => { n = Math.min(n, (o.inv[g] || 0) / q); }); Object.entries(rec.out).forEach(([g, q]) => { n = Math.min(n, Math.max(0, yardCap(l, g) - (o.inv[g] || 0)) / q); }); return Math.floor(n); }
+// why nothing can be mixed right now, or null
+export function mixBlock(l) {
+  const o = l.ops, rec = RECIPES[l.type];
+  if (mixCap(l) - (o.mixed || 0) < 1) return 'The mixers are booked out this month.';
+  if (Object.keys(rec.out).some((g) => yardCap(l, g) - (o.inv[g] || 0) < 1)) return 'The yard is full of finished stock. Sell some first.';
+  const short = Object.entries(rec.in).filter(([g, q]) => (o.inv[g] || 0) < q).map(([g]) => GOODS[g].name.toLowerCase());
+  return short.length ? `Not enough ${short.join(' and ')} for a batch. Buy more under Production & supplies.` : null;
+}
 // hand mixing (manual plants): the supplies go into the mixer at the start, the owner keeps the mixture right in
 // the browser for MIX.perT seconds per tonne (js/mixer.js), then mixEnd pours finished stock or throws the batch out
 export const MIX = { perT: 1, grace: 5 * 60 * 1000 };
@@ -66,7 +76,7 @@ export function mixStart(l, qty, now) {
   if (o.batch && now < mixDue(o.batch) + MIX.grace) return { ok: false, msg: 'The mixer is already running.' };
   o.batch = null; // a batch left in the mixer too long has set and is lost
   const max = mixMax(l), n = Math.min(Math.floor(Number(qty) || 0), max);
-  if (n < 1) return { ok: false, msg: capacity(l) - (o.mixed || 0) < 1 ? 'The mixers are booked out this month.' : Object.keys(rec.out).some((g) => yardCap(l, g) - (o.inv[g] || 0) < 1) ? 'The yard is full of finished stock. Sell some first.' : `Not enough ${Object.entries(rec.in).filter(([g, q]) => (o.inv[g] || 0) < q).map(([g]) => GOODS[g].name.toLowerCase()).join(', ') || 'supplies'} for a batch.` };
+  if (n < 1) return { ok: false, msg: mixBlock(l) || 'Nothing can be mixed right now.' };
   Object.entries(rec.in).forEach(([g, q]) => { o.inv[g] = Math.max(0, (o.inv[g] || 0) - q * n); });
   o.mixed = (o.mixed || 0) + n; o.batch = { qty: n, at: now };
   return { ok: true, msg: `The mixer is running: ${n} t. Keep the mixture right for ${n * MIX.perT} seconds.`, n };
@@ -113,7 +123,11 @@ export function freshStep(city, ctx, l, now) {
 // the oldest finished batch that still waits in the yard: when it hardens (ms), or null
 export function nextHardens(l) { const g = freshGoods(l)[0]; if (!g || !l.ops) return null; const a = lotsOf(l, g, 'inv')[0], b = lotsOf(l, g, 'fg')[0], t = [a, b].filter(Boolean).map((x) => x.at); return t.length ? Math.min(...t) + GOODS[g].fresh : null; }
 // a yard company that never had its starting stock (older saves): fill each raw material to half
-export function fillYard(l) { const rec = RECIPES[l.type], y = rec.yard; if (!y || !l.ops || l.ops.yardV) return; Object.entries(y).forEach(([g, cap]) => { if (g in rec.in) l.ops.inv[g] = Math.max(l.ops.inv[g] || 0, cap / 2); }); l.ops.yardV = 1; }
+// v2: supplies outside the yard (water, power) get the usual starter month once, for plants bought before they were in the recipe
+export function fillYard(l) { const rec = RECIPES[l.type], y = rec.yard; if (!y || !l.ops || l.ops.yardV >= 2) return; const o = l.ops;
+  if (!o.yardV) Object.entries(y).forEach(([g, cap]) => { if (g in rec.in) o.inv[g] = Math.max(o.inv[g] || 0, cap / 2); });
+  Object.entries(rec.in).forEach(([g, q]) => { if (!(g in y)) o.inv[g] = Math.max(o.inv[g] || 0, Math.ceil(q * baseCap(l) * 1.25)); });
+  o.yardV = 2; }
 export function newOps(l, managed) {
   const ops = { managed: !!managed, depts: { ops: { w: managed ? needWorkers(l, 'ops') : 0, set: { ...DEPT_DEFAULTS.ops }, head: null } }, inv: {}, customers: 100, rep: 50, morale: 70, rp: 0, tech: 0, eff: 1,
     pending: [], fg: 0, cur: { b2c: 0, goods: 0, sup: 0 }, hist: [], cd: {}, booksM: -1, legalUntil: -1, overtimeM: -1, board: [] };
@@ -122,7 +136,7 @@ export function newOps(l, managed) {
   // a starter month of supplies so a new owner sees production running before the first restock
   Object.entries(RECIPES[l.type].in).forEach(([g, q]) => (ops.inv[g] = Math.ceil(q * baseCap(l) * 1.25)));
   // a yard starts half full
-  Object.entries(RECIPES[l.type].yard || {}).forEach(([g, cap]) => { if (g in RECIPES[l.type].in) ops.inv[g] = cap / 2; }); if (RECIPES[l.type].yard) ops.yardV = 1;
+  Object.entries(RECIPES[l.type].yard || {}).forEach(([g, cap]) => { if (g in RECIPES[l.type].in) ops.inv[g] = cap / 2; }); if (RECIPES[l.type].yard) ops.yardV = 2;
   return ops;
 }
 function ensureClientsFor(l, ops) { const t = l.ops; l.ops = ops; ensureClients(l); l.ops = t; }
