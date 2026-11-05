@@ -118,7 +118,7 @@ export function companyHTML(lid, ui = {}) {
 
   const inputs = Object.entries(rec.in).map(([g]) => { const mk = c.market[g], stock = o.inv[g] || 0, n = need[g] || 0, cover = n ? stock / n : 99, way = E.LOG.onTheWay(c, l, g);
     const q = (ui.buyQty && ui.buyQty[g]) || Math.max(10, Math.ceil(n / 10) * 10), cid = (ui.carrier && ui.carrier[l.id]) || O.setting(l, 'procurement', 'carrier'), qt = O.quote(c, l, g, q, o.depts.procurement ? O.setting(l, 'procurement', 'policy') : 'cheapest', cid);
-    return `<div class="suprow"><div class="supg"><b>${esc(GOODS[g].name)}</b><span>Need ${N(n)} ${esc(GOODS[g].unit)}/mo · stock ${N(stock)}${way ? ` (+${N(way)} on the way)` : ''} · <em class="${cover < 1 ? 'down' : ''}">${cover >= 99 ? '' : cover.toFixed(1) + ' months'}</em></span><span>Market ${K(mk.p)} · import ${K(O.importPrice(c, g))}</span></div>
+    return `<div class="suprow"><div class="supg"><b>${esc(GOODS[g].name)}</b><span>${O.isManual(l) ? `${+rec.in[g].toFixed(3)} ${esc(GOODS[g].unit)} per ${esc(rec.unit.split(' ')[0])} made · stock ${N(stock)}${O.yardCap(l, g) < Infinity ? ` of ${N(O.yardCap(l, g))}` : ''}${way ? ` (+${N(way)} on the way)` : ''}` : `Need ${N(n)} ${esc(GOODS[g].unit)}/mo · stock ${N(stock)}${way ? ` (+${N(way)} on the way)` : ''} · <em class="${cover < 1 ? 'down' : ''}">${cover >= 99 ? '' : cover.toFixed(1) + ' months'}</em>`}</span><span>Market ${K(mk.p)} · import ${K(O.importPrice(c, g))}</span></div>
       ${ro ? '' : `<div class="supctl"><div class="stepper"><button data-a="buyQty" data-g="${g}" data-v="-10" aria-label="Fewer">−</button><output class="num">${q}</output><button data-a="buyQty" data-g="${g}" data-v="10" aria-label="More">+</button></div><button class="btn sm navy" data-a="buySupply" data-lid="${l.id}" data-g="${g}" data-q="${q}" data-c="${cid}">Order · ${money(qt.cost)}</button></div><span class="supnote">${money(qt.goods)} goods + ${money(qt.freight)} freight · ${qt.minDays === qt.maxDays ? qt.maxDays : `${qt.minDays}–${qt.maxDays}`} days${qt.fromBook ? ` · ${N(qt.fromBook)} from players` : ''}${qt.imported ? ` · ${N(qt.imported)} imported` : ''}</span>`}</div>`; }).join('');
   const outs = Object.entries(rec.out).map(([g, q]) => { const mk = c.market[g], stock = o.inv[g] || 0;
     return `<tr><td><b>${esc(GOODS[g].name)}</b><span>${esc(GOODS[g].unit)}</span></td><td class="num">${N(q * last.units)}</td><td class="num">${N(stock)}</td><td class="num">${K(mk.p)}</td><td>${ro ? '' : `<div class="btns" style="flex-wrap:nowrap;gap:6px;justify-content:flex-end"><button class="btn sm" data-a="listGoods" data-lid="${l.id}" data-g="${g}" ${stock < 1 ? 'disabled' : ''}>List all</button><button class="btn sm" data-a="exportGoods" data-lid="${l.id}" data-g="${g}" data-c="${(ui.carrier && ui.carrier[l.id]) || O.setting(l, 'procurement', 'carrier')}" ${stock < 1 ? 'disabled' : ''}>Export at ${K(O.exportPrice(c, g))}</button><button class="btn sm gold" data-a="dealNew" data-lid="${l.id}" data-g="${g}" ${stock < 1 ? 'disabled' : ''}>Sell to a contact</button></div>`}</td></tr>`; }).join('');
@@ -153,7 +153,7 @@ export function companyHTML(lid, ui = {}) {
     <div class="col">
       ${ro ? '' : `<div class="box"><h2>To-do<small>${tasks.length}</small></h2><div class="in">${taskHTML}<p class="empty" style="font-size:13px">Tasks appear when a department has no staff. Hire workers to hand the work over.</p></div></div>`}
       ${cellarBox(c, l, ro)}
-      ${yardBox(c, l)}
+      ${yardBox(c, l, ro)}
       ${newsroomBox(c, l, ro)}
       ${o.depts.social && !ro ? '' : adBox(c, l, ro, ui)}
       ${o.depts.social ? '' : pressBox(c, l, ro)}
@@ -239,14 +239,19 @@ function pressBox(c, l, ro, inDept) {
 }
 const AD_CATS_TXT = Object.fromEntries(Object.entries(AD_CATS).map(([k, cs]) => [k, cs.map((x) => ({ car: 'cars', wine: 'wine', watch: 'watches', art: 'art' }[x])).join(' and ')]));
 
-// Warehouse: raw materials in the yard (RECIPES[type].yard) and finished stock, with months of cover
-function yardBox(c, l) {
+// Warehouse: what the yard holds (RECIPES[type].yard: good -> most it holds); a manual plant mixes batches here
+function yardBox(c, l, ro) {
   const rec = RECIPES[l.type]; if (!rec.yard) return '';
-  const o = l.ops, need = O.needsPerMonth(l), rows = rec.yard.map((g) => { const stock = o.inv[g] || 0, n = need[g] || 0, cover = n ? stock / n : 99, way = E.LOG.onTheWay(c, l, g);
-    return `<div class="row"><div class="grow"><b>${esc(GOODS[g].name)}</b><span>${N(stock)} ${esc(GOODS[g].unit)} in stock${way ? ` · +${N(way)} on the way` : ''} · uses ${N(n)} ${esc(GOODS[g].unit)}/mo</span><div class="bar" style="margin-top:4px"><i style="width:${Math.min(100, cover / 3 * 100)}%;background:${cover < 1 ? 'var(--bad)' : cover < 2 ? 'var(--gold)' : 'var(--good)'}"></i></div></div><span class="chip ${cover < 1 ? 'bad' : cover < 2 ? 'warn' : 'good'}">${cover >= 99 ? 'not used' : cover.toFixed(1) + ' months'}</span></div>`; }).join('');
-  const made = Object.keys(rec.out).map((g) => `<div class="row"><div class="grow"><b>${esc(GOODS[g].name)}</b><span>finished, ready to sell</span></div><b class="num">${N(o.inv[g] || 0)} ${esc(GOODS[g].unit)}</b></div>`).join('');
-  return `<div class="box" id="yard-box"><h2>Warehouse<small>RAW MATERIALS</small></h2><div class="in"><div class="rows">${rows}${made}</div>
-    <p class="empty" style="font-size:13px">The bar is full at 3 months of stock. Order more under Production &amp; supplies.</p></div></div>`;
+  const o = l.ops, man = O.isManual(l), out = Object.keys(rec.out)[0], unit = out ? GOODS[out].unit : 'units';
+  const row = (g, cap) => { const stock = o.inv[g] || 0, way = E.LOG.onTheWay(c, l, g), f = stock / cap, made = g in rec.out;
+    return `<div class="row"><div class="grow"><b>${esc(GOODS[g].name)}</b><span>${N(stock)} of ${N(cap)} ${esc(GOODS[g].unit)}${made ? ' finished, ready to sell' : ' in the yard'}${way ? ` · +${N(way)} on the way` : ''}</span><div class="bar" style="margin-top:4px"><i style="width:${Math.min(100, f * 100)}%;background:${made ? (f > 0.9 ? 'var(--bad)' : 'var(--gold)') : f < 0.1 ? 'var(--bad)' : f < 0.25 ? 'var(--gold)' : 'var(--good)'}"></i></div></div><span class="chip ${made ? (f > 0.9 ? 'bad' : '') : f < 0.1 ? 'bad' : f < 0.25 ? 'warn' : 'good'}">${Math.round(f * 100)}%</span></div>`; };
+  const rows = Object.entries(rec.yard).sort(([a], [b]) => (a in rec.out) - (b in rec.out)).map(([g, cap]) => row(g, cap)).join('');
+  const max = man ? O.mixMax(l) : 0, cap = Math.floor(O.capacity(l)), done = Math.round(o.mixed || 0);
+  const mixer = man ? `<div class="cap" style="margin-top:8px">Mix ${esc(GOODS[out].name.toLowerCase())}</div>
+    <p class="muted" style="font-size:13px;margin:2px 0 8px">${rec.mixNote ? esc(rec.mixNote) + ' ' : ''}The plant only runs when you start a batch. Mixed this month: ${N(done)} of ${N(cap)} ${esc(unit)}.</p>
+    ${ro ? '' : `<div class="btns">${[50, 100, 250].filter((n) => n < max).map((n) => `<button class="btn sm" data-a="mixBatch" data-lid="${l.id}" data-v="${n}">Mix ${n} ${esc(unit)}</button>`).join('')}<button class="btn sm gold" data-a="mixBatch" data-lid="${l.id}" data-v="${max}" ${max < 1 ? 'disabled' : ''}>Mix ${max < 1 ? '' : `all ${N(max)} `}${esc(unit)}</button></div>`}` : '';
+  return `<div class="box" id="yard-box"><h2>Warehouse<small>YARD</small></h2><div class="in"><div class="rows">${rows}</div>${mixer}
+    <p class="empty" style="font-size:13px">Orders stop at what the yard holds. Buy raw materials under Production &amp; supplies.</p></div></div>`;
 }
 // companies that make a collectible once a year (CRAFT): vineyard wine in the estate cellar, tuner cars in the workshop garage
 function cellarBox(c, l, ro) {

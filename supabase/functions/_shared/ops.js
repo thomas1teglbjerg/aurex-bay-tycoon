@@ -51,6 +51,23 @@ export function deptState(l, dept) {
   return a >= 1 ? 'auto' : a > 0 ? 'partial' : 'manual';
 }
 
+// the yard: most a company can hold of a raw material (RECIPES[type].yard), Infinity when it has no limit
+export const yardCap = (l, g) => { const y = RECIPES[l.type].yard; return y && y[g] != null ? y[g] : Infinity; };
+export const yardRoom = (city, ctx, l, g) => Math.max(0, yardCap(l, g) - ((l.ops && l.ops.inv[g]) || 0) - (ctx && ctx.onTheWay ? ctx.onTheWay(city, l, g) : 0));
+// manual plants (RECIPES[type].manual) only produce when the owner mixes a batch; bot-run ones still run by the month
+export const isManual = (l) => !!RECIPES[l.type].manual && !!l.ops && !l.ops.managed;
+export function mixMax(l) { const o = l.ops, rec = RECIPES[l.type]; let n = Math.max(0, capacity(l) - (o.mixed || 0)); Object.entries(rec.in).forEach(([g, q]) => { n = Math.min(n, (o.inv[g] || 0) / q); }); Object.entries(rec.out).forEach(([g, q]) => { n = Math.min(n, Math.max(0, yardCap(l, g) - (o.inv[g] || 0)) / q); }); return Math.floor(n); }
+export function mix(l, qty) {
+  const o = l.ops, rec = RECIPES[l.type]; if (!isManual(l)) return { ok: false, msg: 'This company runs by itself.' };
+  const max = mixMax(l), n = Math.min(Math.floor(Number(qty) || 0), max);
+  if (n < 1) return { ok: false, msg: capacity(l) - (o.mixed || 0) < 1 ? 'The mixers are booked out this month.' : Object.keys(rec.out).some((g) => yardCap(l, g) - (o.inv[g] || 0) < 1) ? 'The yard is full of finished stock. Sell some first.' : `Not enough ${Object.entries(rec.in).filter(([g, q]) => (o.inv[g] || 0) < q).map(([g]) => GOODS[g].name.toLowerCase()).join(', ') || 'supplies'} for a batch.` };
+  Object.entries(rec.in).forEach(([g, q]) => { o.inv[g] = Math.max(0, (o.inv[g] || 0) - q * n); });
+  Object.entries(rec.out).forEach(([g, q]) => { o.inv[g] = (o.inv[g] || 0) + q * n; });
+  o.fg = (o.fg || 0) + n; o.mixed = (o.mixed || 0) + n;
+  return { ok: true, msg: `Mixed ${n} ${Object.keys(rec.out).map((g) => GOODS[g].unit).join('') || 'units'} of ${Object.keys(rec.out).map((g) => GOODS[g].name.toLowerCase()).join(', ')}.`, n };
+}
+// a yard company that never had its starting stock (older saves): fill each raw material to half
+export function fillYard(l) { const rec = RECIPES[l.type], y = rec.yard; if (!y || !l.ops || l.ops.yardV) return; Object.entries(y).forEach(([g, cap]) => { if (g in rec.in) l.ops.inv[g] = Math.max(l.ops.inv[g] || 0, cap / 2); }); l.ops.yardV = 1; }
 export function newOps(l, managed) {
   const ops = { managed: !!managed, depts: { ops: { w: managed ? needWorkers(l, 'ops') : 0, set: { ...DEPT_DEFAULTS.ops }, head: null } }, inv: {}, customers: 100, rep: 50, morale: 70, rp: 0, tech: 0, eff: 1,
     pending: [], fg: 0, cur: { b2c: 0, goods: 0, sup: 0 }, hist: [], cd: {}, booksM: -1, legalUntil: -1, overtimeM: -1, board: [] };
@@ -58,6 +75,8 @@ export function newOps(l, managed) {
   if (managed) ['procurement', 'sales', 'social', 'hr', 'finance'].filter((k) => deptAllowed(l, k)).forEach((k) => (ops.depts[k] = { w: needWorkers(l, k), set: { ...DEPT_DEFAULTS[k] }, head: null }));
   // a starter month of supplies so a new owner sees production running before the first restock
   Object.entries(RECIPES[l.type].in).forEach(([g, q]) => (ops.inv[g] = Math.ceil(q * baseCap(l) * 1.25)));
+  // a yard starts half full
+  Object.entries(RECIPES[l.type].yard || {}).forEach(([g, cap]) => { if (g in RECIPES[l.type].in) ops.inv[g] = cap / 2; }); if (RECIPES[l.type].yard) ops.yardV = 1;
   return ops;
 }
 function ensureClientsFor(l, ops) { const t = l.ops; l.ops = ops; ensureClients(l); l.ops = t; }
@@ -185,7 +204,7 @@ export function exportGoods(city, ctx, l, g, qty, cid) {
 export function restock(city, ctx, l, months) {
   const need = needsPerMonth(l), policy = l.ops.depts.procurement ? setting(l, 'procurement', 'policy') : 'cheapest';
   let cost = 0, imported = 0;
-  let wants = {}; Object.entries(need).forEach(([g, q]) => { const want = q * months - (l.ops.inv[g] || 0) - (ctx.onTheWay ? ctx.onTheWay(city, l, g) : 0); if (want > 0.5) wants[g] = want; });
+  let wants = {}; Object.entries(need).forEach(([g, q]) => { const want = Math.min(q * months - (l.ops.inv[g] || 0) - (ctx.onTheWay ? ctx.onTheWay(city, l, g) : 0), yardRoom(city, ctx, l, g)); if (want > 0.5) wants[g] = want; });
   if (policy === 'warehouse' && ctx.fromWarehouse) wants = ctx.fromWarehouse(city, l, wants);
   Object.entries(wants).forEach(([g, want]) => { if (want > 0.5) { const r = buyGoods(city, ctx, l, g, Math.ceil(want), policy === 'warehouse' ? 'cheapest' : policy, { carrier: setting(l, 'procurement', 'carrier') }); cost += r.cost; imported += r.imported; } });
   { const pct = (l.ops.depts.procurement && l.ops.depts.procurement.head === 'carlos' ? 0.05 : 0) + tierOf(selfLv(l, 'procurement'), 0.03, 0.05, 0.07) + (hasSp(l, 'buyer') ? 0.06 : 0); if (pct > 0) { const back = cost * pct; ctx.credit(city, l.owner, back); cost -= back; } }
@@ -199,12 +218,15 @@ export function produce(city, ctx, l, m) {
   o.curM = m;
   const cap = capacity(l), dem = demand(city, l), hasOut = Object.keys(rec.out).length > 0, guests = hosts(l) && !o.managed;
   const target = hasOut ? cap : o.managed || guests ? Math.min(cap, dem * 1.05) : Math.max(0, Math.min(cap, dem * 1.1 - (o.fg || 0) * 0.6));
+  const man = isManual(l);
   let possible = target;
-  Object.entries(rec.in).forEach(([g, q]) => { possible = Math.min(possible, (o.inv[g] || 0) / q); });
+  if (!man) Object.entries(rec.in).forEach(([g, q]) => { possible = Math.min(possible, (o.inv[g] || 0) / q); });
   let units = Math.max(0, Math.min(target, possible));
+  // a manual plant used its supplies when the owner mixed; units is what was mixed since last month
+  if (man) { units = o.mixed || 0; o.mixed = 0; }
   // guests use supplies when they check in, not here; units is how many stayed last month
   if (guests) { const prev = o.rooms && o.rooms.m === m - 1 ? o.rooms.used : null; if (prev != null) units = prev; o.fg = 0; o.line = null; o.rooms = { m, cap: r2(cap), used: 0 }; }
-  else {
+  else if (!man) {
     Object.entries(rec.in).forEach(([g, q]) => { o.inv[g] = Math.max(0, (o.inv[g] || 0) - q * units); });
     Object.entries(rec.out).forEach(([g, q]) => { o.inv[g] = (o.inv[g] || 0) + q * units; });
   }
@@ -216,7 +238,7 @@ export function produce(city, ctx, l, m) {
   else {
     // finished goods come off the line week by week: a quarter now, the rest over the coming weeks
     if (o.line && o.line.left > 0) o.fg = (o.fg || 0) + o.line.per * o.line.left;
-    o.fg = (o.fg || 0) + units * 0.25; o.line = { per: units * 0.25, left: 3 };
+    if (man) o.line = null; else { o.fg = (o.fg || 0) + units * 0.25; o.line = { per: units * 0.25, left: 3 }; }
     sold = orderMonth(city, ctx, l, m, dem, price);
   }
   // customers, reputation
@@ -264,7 +286,7 @@ export function autoSell(city, ctx, l) {
   Object.keys(rec.out).forEach((g) => {
     const mk = city.market[g], stock = o.inv[g] || 0; if (stock < 0.5) return;
     const monthly = rec.out[g] * baseCap(l);
-    if (stock > monthly * 4) exportGoods(city, ctx, l, g, stock - monthly * 3); // dump old stock abroad
+    if (yardCap(l, g) === Infinity && stock > monthly * 4) exportGoods(city, ctx, l, g, stock - monthly * 3); // dump old stock abroad (a yard keeps its stock)
     const qty = (o.inv[g] || 0) * a; listGoods(city, l, g, qty, Math.min(importPrice(city, g) * 0.99, mk.p * strat), true);
   });
 }
@@ -501,6 +523,7 @@ let freightQuote = null; export function setFreightQuote(f) { freightQuote = f; 
 export function buySupply(city, ctx, l, g, qty, cid) {
   if (!(g in RECIPES[l.type].in)) return { ok: false, msg: 'This company does not use that supply.' };
   qty = Math.max(1, Math.round(qty));
+  const room = Math.floor(yardRoom(city, ctx, l, g)); if (room < 1) return { ok: false, msg: `The yard is full: it holds ${yardCap(l, g)} ${GOODS[g].unit} of ${GOODS[g].name.toLowerCase()}.` }; qty = Math.min(qty, room);
   const policy = l.ops.depts.procurement ? setting(l, 'procurement', 'policy') : 'cheapest';
   const r = buyGoods(city, ctx, l, g, qty, policy, { carrier: cid || setting(l, 'procurement', 'carrier') });
   return { ok: true, msg: r.freight !== undefined ? `Ordered ${qty} ${GOODS[g].unit} of ${GOODS[g].name.toLowerCase()}: ${r2(r.goods)} M + $${Math.round(r.freight * 1000)}k freight. Expected in about ${Math.round(r.eta)} days.` : `Bought ${qty} ${GOODS[g].unit} of ${GOODS[g].name.toLowerCase()} for ${r.cost} M.` };
