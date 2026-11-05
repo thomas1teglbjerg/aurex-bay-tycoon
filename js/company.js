@@ -250,9 +250,15 @@ function lotsLine(l, g) {
 function yardBox(c, l, ro) {
   const rec = RECIPES[l.type]; if (!rec.yard) return '';
   const o = l.ops, man = O.isManual(l), out = Object.keys(rec.out)[0], unit = out ? GOODS[out].unit : 'units';
-  const row = (g, cap) => { const stock = o.inv[g] || 0, way = E.LOG.onTheWay(c, l, g), f = stock / cap, made = g in rec.out;
-    return `<div class="row"><div class="grow"><b>${esc(GOODS[g].name)}</b><span>${N(stock)} of ${N(cap)} ${esc(GOODS[g].unit)}${made ? ' finished, ready to sell' : ' in the yard'}${way ? ` · +${N(way)} on the way` : ''}</span>${made && GOODS[g].fresh ? lotsLine(l, g) : ''}<div class="bar" style="margin-top:4px"><i style="width:${Math.min(100, f * 100)}%;background:${made ? (f > 0.9 ? 'var(--bad)' : 'var(--gold)') : f < 0.1 ? 'var(--bad)' : f < 0.25 ? 'var(--gold)' : 'var(--good)'}"></i></div></div><span class="chip ${made ? (f > 0.9 ? 'bad' : '') : f < 0.1 ? 'bad' : f < 0.25 ? 'warn' : 'good'}">${Math.round(f * 100)}%</span></div>`; };
-  const rows = Object.entries(rec.yard).sort(([a], [b]) => (a in rec.out) - (b in rec.out)).map(([g, cap]) => row(g, cap)).join('');
+  // a bar graph: one column per good, filled to how much of its yard space is used
+  const col = (g, cap) => { const stock = o.inv[g] || 0, way = E.LOG.onTheWay(c, l, g), f = Math.min(1, stock / cap), made = g in rec.out;
+    const tone = made ? (f > 0.9 ? 'bad' : 'gold') : f < 0.1 ? 'bad' : f < 0.25 ? 'warn' : 'good', wf = Math.min(1 - f, way / cap);
+    return `<div class="yg-col ${made ? 'made' : ''}" title="${esc(GOODS[g].name)}: ${N(stock)} of ${N(cap)} ${esc(GOODS[g].unit)}${way ? `, +${N(way)} on the way` : ''}"><b class="yg-v">${N(stock)} ${esc(GOODS[g].unit)}</b>
+      <div class="yg-bar"><i class="yg-way" style="height:${(wf * 100).toFixed(1)}%;bottom:${(f * 100).toFixed(1)}%"></i><i class="yg-fill ${tone}" style="height:${(f * 100).toFixed(1)}%"></i><span class="yg-pct">${Math.round(f * 100)}%</span></div>
+      <span class="yg-n">${esc(GOODS[g].name)}</span><span class="yg-c">of ${N(cap)}${way ? ` · +${N(way)} coming` : ''}${made ? ' · finished' : ''}</span></div>`; };
+  const goods = Object.entries(rec.yard).sort(([a], [b]) => (a in rec.out) - (b in rec.out));
+  const fresh = goods.filter(([g]) => g in rec.out && GOODS[g].fresh).map(([g]) => lotsLine(l, g)).join('');
+  const rows = `<div class="yg" role="img" aria-label="Yard stock">${goods.map(([g, cap]) => col(g, cap)).join('')}</div>${fresh}`;
   const max = man ? O.mixMax(l) : 0, cap = Math.floor(O.mixCap(l)), done = Math.round(o.mixed || 0);
   const mixer = man ? `<div class="cap" style="margin-top:8px">Mix ${esc(GOODS[out].name.toLowerCase())}</div>
     <p class="muted" style="font-size:13px;margin:2px 0 8px">${rec.mixNote ? esc(rec.mixNote) + ' ' : ''}The plant only runs when you mix. You keep the mixture right with sliders while the drum turns; if the mix fails, the batch is thrown out. Mixed this month: ${N(done)} of ${N(cap)} ${esc(unit)}.</p>
@@ -261,7 +267,7 @@ function yardBox(c, l, ro) {
   const host = Object.keys(SITE_CO).find((h) => SITE_CO[h].lid === l.id), asked = host ? E.QT.forPlant(c, l.id).filter((q) => q.status === 'asked').length : 0;
   const orders = host ? (c.deals || []).filter((d) => d.stock && d.lid === l.id && E.DEAL.isLive(d)).length : 0;
   const web = host && !ro ? `<button class="row mco" data-a="web" data-u="${host}/office" style="margin-top:8px"><div class="grow"><b>Website: ${host}</b><span>${asked ? `${asked} new quote request${asked > 1 ? 's' : ''}` : 'No new quote requests'}${orders ? ` · ${orders} order${orders > 1 ? 's' : ''} to deliver` : ''} · prices and the plant office</span></div>${asked || orders ? `<span class="chip warn">${asked + orders}</span>` : ''}<span aria-hidden="true">›</span></button>` : '';
-  return `<div class="box" id="yard-box"><h2>Warehouse<small>YARD</small></h2><div class="in"><div class="rows">${rows}</div>${mixer}${web}
+  return `<div class="box" id="yard-box"><h2>Warehouse<small>YARD</small></h2><div class="in">${rows}${mixer}${web}
     <p class="empty" style="font-size:13px">Orders stop at what the yard holds. Buy raw materials under Production &amp; supplies.</p></div></div>`;
 }
 // companies that make a collectible once a year (CRAFT): vineyard wine in the estate cellar, tuner cars in the workshop garage
