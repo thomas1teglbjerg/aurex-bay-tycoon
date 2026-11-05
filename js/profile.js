@@ -101,7 +101,10 @@ function ownsHTML(c, p, own) {
   const L = E.LIFE; if (!c.life || !p.life) return '';
   const homes = p.life.homes || [], items = p.life.items || [], sets = L.completeSets(p);
   const hv = homes.reduce((a, h) => a + L.homeValue(c, h), 0), cv = L.collectionValue(c, p);
-  const homeRows = homes.map((h) => { const def = L.HOME[h.hid]; if (!def) return '';
+  // the home they live in (or the most valuable one) gets a big cover picture, the rest are rows below it
+  const main = homes.find((h) => h.uid === p.life.res && L.HOME[h.hid]) || homes.filter((h) => L.HOME[h.hid]).sort((a, b) => L.homeValue(c, b) - L.homeValue(c, a))[0];
+  const cover = main ? `<div class="pf-cover" style="${homeBg(main.hid, 'ext')}"><div><b>${esc(L.HOME[main.hid].name)}</b><span>${esc(L.HOME[main.hid].district)} · ${main.uid === p.life.res ? 'Lives here' : main.rented ? 'Rented out' : 'Second home'} · ${money(L.homeValue(c, main))}</span></div></div>` : '';
+  const homeRows = cover + homes.filter((h) => h !== main).map((h) => { const def = L.HOME[h.hid]; if (!def) return '';
     return `<div class="pf-home"><span class="pf-hth" style="${homeBg(h.hid, 'ext')}"></span><div><b>${esc(def.name)}</b><span>${esc(def.district)} · ${h.uid === p.life.res ? 'Lives here' : h.rented ? 'Rented out' : 'Second home'}</span></div><em>${money(L.homeValue(c, h))}</em></div>`; }).join('');
   const cats = CATS.map(([k, n]) => { const its = items.filter((i) => L.ITEM[i.cid] && L.ITEM[i.cid].cat === k); return its.length ? `<div class="pf-cat">${ricon(k, 16)}<span>${n}</span><b>${its.length}</b><em>${money(L.collectionValue(c, p, k))}</em></div>` : ''; }).join('');
   const top = items.filter((i) => L.ITEM[i.cid]).map((i) => ({ i, v: L.instValue(c, p, i, sets) })).sort((a, b) => b.v - a.v).slice(0, 6);

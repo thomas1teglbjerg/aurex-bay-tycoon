@@ -732,4 +732,4 @@ export const CAREER = {
   }
 };
 // personal portraits: only the first player in the city with this avatar name gets it (img/<pic>.jpg)
-export const PORTRAITS = { 'Thomas Debenhams': 'p-thomas-debenhams', 'Mikkel Debenhams': 'p-mikkel-debenhams' };
+export const PORTRAITS = { 'Thomas Teglbjærg': 'p-thomas-debenhams', 'Mikkel Teglbjærg': 'p-mikkel-debenhams', 'Thomas Debenhams': 'p-thomas-debenhams', 'Mikkel Debenhams': 'p-mikkel-debenhams' };
