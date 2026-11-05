@@ -6,7 +6,7 @@ import { city, me, meId, esc, M, P, lineChart, shortDate, dateLabel, msUntilMont
 import { money, ricon, homeBg, bidBase, standing } from './life.js';
 import { apexSite } from './team.js';
 import { carrierSite } from './freight.js';
-import { CARRIERS, HOUSE_AD, WORLD } from '../supabase/functions/_shared/content.js';
+import { CARRIERS, CENTRAL, CENTRAL_BANK, WORLD, TYPES, GOODS, HOUSE_AD } from '../supabase/functions/_shared/content.js';
 
 const L = E.LIFE;
 export const HOME_URL = 'baylink.ab';
@@ -28,6 +28,7 @@ export const SITES = {
   ...Object.fromEntries(Object.entries(DEALERS).map(([cat, d]) => [d.host, { name: d.name, tag: d.sub, logo: d.logo, cat }])),
   'apextalent.ab': { name: 'Apex Talent', tag: 'Executive search and transfers', logo: ['AT', '#111827', '#f5c84c'] },
   ...Object.fromEntries(CARRIERS.map((c) => [c.host, { name: c.name, tag: c.tag, logo: [c.short.split(' ').map((w) => w[0]).join(''), c.color, '#fff'], carrier: c.id }])),
+  'bankofaurex.ab': { name: 'Bank of Aurex', tag: 'The national bank · business loans and the bank rate', logo: ['BA', '#14110d', '#d9b45a'] },
   'harbortrust.ab': { name: 'Harbor Trust', tag: 'Private banking · your personal account', logo: ['HT', '#0b3d4f', '#7fe0c9'] },
   'bayhomes.ab': { name: 'BayHomes', tag: 'Find your place in Aurex Bay', logo: ['BH', '#0e8a7e', '#fff'] },
   'aurexgazette.ab': { name: 'The Aurex Gazette', tag: 'News, markets and society', logo: ['G', '#fff', '#111'] }
@@ -70,7 +71,7 @@ function adSlot(slot, cls = '') {
 export function parseUrl(u) { const s = String(u || HOME_URL).trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, ''); const [host, ...rest] = s.split('/'); return { host: host.toLowerCase(), path: rest, url: s || HOME_URL }; }
 export function webHTML(st) {
   const u = parseUrl(st.url), site = SITES[u.host];
-  const page = !site ? notFound(u) : u.host === 'baylink.ab' ? portal(st) : u.host === 'aurexauctions.ab' ? auctions(u, st) : SITES[u.host].cat ? dealer(SITES[u.host].cat, u) : u.host === 'bayhomes.ab' ? homes(u, st) : u.host === 'harbortrust.ab' ? bank(u) : u.host === 'apextalent.ab' ? apexSite(u, go) : SITES[u.host].carrier ? carrierSite(u.host, u, go) : gazette();
+  const page = !site ? notFound(u) : u.host === 'baylink.ab' ? portal(st) : u.host === 'aurexauctions.ab' ? auctions(u, st) : SITES[u.host].cat ? dealer(SITES[u.host].cat, u) : u.host === 'bayhomes.ab' ? homes(u, st) : u.host === 'harbortrust.ab' ? bank(u) : u.host === 'bankofaurex.ab' ? boa(u) : u.host === 'apextalent.ab' ? apexSite(u, go) : SITES[u.host].carrier ? carrierSite(u.host, u, go) : gazette();
   const bm = Object.keys(SITES).filter((h) => h !== 'baylink.ab').map((h) => `<button data-a="webGo" data-u="${h}" class="${u.host === h ? 'on' : ''}">${favicon(h, 18)}<span>${esc(SITES[h].name.replace(/^The /, ''))}</span></button>`).join('');
   return `<div class="wwin"><div class="wchrome">
     <div class="wbar"><button data-a="webBack" aria-label="Back" ${st.back.length ? '' : 'disabled'}>‹</button><button data-a="webFwd" aria-label="Forward" ${st.fwd.length ? '' : 'disabled'}>›</button><button data-a="webHome" aria-label="Home" class="hm"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/></svg></button>
@@ -211,6 +212,72 @@ export function gazetteBox() {
     <div class="gz-cols"><div class="gz-lead">${news.map((n, i) => i ? `<h4>${esc(n.title)}</h4><p>${esc(n.text || '')}</p>` : `<h3 class="gz-h">${esc(n.title)}</h3><p>${esc(n.text || '')}</p>`).join('') || '<p>No news yet.</p>'}</div>
     <aside><h3>Markets this month</h3>${moversHTML(c)}</aside></div>
     ${houseAd('wide')}<span class="gz-more">Read The Aurex Gazette ›</span></a>`;
+}
+
+// ---------------------------------------------------------------- Bank of Aurex: the national bank, business loans
+const BOA_IMG = 'img/c-bankofaurex.jpg';
+function boa(u) {
+  const c = city(), p = me(), page = u.path[0] || '', debt = E.debt(p), cap = E.loanCap(c, p), room = Math.max(0, cap - debt), rate = E.loanRate(c, p);
+  const r = E.rates(c, 'p', p.id), cb = E.listing(c, CENTRAL_BANK), last = c.lastCard && WORLD.find((w) => w.id === c.lastCard.id);
+  const gov = cb && cb.owner ? (cb.owner.k === 'h' ? (c.holdings[cb.owner.id] || {}).name : (c.players[cb.owner.id] || {}).name) : null;
+  const cbs = c.cb || { rate: CENTRAL.start, target: CENTRAL.start, hist: [], levy: {}, px: 1, setM: -99, levyM: -99 }, gov0 = E.canRun(c, meId(), cb);
+  const tabs = [['', 'Home'], ['loans', 'Business loans'], ['policy', 'Monetary policy'], ...(gov0 ? [['office', "Governor's office"]] : [])];
+  const head = `<header class="ba-head"><div class="ba-brand">${go('bankofaurex.ab', '<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M20 3 37 36H29L20 18 11 36H3Z" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M20 14 30 34H10Z" fill="currentColor" opacity=".55"/></svg><span><b>Bank of Aurex</b><small>The national bank · est. 1902</small></span>')}</div>
+    <nav class="ba-nav">${tabs.map(([k, t]) => go('bankofaurex.ab' + (k ? '/' + k : ''), t, page === k ? 'on' : '')).join('')}</nav></header>`;
+  const stat = (k, v, cls = '') => `<div class="ba-stat"><small>${k}</small><b class="${cls}">${v}</b></div>`;
+  const econ = `<span class="ba-econ e-${esc(c.econ.toLowerCase())}">${esc(c.econ)}</span>`;
+  let body = '';
+  if (page === 'loans') {
+    const parts = E.loanRateParts(c, p), steps = [5, 10, 20, 50];
+    body = `<h2>Business loans</h2><p class="ba-sub">Credit for ${esc(p.name)}'s companies. Interest is charged on what you owe and paid from your company cash.</p>
+      <div class="ba-stats">${stat('You owe', M(debt), debt ? 'down' : '')}${stat('Your rate', rate + '%')}${stat('Interest a year', M(r.interest))}${stat('Credit limit', M(cap))}</div>
+      <div class="ba-card"><h3>Borrow <em>${M(room)} available</em></h3><div class="ba-bar"><i style="width:${cap ? Math.min(100, debt / cap * 100) : 0}%"></i></div><p class="ba-small">Your limit is half the value of your companies plus 10 M.</p>
+        <div class="ba-btns">${steps.map((v) => `<button class="ba-btn" data-a="loan" data-v="${v}" ${v > room ? 'disabled' : ''}>Borrow ${M(v)}</button>`).join('')}</div></div>
+      <div class="ba-card"><h3>Repay <em>${M(p.cash)} in company cash</em></h3><div class="ba-btns">${[5, 20].filter((v) => !debt || v < debt).map((v) => `<button class="ba-btn ghost" data-a="repay" data-v="${v}" ${!debt || p.cash <= 0 ? 'disabled' : ''}>Repay ${M(v)}</button>`).join('')}<button class="ba-btn ghost" data-a="repay" data-v="999" ${!debt || p.cash < debt ? 'disabled' : ''}>Repay all</button></div></div>
+      <div class="ba-card"><h3>Your loans</h3>${p.loans.length ? p.loans.map((l, i) => `<div class="ba-l"><span>Loan ${i + 1} · taken ${esc(shortDate(l.m))}</span><b>${M(l.amt)}</b></div>`).join('') + `<div class="ba-l tot"><span>Total</span><b>${M(debt)}</b></div>` : '<p class="ba-small">You have no loans with us.</p>'}</div>
+      <div class="ba-card"><h3>How your rate is made</h3>${parts.map(([k, v], i) => `<div class="ba-l"><span>${esc(k)}</span><b>${i ? (v > 0 ? '+' : '−') + Math.abs(v) + ' pts' : v + '%'}</b></div>`).join('')}<div class="ba-l tot"><span>Your rate</span><b>${rate}%</b></div><p class="ba-small">Never below 1%.</p></div>`;
+  } else if (page === 'policy' || (page === 'office' && !gov0)) {
+    const h = (cbs.hist || []).slice(-24), lv = cbs.levy || {}, pend = cbs.pending;
+    const levies = [lv.sector ? [`${TYPES[lv.sector].name} income`, lv.sp] : null, lv.supply ? [`${GOODS[lv.supply].name} purchases`, lv.gp] : null].filter(Boolean);
+    body = `<h2>Monetary policy</h2><p class="ba-sub">The Bank of Aurex sets the bank rate that every business loan in the city starts from.</p>
+      <div class="ba-stats">${stat('Bank rate', cbs.rate + '%')}${stat('Target', cbs.target + '%')}${stat('Economy', econ)}${stat('Governor', esc(gov || 'Vacant'))}</div>
+      ${pend ? `<div class="ba-card ba-note"><h3>Announced</h3><p class="ba-small">${pend.target != null ? `New target ${pend.target}% from next week. ` : ''}${pend.levy ? 'New levies from next week.' : ''}</p></div>` : ''}
+      <div class="ba-card"><h3>Bank rate <em>last ${h.length} months</em></h3>${h.length > 1 ? lineChart([{ v: h.map((x) => x[1]), c: '#d9b45a', w: 2.4 }], h.map((x) => shortDate(x[0])), { fmt: (v) => v.toFixed(2) + '%', label: 'Bank rate', h: 150 }) : '<p class="ba-small">The chart fills in month by month.</p>'}</div>
+      <div class="ba-card"><h3>What the policy does now</h3>
+        <div class="ba-l"><span>Pressure on the economy</span><b>${esc(E.CB.tiltWords(c))}</b></div>
+        <div class="ba-l"><span>Supply prices vs normal</span><b>${((cbs.px || 1) * 100 - 100 >= 0 ? '+' : '−') + Math.abs((cbs.px || 1) * 100 - 100).toFixed(1)}%</b></div>
+        <div class="ba-l"><span>Home mortgages</span><b>${L.mortgageRate(c).toFixed(1)}%</b></div><div class="ba-l"><span>Savings accounts</span><b>${L.savingsRate(c).toFixed(1)}%</b></div>
+        <p class="ba-small">Below ${CENTRAL.calm[0]}% cheap money pushes towards a boom and lifts supply prices. Above ${CENTRAL.calm[1]}% dear money drags towards recession and supply prices fall. The world news still decides; the bank only tilts the odds.</p></div>
+      <div class="ba-card"><h3>Levies <em>${esc(M(cbs.collected || 0))} collected for the city</em></h3>${levies.length ? levies.map(([k, v]) => `<div class="ba-l"><span>${esc(k)}</span><b>${v}%</b></div>`).join('') : '<p class="ba-small">No levies right now.</p>'}</div>
+      ${last ? `<div class="ba-card"><h3>Latest world news <em>${esc(dateLabel(c.lastCard.m))}</em></h3><b class="ba-news">${esc(last.title)}</b><p class="ba-small">${esc(last.text)}</p></div>` : ''}
+      <div class="ba-card"><h3>The governor's seat</h3><p class="ba-small">${gov ? `The bank is owned by ${esc(gov)}.` : 'The bank has no owner yet.'} The owner sets a target rate (${CENTRAL.min}–${CENTRAL.max}%) once a quarter; the rate moves at most ${CENTRAL.moveMax} points a month. Owners need ${esc(PRESTIGE_TIERS[CENTRAL.needTier].name)} prestige and Finance level ${CENTRAL.needFinance}. If the rate stays below ${CENTRAL.extreme[0]}% or above ${CENTRAL.extreme[1]}% for a year, the Finance Ministry may reset it to ${CENTRAL.neutral}%. ${go('bankofaurex.ab/about', 'About the bank ›', 'ba-more')}</p></div>`;
+  } else if (page === 'office') {
+    const lv = cbs.levy || {}, rateWait = CENTRAL.quarter - (c.m - cbs.setM), levyWait = CENTRAL.quarter - (c.m - cbs.levyM);
+    const steps = [-1, -0.5, -0.25, 0.25, 0.5, 1].map((d) => Math.round((cbs.target + d) * 100) / 100).filter((v) => v >= CENTRAL.min && v <= CENTRAL.max);
+    const mine = E.cbGovTypes(c, meId()), crowd = E.CB.crowded(c), trade = E.CB.traded(c), pcts = [0, 2, 5, 10];
+    const levyBtn = (args, on, label, dis) => `<button class="ba-btn ${on ? '' : 'ghost'}" data-a="cbLevy" ${Object.entries(args).map(([k, v]) => `data-${k}="${esc(String(v ?? ''))}"`).join(' ')} ${dis || levyWait > 0 ? 'disabled' : ''}>${label}</button>`;
+    const keepG = { supply: lv.supply || '', gp: lv.gp || 0 }, keepS = { sector: lv.sector || '', sp: lv.sp || 0 };
+    body = `<h2>Governor's office</h2><p class="ba-sub">You steer the bank, not the economy. Every decision is announced in the Gazette a week before it takes effect.</p>
+      <div class="ba-stats">${stat('Bank rate', cbs.rate + '%')}${stat('Target', cbs.target + '%')}${stat('Pressure', esc(E.CB.tiltWords(c)))}</div>
+      <div class="ba-card"><h3>Target rate <em>${rateWait > 0 ? `next decision in ${rateWait} month${rateWait === 1 ? '' : 's'}` : 'the board can decide now'}</em></h3>
+        <p class="ba-small">Lower rates make every loan cheaper, yours too. Higher rates earn the bank more: it keeps ${Math.round(CENTRAL.ownerCut * 100)}% of the interest other tycoons pay.</p>
+        <div class="ba-btns">${steps.map((v) => `<button class="ba-btn ${v < cbs.target ? 'ghost' : ''}" data-a="cbRate" data-v="${v}" ${rateWait > 0 ? 'disabled' : ''}>${v < cbs.target ? 'Cut' : 'Raise'} to ${v}%</button>`).join('')}</div></div>
+      <div class="ba-card"><h3>Levy on a crowded sector <em>${levyWait > 0 ? `next change in ${levyWait} month${levyWait === 1 ? '' : 's'}` : 'once a quarter'}</em></h3>
+        <p class="ba-small">Up to ${CENTRAL.levyMax}% of passive income for companies in one of the most crowded sectors. Not on a sector you are in yourself. The money goes to the city.</p>
+        ${crowd.length ? crowd.map((x) => `<div class="ba-l"><span>${esc(TYPES[x.type].name)} · ${x.n} companies${mine.has(x.type) ? ' · you are in it' : ''}</span><b>${lv.sector === x.type ? lv.sp + '%' : '0%'}</b></div><div class="ba-btns">${pcts.map((v) => levyBtn({ sector: v ? x.type : '', sp: v, ...keepG }, (lv.sector === x.type ? lv.sp : 0) === v, v + '%', mine.has(x.type) && v > 0)).join('')}</div>`).join('') : '<p class="ba-small">No sector is crowded yet.</p>'}</div>
+      <div class="ba-card"><h3>Levy on a traded supply</h3>
+        <p class="ba-small">Up to ${CENTRAL.levyMax}% on top of the price when companies buy one of the most traded supplies.</p>
+        ${trade.length ? trade.map((x) => `<div class="ba-l"><span>${esc(GOODS[x.g].name)} · ${Math.round(x.q)} ${esc(GOODS[x.g].unit)} last month</span><b>${lv.supply === x.g ? lv.gp + '%' : '0%'}</b></div><div class="ba-btns">${pcts.map((v) => levyBtn({ supply: v ? x.g : '', gp: v, ...keepS }, (lv.supply === x.g ? lv.gp : 0) === v, v + '%')).join('')}</div>`).join('') : '<p class="ba-small">No supply traded last month.</p>'}</div>
+      <p class="ba-small">Heavy levies (more than ${CENTRAL.levyLoad} points in all) drag the economy too. If you are away for months, the bank's autopilot steers back to ${CENTRAL.neutral}% and drops the levies.</p>`;
+  } else if (page === 'about') {
+    body = `<h2>About the bank</h2><div class="ba-card"><p class="ba-small">Founded in 1902, the Bank of Aurex is the national bank of Aurex Bay. It lends to the city's companies and runs from its tower in Aurex City.</p>
+      ${cb ? `<div class="ba-btns"><button class="ba-btn" data-a="adCo" data-lid="${cb.id}">See the company ›</button></div>` : ''}</div>`;
+  } else {
+    body = `<div class="ba-hero" style="background-image:url(${BOA_IMG})"><div><small>Business banking</small><h1>Capital for the companies that build Aurex Bay</h1><p>Borrow for growth, repay when it suits you.</p>${go('bankofaurex.ab/loans', 'Manage your loans', 'ba-cta')}</div></div>
+      <div class="ba-stats">${stat('Bank rate', cbs.rate + '%')}${stat('Your rate', rate + '%')}${stat('You owe', M(debt), debt ? 'down' : '')}${stat('Economy', econ)}</div>
+      <div class="ba-grid">${go('bankofaurex.ab/loans', `<b>Business loans</b><span>Borrow up to ${M(room)} more today.</span>`, 'ba-tile')}${go('bankofaurex.ab/policy', '<b>Monetary policy</b><span>The bank rate and the state of the economy.</span>', 'ba-tile')}${gov0 ? go('bankofaurex.ab/office', `<b>Governor's office</b><span>Set the target rate and the levies.</span>`, 'ba-tile') : go('bankofaurex.ab/about', '<b>About the bank</b><span>The national bank of Aurex Bay since 1902.</span>', 'ba-tile')}</div>`;
+  }
+  return `${head}<div class="ba-main">${body}</div>`;
 }
 
 // ---------------------------------------------------------------- Harbor Trust online banking
