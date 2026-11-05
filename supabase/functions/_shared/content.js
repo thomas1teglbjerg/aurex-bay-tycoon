@@ -69,7 +69,7 @@ export const LISTINGS = [
   ['hotel', 'marina', 'L', 0.2, 0.3], ['hotel', 'marina', 'M', 0.42, 0.4], ['hotel', 'sunset', 'S', 0.45, 0.4, null, 'c-hotel-sunset'],
   ['metal', 'harbor', 'L', 0.4, 0.53], ['metal', 'ironport', 'S', 0.08, 0.1], ['metal', 'harbor', 'M', 0.44, 0.66],
   ['car', 'harbor', 'L', 0.53, 0.46], ['dealer', 'ironport', 'M', 0.42, 0.83, 'Kazen Motors'], ['car', 'aurex', 'S', 0.3, 0.84],
-  ['finance', 'aurex', 'L', 0.5, 0.34, 'Bank of Aurex', 'c-bankofaurex'], ['finance', 'aurex', 'M', 0.76, 0.36], ['bank', 'ironport', 'S', 0.48, 0.44, 'Aurex Bank'],
+  ['finance', 'aurex', 'L', 0.5, 0.34, 'Bank of Aurex', 'c-bankofaurex'], ['finance', 'aurex', 'M', 0.76, 0.36, 'Harbor Trust', 'c-harbortrust'], ['bank', 'ironport', 'S', 0.48, 0.44, 'Aurex Bank'],
   ['chip', 'nevus', 'L', 0.44, 0.25], ['chip', 'greenfield', 'M', 0.28, 0.17], ['chip', 'harbor', 'S', 0.47, 0.36],
   ['data', 'aurex', 'L', 0.24, 0.26], ['data', 'aurex', 'M', 0.9, 0.58], ['data', 'nevus', 'S', 0.62, 0.42],
   ['pharma', 'nevus', 'L', 0.78, 0.63], ['pharma', 'greenfield', 'M', 0.43, 0.3], ['pharma', 'crown', 'S', 0.86, 0.38],
@@ -665,7 +665,7 @@ export const DINNER = {
 export const TALENT = [
   { id: 'michael', kind: 'michael', name: 'Michael Turner', rating: 3, img: true }, { id: 't-priya', kind: 'michael', name: 'Priya Shah', rating: 4 }, { id: 't-henrik', kind: 'michael', name: 'Henrik Vos', rating: 2 },
   { id: 'anika', kind: 'anika', name: 'Anika Rao', rating: 3, img: true }, { id: 't-diego', kind: 'anika', name: 'Diego Alvarez', rating: 5 }, { id: 't-mei', kind: 'anika', name: 'Mei Lin', rating: 2 },
-  { id: 'sofia', kind: 'sofia', name: 'Sofia Lindström', rating: 3, img: true }, { id: 't-jamal', kind: 'sofia', name: 'Jamal Reed', rating: 4 }, { id: 't-clara', kind: 'sofia', name: 'Clara Novak', rating: 2 },
+  { id: 'sofia', kind: 'sofia', name: 'Sofia Lindström', rating: 3, img: true }, { id: 't-jamal', kind: 'sofia', name: 'Jamal Reed', rating: 4, img: true }, { id: 't-clara', kind: 'sofia', name: 'Clara Novak', rating: 2 },
   { id: 'robert', kind: 'robert', name: 'Robert Hayes', rating: 3, img: true }, { id: 't-ingrid', kind: 'robert', name: 'Ingrid Falk', rating: 4 }, { id: 't-tomas', kind: 'robert', name: 'Tomás Silva', rating: 2 },
   { id: 'emily', kind: 'emily', name: 'Emily Carter', rating: 3, img: true }, { id: 't-yara', kind: 'emily', name: 'Yara Haddad', rating: 4 }, { id: 't-noah', kind: 'emily', name: 'Noah Brooks', rating: 2 },
   { id: 'carlos', kind: 'carlos', name: 'Carlos Mendoza', rating: 4, img: true }, { id: 'mack', kind: 'carlos', name: 'Mack Brennan', rating: 1, img: true, starter: true, role: 'Logistics Operator', pay: 0.6 }, { id: 't-olga', kind: 'carlos', name: 'Olga Petrova', rating: 3 }, { id: 't-sam', kind: 'carlos', name: 'Sam Okoye', rating: 2 },
@@ -676,7 +676,7 @@ export const TALENT = [
   { id: 'dario', kind: 'marco', name: 'Dario Russo', rating: 4, img: true, role: 'General Manager', pay: 2,
     bio: 'Turned around two failing dealerships in the last downturn. Calm, demanding and allergic to excuses. When the market drops, his numbers do not.',
     passive: ['Steady Hand', 'Recessions and crises never cut customer demand in the company where he heads Operations.'] },
-  { id: 'jason', kind: 'jason', name: 'Jason Miller', rating: 3, img: true }, { id: 't-elena', kind: 'jason', name: 'Elena Rossi', rating: 5 }, { id: 't-kofi', kind: 'jason', name: 'Kofi Mensah', rating: 2 },
+  { id: 'jason', kind: 'jason', name: 'Jason Miller', rating: 3, img: true }, { id: 't-elena', kind: 'jason', name: 'Elena Rossi', rating: 5, img: true }, { id: 't-kofi', kind: 'jason', name: 'Kofi Mensah', rating: 2 },
   { id: 'laurent', kind: 'marco', name: 'Laurent Beaumont', rating: 5, img: true, role: 'Master Sommelier', pay: 1.8,
     bio: 'Forty harvests in Crown Hills. Names the vintage, the slope and the weather that year from one sip, and has sent back wine at every five-star table in the bay.',
     passive: ['Grand Palate', 'At a hotel, restaurant or vineyard where he heads Operations: +1 M YPI. At a vineyard: +15% chance of a collectible vintage and +20% chance it comes out one rarity higher.'] },
@@ -725,7 +725,7 @@ export const CARRIERS = [
 // Gazette box on the Market tab and stays fixed on The Aurex Gazette website. Change it here.
 export const HOUSE_AD = { img: 'img/x-bergwald-s7.jpg', pos: '50% 60%', from: 'Bergwald', head: 'Bergwald cars is coming to Aurex Bay', line: 'See you soon' };
 // pictures the administrator can pick for the house ad (paths under img/)
-export const HOUSE_PICS = [['x-bergwald-s7', 'Bergwald S7'], ['x-bergwald-x7', 'Bergwald X7'], ['x-bergwald-gt', 'Bergwald GT'], ['x-bergwald-crown', 'Bergwald Crown Hills'], ['x-tuner-gtrs', 'Valtor GT-RS'], ['x-c4', 'Vellano V9'], ['c-gazette', 'The Aurex Gazette'], ['c-bankofaurex', 'Bank of Aurex'], ['h1-watch', 'Watches'], ['h1-wine', 'Wine'], ['h1-art', 'Art'], ['h1-ext', 'Villa'], ['map', 'Aurex Bay']];
+export const HOUSE_PICS = [['x-bergwald-s7', 'Bergwald S7'], ['x-bergwald-x7', 'Bergwald X7'], ['x-bergwald-gt', 'Bergwald GT'], ['x-bergwald-crown', 'Bergwald Crown Hills'], ['x-tuner-gtrs', 'Valtor GT-RS'], ['x-c4', 'Vellano V9'], ['c-gazette', 'The Aurex Gazette'], ['c-bankofaurex', 'Bank of Aurex'], ['c-harbortrust', 'Harbor Trust'], ['h1-watch', 'Watches'], ['h1-wine', 'Wine'], ['h1-art', 'Art'], ['h1-ext', 'Villa'], ['map', 'Aurex Bay']];
 
 // The Aurex Gazette as a company (gazette.js): its owner runs the city's ad desk, prints press releases and picks the front page
 export const PAPER = {
