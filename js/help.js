@@ -275,7 +275,7 @@ const SETTINGS = {
 const TABS = {
   map: h('Tab', 'The city map. Click a district to zoom in; pins show companies, warehouses and homes.', 'Gold pins are for sale.'),
   empire: h('Tab', 'Your empire: cash, mail, to-dos, companies, warehouses and your team of specialists.'),
-  market: h('Tab', 'The economy, the supplies market, your offers, the Bank of Aurex, the Gazette and the Aurex Bay Stock Exchange.'),
+  market: h('Tab', 'The supplies market, your offers, the Bank of Aurex, the Gazette and the Aurex Bay Stock Exchange.'),
   network: h('Tab', 'Companies you own together with other players at the top; your network, supply contracts and the city ranking below.'),
   life: h('Tab', 'Your personal side: wallet, homes, collections, auctions and prestige.')
 };
@@ -312,7 +312,7 @@ export function helpAt(el, where = {}) {
   if ((x = q('#tabs [data-tab]'))) return { t: text(x), ...TABS[x.dataset.tab] };
   if (q('.who-c')) return { t: 'Players in the city', k: 'Top bar', d: 'Players online now, with their logo and initials. Dimmed means they have not done anything for 10 minutes.', tip: 'Right-click an icon to chat with that player.' };
   if ((x = q('.money > div'))) return term(text(x.querySelector('small')));
-  if (q('#econ')) return { t: `Economy: ${c ? c.econ : ''}`, k: 'Economy', d: `${c ? ECON_TXT[c.econ] || '' : ''} A World Card can change it about once a quarter.`, tip: 'See the Market tab for the latest card.' };
+  if (q('#econ')) return { t: `Economy: ${c ? c.econ : ''}`, k: 'Economy', d: `${c ? ECON_TXT[c.econ] || '' : ''} A World Card can change it about once a quarter.`, tip: 'The Aurex Gazette on the Market tab shows the latest World Card.' };
   if (q('#datelbl, .brand')) return { t: 'Game date', k: 'Time', d: `The date in Aurex Bay. W is the week of the month. At live speed one game year lasts one real week, so a month is about 14 hours.`, tip: 'Companies produce and sell every month; supplies and share prices move every week.' };
   if ((x = q('#speed'))) return { t: 'Game speed', k: 'Time', d: `How fast time runs. ${SPEEDS.map((s) => `${s.label}: ${s.note}`).join('. ')}.`, tip: 'Online, only the administrator changes the speed for everyone.' };
   if (q('#mylogo')) return { t: 'Your parent company', k: 'Brand', d: 'The logo of the parent company that owns your businesses. Click to open your empire.' };

@@ -266,7 +266,7 @@ function deptCardRO(l, d) {
 }
 function deptCard(l, d, ui) {
   const o = l.ops, state = O.deptState(l, d.id), dd = o.depts[d.id], p = me();
-  if (!dd) return `<article class="dept">${deptHeader(l, d, 'closed', true)}<div class="dept-in"><p>${esc(d.desc)}</p><p class="muted" style="font-size:13px">Without it: ${esc(d.without)}</p><button class="btn navy" data-a="deptOpen" data-lid="${l.id}" data-dept="${d.id}" ${(l.owner.k === 'h' ? city().holdings[l.owner.id].treasury : p.cash) < O.deptOpenCost(l, d.id) ? 'disabled' : ''}>Open department · ${M(O.deptOpenCost(l, d.id))}</button></div></article>`;
+  if (!dd) return `<article class="dept fold">${deptHeader(l, d, 'closed', true).replace('<header ', `<header data-k="dept:${d.id}" `)}<div class="dept-in"><p>${esc(d.desc)}</p><p class="muted" style="font-size:13px">Without it: ${esc(d.without)}</p><button class="btn navy" data-a="deptOpen" data-lid="${l.id}" data-dept="${d.id}" ${(l.owner.k === 'h' ? city().holdings[l.owner.id].treasury : p.cash) < O.deptOpenCost(l, d.id) ? 'disabled' : ''}>Open department · ${M(O.deptOpenCost(l, d.id))}</button></div></article>`;
   const need = O.needWorkers(l, d.id), a = O.automation(l, d.id);
   // who leads it: the owner, the coop that holds the company, or a co-owner lending a personal specialist
   const c = city(), hq = l.owner.k === 'h' ? c.holdings[l.owner.id] : null, cemp = hq && c.talent ? E.TAL.coopEmp(c, hq) : null;

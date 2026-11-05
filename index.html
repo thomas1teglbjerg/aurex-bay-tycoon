@@ -835,6 +835,14 @@ a.adv:hover .adv-t em { text-decoration: underline; }
 .shic { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; flex: none; color: #fff; background: var(--cc); }
 .s-boltexpress { --cc: #e11d48; --cbg: #fff5f7; } .s-ridgeway { --cc: #2563eb; --cbg: #f3f6fd; } .s-harborline { --cc: #0f766e; --cbg: #f0f7f6; }
 .s-boltexpress, .s-ridgeway, .s-harborline { background: var(--cbg); color: #16202e; }
+.s-aurexfreight { --cc: #1e293b; background: #f4f6fa; color: #16202e; } .s-aurexfreight .shrow .grow > span { color: #55657d; }
+.s-aurexfreight .cr-head nav { flex-wrap: wrap; gap: 6px 14px; } .s-aurexfreight .cr-head nav a { display: inline-flex; align-items: center; gap: 5px; }
+.fx-tabs { display: flex; gap: 18px; padding: 10px 18px 0; border-bottom: 1px solid rgba(0,0,0,0.08); } .fx-tabs a { color: #55657d !important; text-decoration: none; font-weight: 700; font-size: 14px; padding: 6px 0; border-bottom: 2px solid transparent; } .fx-tabs a.on { color: var(--cc) !important; border-color: var(--cc); }
+.fx-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+.fx-card { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; background: #fff; border-radius: 14px; border-top: 4px solid var(--cc); box-shadow: 0 1px 3px rgba(0,0,0,0.08); text-decoration: none; color: #16202e !important; }
+.fx-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.12); } .fx-top { display: flex; align-items: center; gap: 8px; color: var(--cc); font-family: var(--head); font-size: 18px; } .fx-top b { color: #16202e; }
+.fx-tag { font-size: 13px; color: #55657d; margin-bottom: 6px; } .fx-l { display: flex; justify-content: space-between; gap: 8px; font-size: 13.5px; padding: 4px 0; border-bottom: 1px solid rgba(0,0,0,0.06); } .fx-l span { color: #55657d; }
+.fx-on { font-size: 13px; color: var(--cc); font-weight: 700; margin-top: 6px; } .fx-card em { font-style: normal; font-weight: 700; color: var(--cc); margin-top: 8px; font-size: 14px; }
 .cr-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 18px; background: var(--cc); color: #fff; } .cr-logo { display: flex; align-items: center; gap: 8px; text-decoration: none; color: #fff !important; font-family: var(--head); font-size: 19px; } .s-boltexpress .cr-logo b { font-style: italic; text-transform: uppercase; } .s-harborline .cr-logo b { letter-spacing: 0.08em; text-transform: uppercase; }
 .cr-head nav { margin-left: auto; display: flex; gap: 16px; } .cr-head nav a { color: rgba(255,255,255,0.8) !important; text-decoration: none; font-weight: 700; font-size: 14px; padding: 4px 0; border-bottom: 2px solid transparent; } .cr-head nav a.on { color: #fff !important; border-color: #fff; }
 .cr-hero { padding: 26px 18px; background: linear-gradient(135deg, var(--cc), color-mix(in srgb, var(--cc) 60%, #000)); color: #fff; } .cr-hero h1 { font-family: var(--head); font-size: clamp(24px, 6vw, 36px); max-width: 640px; line-height: 1.1; }
@@ -1006,6 +1014,10 @@ em.s { color: #b07a10; font-style: normal; font-weight: 700; } em.m { color: var
 #panel .box.closed > h2 { border-bottom-color: transparent; }
 #panel .box.closed > h2::after { transform: translateY(1px) rotate(-45deg); }
 #panel .box.closed > :not(h2) { display: none !important; }
+#panel .fold > .dh { cursor: pointer; user-select: none; } #panel .fold > .dh > div { flex: 1; }
+#panel .fold > .dh::after { content: ""; flex: none; width: 9px; height: 9px; margin-right: 4px; border-right: 2px solid #fff; border-bottom: 2px solid #fff; transform: translateY(-3px) rotate(45deg); transition: transform .18s; }
+#panel .fold.closed > .dh { min-height: 0; padding-top: 10px; padding-bottom: 10px; } #panel .fold.closed > .dh::after { transform: translateY(1px) rotate(-45deg); }
+#panel .fold.closed > :not(.dh) { display: none !important; }
 #panel .box > h2:focus-visible { outline: 2px solid var(--info); outline-offset: -2px; border-radius: 12px; }
 /* ---------------- inline scenes (sales calls, meetings) */
 .iscene { border: 1px solid var(--line); border-left: 0; border-radius: 12px; overflow: hidden; background: var(--panel); box-shadow: inset 0 3px 0 var(--tint); display: flex; flex-direction: column; gap: 10px; padding: 12px; }
