@@ -72,16 +72,15 @@ export function newsletter(city, m, liveAds) {
   return { items, ad: ad ? { id: ad.id, lid: ad.lid, kind: ad.kind, cid: ad.cid, tone: ad.tone, head: ad.head, line: ad.line } : null };
 }
 
-// the research note on the next world card: raw signals, no headline. Each shocked stock shows as a z-score
-// against its 12-week mean (with some noise), one untouched sector adds a weak decoy, then macro and special flags.
+// the research note on the next world card, in the specialist's own words: what they hear per sector
+// (strong moves first), sometimes an unconfirmed rumour about another sector, the big picture and special warnings. Never the card itself.
 export function insightBody(card, rnd = Math.random) {
-  const n = (lo, hi, d = 0) => (lo + rnd() * (hi - lo)).toFixed(d);
-  const fill = (t) => t.replace('{a}', n(1.2, 2.6, 1)).replace('{b}', n(7, 16)).replace('{c}', n(20, 60)).replace('{d}', n(36, 48)).replace('{e}', n(90, 170)).replace('{f}', n(12, 16)).replace('{g}', n(1, 9)).replace('{h}', n(2, 4)).replace('{i}', n(4, 9)).replace('{j}', n(96, 100));
-  const z = (v) => { const x = v * 12 + (rnd() - 0.5) * 0.6; return `${x >= 0 ? '+' : '−'}${Math.abs(x).toFixed(1)}σ`; };
-  const hit = Object.entries(card.shock || {}), quiet = STOCKS.filter((s) => !(s.id in (card.shock || {})));
-  const rows = hit.map(([id, v]) => `${INSIGHT.signal[id]}: ${z(v)} vs 12-week mean`);
-  if (quiet.length) { const d = quiet[Math.floor(rnd() * quiet.length)]; rows.push(`${INSIGHT.signal[d.id]}: ${z((rnd() < 0.5 ? -1 : 1) * (0.03 + rnd() * 0.04))} vs 12-week mean`); }
-  for (let i = rows.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [rows[i], rows[j]] = [rows[j], rows[i]]; }
-  const macro = (INSIGHT.macro[card.econ] || INSIGHT.macro.none).map(fill), fx = card.fx && INSIGHT.fx[card.fx] ? [fill(INSIGHT.fx[card.fx])] : [];
-  return ['My signal read for the coming quarter. Draw your own conclusions; I only report what the data shows.', 'Sector signals:', ...rows.map((r) => `· ${r}`), 'Macro:', ...macro.map((r) => `· ${r}`), ...(fx.length ? ['Flags:', ...fx.map((r) => `· ${r}`)] : []), 'Not investment advice. Moves like these usually reach prices within the quarter.'].join('\n');
+  const any = (a) => a[Math.floor(rnd() * a.length)];
+  const hit = Object.entries(card.shock || {}).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+  const lines = hit.map(([id, v]) => `${INSIGHT.hint[id][v >= 0 ? 0 : 1]} ${Math.abs(v) >= 0.15 ? any(INSIGHT.strong) : any(INSIGHT.weak)}`);
+  const quiet = STOCKS.filter((s) => !(s.id in (card.shock || {})));
+  if (quiet.length && rnd() < 0.5) lines.push(INSIGHT.rumour.replace('{x}', INSIGHT.hint[any(quiet).id][rnd() < 0.5 ? 0 : 1]));
+  if (!hit.length) lines.push('Honestly, my contacts are quiet. No sector stands out.');
+  const fx = card.fx && INSIGHT.fx[card.fx];
+  return [any(INSIGHT.open), ...lines, ...(fx ? [fx] : []), INSIGHT.macro[card.econ] || INSIGHT.macro.none, any(INSIGHT.close)].join('\n');
 }
