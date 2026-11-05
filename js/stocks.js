@@ -27,7 +27,7 @@ export function stocksHTML(ui) {
     return `<tr data-a="stock" data-id="${x.id}" class="click"><td><div style="display:flex;align-items:center;gap:8px"><img src="img/k-${x.id}.jpg" alt="" class="certthumb"><b>${esc(s.name)}</b></div></td><td class="num">${x.qty}</td><td class="num">${M(x.avg)}</td><td class="num">${PX(livePrice(c, x.id))}</td><td class="num">${M(x.value)}</td><td class="num ${x.pl >= 0 ? 'up' : 'down'}">${M(x.pl, true)}</td><td class="num ${x.pl >= 0 ? 'up' : 'down'}">${P(x.plPct)}</td><td class="num ${change(h, 1) >= 0 ? 'up' : 'down'}">${P(change(h, 1))}</td></tr>`; }).join('');
   const market = STOCKS.map((s) => { const st = { p: livePrice(c, s.id) }, h = liveH(c, s.id), own = p.shares[s.id] || 0;
     return `<button class="mrow" data-a="stock" data-id="${s.id}"><img src="img/k-${s.id}.jpg" alt="" class="certthumb"><div class="grow"><b>${esc(s.name)}</b><span class="num">${own ? `You own ${own}` : 'Not owned'}</span></div>${spark(h.slice(-48), 64, 26)}<div class="right"><b class="num">${PX(st.p)}</b><span class="num ${change(h, 1) >= 0 ? 'up' : 'down'}">${P(change(h, 1))} 1w</span><span class="num ${change(h, 48) >= 0 ? 'up' : 'down'}">${P(change(h, 48))} 12m</span></div></button>`; }).join('');
-  return `<h2 class="ph1">Aurex Bay Stock Exchange</h2>
+  return `<h2 class="ph1" style="margin-top:28px">Aurex Bay Stock Exchange</h2>
   <div class="kpis">
     <div class="stat"><small>Portfolio value</small><b class="num">${M(value)}</b></div>
     <div class="stat"><small>Invested</small><b class="num">${M(cost)}</b></div>
@@ -40,7 +40,7 @@ export function stocksHTML(ui) {
     <div class="box"><h2>Portfolio<small>VALUE VS INVESTED</small></h2><div class="in">${chart}<div class="btns" style="font-size:13px;gap:14px"><span><b style="color:#1b2b44">━</b> Market value</span><span><b style="color:#c4952b">╍</b> Invested</span></div></div></div>
     <div class="box"><h2>Your holdings<small>${pos.length} STOCKS</small></h2><div class="in">${rows ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Stock</th><th>Shares</th><th>Avg cost</th><th>Price</th><th>Value</th><th>P/L</th><th>P/L %</th><th>1w</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="empty">You hold no shares yet. Pick a stock to buy your first shares.</p>'}</div></div>
   </div><div class="col">
-    <div class="box"><h2>Market<small>12 STOCKS</small></h2><div class="in"><div class="rows">${market}</div><p class="empty" style="font-size:13px">Prices move monthly with the economy, quarterly with World Cards, and instantly when any player trades.</p></div></div>
+    <div class="box"><h2>Stocks<small>${STOCKS.length} LISTED</small></h2><div class="in"><div class="rows">${market}</div><p class="empty" style="font-size:13px">Prices move monthly with the economy, quarterly with World Cards, and instantly when any player trades.</p></div></div>
   </div></div>`;
 }
 

@@ -1,10 +1,11 @@
 // Company dashboard: one page per company with production, supplies, orders and departments
 import * as E from '../supabase/functions/_shared/engine.js';
-import { TYPES, SIZES, GOODS, RECIPES, DEPTS, STAFF, WORKER, MARKET_KIND, CLIENT_RULES, LIFE as LC, CRAFT, AD, AD_CATS } from '../supabase/functions/_shared/content.js';
+import { TYPES, SIZES, GOODS, RECIPES, DEPTS, STAFF, WORKER, MARKET_KIND, CLIENT_RULES, LIFE as LC, CRAFT, AD, AD_CATS, PAPER } from '../supabase/functions/_shared/content.js';
 import { adHTML } from './web.js';
 import { carrierPicker, deliveriesBox } from './freight.js';
 import { money, cardHTML } from './life.js';
 import { scenesHTML, sceneFor } from './scenes.js';
+import { selfHeadHTML } from './profile.js';
 import { city, me, esc, lname, coImg, faceUrl, dollars, M, K, N, P, dateLabel, shortDate, deptIcon, spark, barChart, seg } from './util.js';
 
 const O = E.OPS;
@@ -120,12 +121,12 @@ export function companyHTML(lid, ui = {}) {
     return `<div class="suprow"><div class="supg"><b>${esc(GOODS[g].name)}</b><span>Need ${N(n)} ${esc(GOODS[g].unit)}/mo · stock ${N(stock)}${way ? ` (+${N(way)} on the way)` : ''} · <em class="${cover < 1 ? 'down' : ''}">${cover >= 99 ? '' : cover.toFixed(1) + ' months'}</em></span><span>Market ${K(mk.p)} · import ${K(O.importPrice(c, g))}</span></div>
       ${ro ? '' : `<div class="supctl"><div class="stepper"><button data-a="buyQty" data-g="${g}" data-v="-10" aria-label="Fewer">−</button><output class="num">${q}</output><button data-a="buyQty" data-g="${g}" data-v="10" aria-label="More">+</button></div><button class="btn sm navy" data-a="buySupply" data-lid="${l.id}" data-g="${g}" data-q="${q}" data-c="${cid}">Order · ${money(qt.cost)}</button></div><span class="supnote">${money(qt.goods)} goods + ${money(qt.freight)} freight · ${qt.minDays === qt.maxDays ? qt.maxDays : `${qt.minDays}–${qt.maxDays}`} days${qt.fromBook ? ` · ${N(qt.fromBook)} from players` : ''}${qt.imported ? ` · ${N(qt.imported)} imported` : ''}</span>`}</div>`; }).join('');
   const outs = Object.entries(rec.out).map(([g, q]) => { const mk = c.market[g], stock = o.inv[g] || 0;
-    return `<tr><td><b>${esc(GOODS[g].name)}</b><span>${esc(GOODS[g].unit)}</span></td><td class="num">${N(q * last.units)}</td><td class="num">${N(stock)}</td><td class="num">${K(mk.p)}</td><td>${ro ? '' : `<div class="btns" style="flex-wrap:nowrap;gap:6px;justify-content:flex-end"><button class="btn sm" data-a="listGoods" data-lid="${l.id}" data-g="${g}" ${stock < 1 ? 'disabled' : ''}>List all</button><button class="btn sm" data-a="exportGoods" data-lid="${l.id}" data-g="${g}" data-c="${(ui.carrier && ui.carrier[l.id]) || O.setting(l, 'procurement', 'carrier')}" ${stock < 1 ? 'disabled' : ''}>Export at ${K(O.exportPrice(c, g))}</button></div>`}</td></tr>`; }).join('');
+    return `<tr><td><b>${esc(GOODS[g].name)}</b><span>${esc(GOODS[g].unit)}</span></td><td class="num">${N(q * last.units)}</td><td class="num">${N(stock)}</td><td class="num">${K(mk.p)}</td><td>${ro ? '' : `<div class="btns" style="flex-wrap:nowrap;gap:6px;justify-content:flex-end"><button class="btn sm" data-a="listGoods" data-lid="${l.id}" data-g="${g}" ${stock < 1 ? 'disabled' : ''}>List all</button><button class="btn sm" data-a="exportGoods" data-lid="${l.id}" data-g="${g}" data-c="${(ui.carrier && ui.carrier[l.id]) || O.setting(l, 'procurement', 'carrier')}" ${stock < 1 ? 'disabled' : ''}>Export at ${K(O.exportPrice(c, g))}</button><button class="btn sm gold" data-a="dealNew" data-lid="${l.id}" data-g="${g}" ${stock < 1 ? 'disabled' : ''}>Sell to a contact</button></div>`}</td></tr>`; }).join('');
   const myOffers = (c.book || []).filter((x) => x.lid === l.id);
   const ords = (o.orders || []).slice().sort((a, b) => ['new', 'accepted', 'renegotiating', 'cancelled'].indexOf(a.status) - ['new', 'accepted', 'renegotiating', 'cancelled'].indexOf(b.status));
   const clients = (o.clients || []).filter((x) => x.status === 'active').sort((a, b) => b.weight - a.weight);
   const left = (o.clients || []).filter((x) => x.status === 'left').length;
-  const depts = O.deptsFor(l).map((d) => ro ? deptCardRO(l, d) : deptCard(l, d)).join('');
+  const depts = O.deptsFor(l).map((d) => ro ? deptCardRO(l, d) : deptCard(l, d, ui)).join('');
   const ready = ords.filter((x) => x.status === 'accepted').length;
 
   return `<div class="crumbs"><button class="btn sm" data-a="back">‹ ${ro ? 'Coop' : 'Empire'}</button><span class="muted">${coop ? `${esc(coop.name)} · co-owned · costs come out of the coop treasury` : ro ? `${esc(owner.name)}'s company` : 'Company dashboard'}</span></div>
@@ -152,7 +153,9 @@ export function companyHTML(lid, ui = {}) {
     <div class="col">
       ${ro ? '' : `<div class="box"><h2>To-do<small>${tasks.length}</small></h2><div class="in">${taskHTML}<p class="empty" style="font-size:13px">Tasks appear when a department has no staff. Hire workers to hand the work over.</p></div></div>`}
       ${cellarBox(c, l, ro)}
-      ${adBox(c, l, ro, ui)}
+      ${newsroomBox(c, l, ro)}
+      ${o.depts.social && !ro ? '' : adBox(c, l, ro, ui)}
+      ${o.depts.social ? '' : pressBox(c, l, ro)}
       <div class="box" id="orders-box"><h2>${hotel ? 'Bookings' : 'Customer orders'}<small>${ords.length} OPEN</small></h2><div class="in">
         ${!ro && ready && !hotel ? `<button class="btn navy" data-a="deliverOpen" data-lid="${l.id}">Open delivery map · ${ready} ready</button>` : ''}
         ${ords.length ? `<div class="orders">${ords.map((od) => orderCard(c, l, od, ro)).join('')}</div>` : `<p class="empty">${hotel ? (O.automation(l, 'sales') >= 1 ? 'Reservations confirms every booking. Guests check in by themselves.' : 'No open bookings. Travel agents and tour operators book every month.') : O.automation(l, 'sales') >= 1 ? 'Your sales team answers and ships every order.' : 'No open orders. New orders arrive every month from your clients.'}</p>`}
@@ -160,7 +163,7 @@ export function companyHTML(lid, ui = {}) {
         ${o.done && o.done.length ? `<details><summary>${hotel ? 'Recent guests' : 'Recently delivered'} (${o.done.length})</summary><div class="rows">${o.done.slice(0, 8).map((x) => { const cl = O.clientById(o, x.cid); return `<div class="row"><div class="grow"><b>${esc(cl ? cl.name : '')}</b><span>${N(x.units)} ${hotel ? 'stays' : 'units'} · ${esc(shortDate(x.dm))}${x.vip ? ' · VIP' : ''}${x.auto ? ` · handled by ${hotel ? 'Reservations' : 'Sales'}` : ''}</span></div><b class="num up">${M(x.value)}</b></div>`; }).join('')}</div></details>` : ''}
       </div></div>
       <div class="box"><h2>Clients<small>${kind === 'b2b' ? 'B2B' : 'B2C'}</small></h2><div class="in"><div class="rows">${clients.map((cl) => { const [ml, mc] = MOOD(cl.mood); return `<div class="row"><span class="av" style="background:${DEPT_TINT.sales};--avc:${DEPT_TINT.sales}">${esc(cl.name[0])}</span><div class="grow"><b>${esc(cl.name)}</b><span>${esc(cl.district)} · ${cl.weight >= 1.5 ? 'large' : cl.weight >= 0.8 ? 'medium' : 'small'} account · ${cl.orders} orders · ${M(cl.revenue)} bought</span><div class="bar" style="margin-top:4px"><i style="width:${cl.mood}%;background:${cl.mood < 35 ? 'var(--bad)' : cl.mood < 50 ? 'var(--gold)' : 'var(--good)'}"></i></div></div><span class="chip ${mc}">${ml}</span></div>`; }).join('')}</div>
-        ${ro ? '' : scenesHTML((st) => st.lid === l.id && st.from === 'clients')}${!ro && O.automation(l, 'sales') < 1 && o.cd.findCustomers !== c.m && !sceneFor(l.id, 'findCustomers') ? `<button class="btn" data-a="scene" data-from="clients" data-lid="${l.id}" data-task="findCustomers">${hotel ? 'Find new booking partners' : 'Find new clients'} · takes 20 seconds</button>` : ''}</div></div>
+        ${ro ? '' : scenesHTML((st) => st.lid === l.id && st.from === 'clients')}${!ro && O.automation(l, 'sales') < 1 && !sceneFor(l.id, 'findCustomers') ? `<button class="btn${o.cd.findCustomers === c.m ? ' done' : ''}" data-a="scene" data-from="clients" data-lid="${l.id}" data-task="findCustomers">${hotel ? 'Find new booking partners' : 'Find new clients'} · takes 20 seconds</button>` : ''}</div></div>
       <div class="box" id="supplies-box"><h2>${hotel ? 'Guest supplies' : 'Production & supplies'}<small>${Math.round(o.eff * 100)}% SUPPLIED</small></h2><div class="in">
         ${ro ? '' : (() => { const cid0 = (ui.carrier && ui.carrier[l.id]) || O.setting(l, 'procurement', 'carrier'), g0 = Object.keys(rec.in)[0]; return `<div class="set"><span class="cap">Ship with</span>${carrierPicker('carrier', `data-lid="${l.id}"`, cid0, g0 ? (cid) => O.quote(c, l, g0, (ui.buyQty && ui.buyQty[g0]) || Math.max(10, Math.ceil((need[g0] || 0) / 10) * 10), 'cheapest', cid) : null)}<span class="muted" style="font-size:12.5px">Prices shown for ${g0 ? esc(GOODS[g0].name.toLowerCase()) : 'your cargo'}. Freight and delivery time apply to every order${o.depts.procurement ? '. Procurement restocks with the carrier set in its settings' : ''}.</span></div>`; })()}
         <div class="sups">${inputs}</div>
@@ -182,10 +185,10 @@ export function companyHTML(lid, ui = {}) {
   </div>`;
 }
 // Marketing: ad campaigns on the city's websites, for the company or one piece it makes or the owner holds
-function adBox(c, l, ro, ui) {
+function adBox(c, l, ro, ui, inDept) {
   const A = E.ADS, o = l.ops, mk = O.deptFor(l, 'social').name, run = A.running(c, l.id);
-  if (ro && !run) return '';
-  const head = (n) => `<div class="box adbox"><h2>Ad campaigns<small>${n}</small></h2><div class="in">`;
+  if ((ro || !o.depts.social) && !run) return ''; // only companies with a Marketing department advertise
+  const head = (n) => (inDept ? `<div class="dsub adbox"><h3>Ad campaigns<small>${n}</small></h3><div>` : `<div class="box adbox"><h2>Ad campaigns<small>${n}</small></h2><div class="in">`);
   if (run) {
     const left = Math.min(run.weeks, Math.max(0, Math.ceil((run.until - c.g) * 48 - 1e-6))), what = run.kind === 'co' ? esc(lname(l)) : esc((E.LIFE.ITEM[run.cid] || {}).name || 'a piece');
     return head('RUNNING') + `${adHTML(run, 'wide', true)}
@@ -193,10 +196,9 @@ function adBox(c, l, ro, ui) {
       <p class="empty" style="font-size:13px">${run.kind === 'co' ? `Every week it runs: customers +${Math.round(AD.cust * A.strength(l) * 1000) / 10}% and reputation +${AD.rep * A.strength(l)}.` : `Every week it runs the piece gains ${Math.round(AD.lift * A.strength(l) * 1000) / 10}% in market value.`}${A.strength(l) > 1 ? ' A head of marketing makes it 50% stronger.' : ''} Open the web browser to see it live.</p>
       ${ro ? '' : `<div class="btns"><button class="btn sm" data-a="web" data-u="baylink.ab">See it in the browser</button><button class="linkbtn" data-a="adStop" data-lid="${l.id}">Stop campaign</button></div>`}</div></div>`;
   }
-  if (!o.depts.social) return head('MARKETING') + `<p class="empty">Open the ${esc(mk)} department to run ad campaigns on the city’s websites: banners on Baylink, the Gazette, the dealers and every other site in the browser.</p></div></div>`;
   const st = Object.assign({ subj: 'co', tone: 'wink', n: 0, weeks: AD.weeks[1] }, (ui.ad && ui.ad[l.id]) || {});
   const p = me(), prods = E.ADS.products(c, p, l), pr = prods.find((x) => x.uid === st.subj), cid = pr ? pr.cid : null, subj = pr ? pr.uid : 'co';
-  const t = A.copy(l, st.tone, st.n, cid, p.name), cost = A.cost(l, st.weeks), cash = l.owner.k === 'h' ? c.holdings[l.owner.id].treasury : p.cash;
+  const t = A.copy(l, st.tone, st.n, cid, p.name), cost = A.cost(l, st.weeks, c), cash = l.owner.k === 'h' ? c.holdings[l.owner.id].treasury : p.cash;
   const preview = adHTML({ lid: l.id, kind: cid ? 'item' : 'co', cid, uid: pr ? pr.uid : null, tone: st.tone, head: t.head, line: t.line }, 'wide', true);
   const subjects = [['co', `The company · ${lname(l)}`], ...prods.map((x) => [x.uid, `${E.LIFE.ITEM[x.cid].name}${x.where === 'cellar' ? ' · estate cellar' : ' · your collection'}`])];
   return head('MARKETING') + `<p style="margin:0 0 10px">Buy ad space on the city’s websites for a few weeks. The ad uses your picture and a line in the tone you choose.</p>
@@ -207,6 +209,32 @@ function adBox(c, l, ro, ui) {
     <div class="adprev">${preview}</div>
     <div class="btns" style="margin-top:10px"><button class="btn sm" data-a="adNext" data-lid="${l.id}">Another line</button><button class="btn gold" data-a="adLaunch" data-lid="${l.id}" data-subj="${esc(subj)}" data-tone="${st.tone}" data-n="${t.n}" data-weeks="${st.weeks}" ${cash < cost ? 'disabled' : ''}>Launch campaign · ${M(cost)}</button></div>
     <p class="empty" style="font-size:13px">${cid ? `While it runs the piece gains about ${Math.round(AD.lift * A.strength(l) * 1000) / 10}% in market value a week.` : `While it runs: customers +${Math.round(AD.cust * A.strength(l) * 1000) / 10}% and reputation +${AD.rep * A.strength(l)} every week.`}${A.strength(l) > 1 ? ' Your head of marketing makes it 50% stronger.' : ' A head of marketing (Sofia Lindström) makes campaigns 50% stronger.'} Paid ${l.owner.k === 'h' ? 'from the coop treasury' : 'from company cash'}, shown under department budgets.</p></div></div>`;
+}
+// The Aurex Gazette: the owner's newsroom (ad desk, press release price, front page)
+function newsroomBox(c, l, ro) {
+  if (!E.GZ.isPaper(l)) return '';
+  const gz = c.gz || {}, q = gz.queue || [], f = gz.front, fl = f && E.listing(c, f.lid);
+  const step = (a, v, label, dis) => `<button data-a="${a}" data-v="${v}" ${dis ? 'disabled' : ''} aria-label="${label}">${v > 0 ? '+' : '−'}</button>`;
+  return `<div class="box"><h2>Newsroom<small>THE AUREX GAZETTE</small></h2><div class="in">
+    <div class="stats"><div class="stat"><small>Ads booked</small><b class="num">${N(gz.sold || 0)}</b></div><div class="stat"><small>Press releases</small><b class="num">${N(gz.pressN || 0)}</b></div><div class="stat"><small>Earned from ads & press</small><b class="num up">${M(gz.earned || 0)}</b></div></div>
+    ${ro ? '' : `<div class="set"><span class="cap">Ad price</span><div class="stepper">${step('gzRate', -PAPER.rateStep, 'Lower ad price', gz.rate <= PAPER.rate[0])}<output class="num">×${gz.rate || 1}</output>${step('gzRate', PAPER.rateStep, 'Raise ad price', gz.rate >= PAPER.rate[1])}</div><span class="muted" style="font-size:12.5px">of the normal Marketing price. Every campaign in the city pays the paper.</span></div>
+    <div class="set"><span class="cap">Press release</span><div class="stepper">${step('gzFee', -PAPER.pressStep, 'Lower press release price', gz.press <= PAPER.press[0])}<output class="num">${M(gz.press || PAPER.pressStart)}</output>${step('gzFee', PAPER.pressStep, 'Raise press release price', gz.press >= PAPER.press[1])}</div><span class="muted" style="font-size:12.5px">what tycoons pay to print a story about their company.</span></div>
+    <div class="set"><span class="cap">New ads</span>${seg('gzHand', '', [[0, 'Go live at once'], [1, 'I approve them']], gz.hand ? 1 : 0)}</div>`}
+    ${q.length ? `<div class="cap" style="margin-top:8px">Waiting for your approval</div>${q.map((ad) => { const co = E.listing(c, ad.lid); return co ? `<div style="margin:8px 0">${adHTML(ad, 'wide', true)}<div class="btns" style="margin-top:6px"><span class="muted" style="align-self:center;font-size:13px">${esc(lname(co))} · ${ad.weeks} weeks · ${M(ad.cost)}</span>${ro ? '' : `<button class="btn sm gold" data-a="gzReview" data-id="${ad.id}" data-ok="1">Approve</button><button class="btn sm" data-a="gzReview" data-id="${ad.id}" data-ok="0">Reject</button>`}</div></div>` : ''; }).join('')}` : ''}
+    <div class="cap" style="margin-top:10px">Front page</div>
+    ${f && fl ? `<p style="margin:2px 0"><b>${esc(f.t)}</b> · ${esc(lname(fl))}, ${esc(dateLabel(Math.floor(f.g * 12)))}</p>` : '<p class="empty" style="margin:2px 0">No front page story yet.</p>'}
+    <p class="empty" style="font-size:13px">Every week the newsroom mails you three stories about other tycoons' companies. The one you pick leads the paper: that company gets reputation +${PAPER.front.rep} and more customers. If you do not pick, the editor does. The paper never runs bad stories about other players.</p>
+    <div class="btns"><button class="btn sm" data-a="web" data-u="aurexgazette.ab">Open The Aurex Gazette</button></div></div></div>`;
+}
+// any company: pay The Aurex Gazette to print a short story about it
+function pressBox(c, l, ro, inDept) {
+  if (ro || !l.ops || E.GZ.isPaper(l)) return '';
+  const fee = E.GZ.pressFee(c), ready = E.GZ.pressReady(c, l), cash = l.owner.k === 'h' ? c.holdings[l.owner.id].treasury : me().cash;
+  const left = ready ? 0 : Math.max(1, Math.ceil((l.ops.pressG + PAPER.pressWeeks / 48 - c.g) * 48 - 1e-6));
+  return `${inDept ? `<div class="dsub"><h3>Press release<small>${M(fee)}</small></h3><div>` : `<div class="box"><h2>Press release<small>${M(fee)}</small></h2><div class="in">`}
+    <p style="margin:0 0 8px">Pay The Aurex Gazette to print a short story about ${esc(lname(l))}. It shows in the city news and gives reputation +${PAPER.pressRep} and a few more customers.</p>
+    <div class="btns">${Object.entries(PAPER.PRESS_LABEL).map(([k, t]) => `<button class="btn sm" data-a="gzPress" data-lid="${l.id}" data-kind="${k}" ${!ready || cash < fee ? 'disabled' : ''}>${esc(t)}</button>`).join('')}</div>
+    <p class="empty" style="font-size:13px">${ready ? `One story every ${PAPER.pressWeeks} weeks per company.` : `Next press release in ${left} week${left === 1 ? '' : 's'}.`} The money goes to the owner of the paper.</p></div></div>`;
 }
 const AD_CATS_TXT = Object.fromEntries(Object.entries(AD_CATS).map(([k, cs]) => [k, cs.map((x) => ({ car: 'cars', wine: 'wine', watch: 'watches', art: 'art' }[x])).join(' and ')]));
 
@@ -236,9 +264,9 @@ function deptCardRO(l, d) {
   const state = O.deptState(l, d.id), dd = l.ops.depts[d.id];
   return `<article class="dept">${deptHeader(l, d, state, true)}<div class="dept-in"><p class="muted" style="font-size:13.5px">${dd ? `${dd.w} workers · ${Math.round(O.automation(l, d.id) * 100)}% automated${dd.head ? ` · has a head` : ''}` : 'Not opened'}</p></div></article>`;
 }
-function deptCard(l, d) {
+function deptCard(l, d, ui) {
   const o = l.ops, state = O.deptState(l, d.id), dd = o.depts[d.id], p = me();
-  if (!dd) return `<article class="dept">${deptHeader(l, d, 'closed', true)}<div class="dept-in"><p>${esc(d.desc)}</p><p class="muted" style="font-size:13px">Without it: ${esc(d.without)}</p><button class="btn navy" data-a="deptOpen" data-lid="${l.id}" data-dept="${d.id}" ${(l.owner.k === 'h' ? city().holdings[l.owner.id].treasury : p.cash) < O.deptOpenCost(l, d.id) ? 'disabled' : ''}>Open department · ${M(O.deptOpenCost(l, d.id))}</button></div></article>`;
+  if (!dd) return `<article class="dept fold">${deptHeader(l, d, 'closed', true).replace('<header ', `<header data-k="dept:${d.id}" `)}<div class="dept-in"><p>${esc(d.desc)}</p><p class="muted" style="font-size:13px">Without it: ${esc(d.without)}</p><button class="btn navy" data-a="deptOpen" data-lid="${l.id}" data-dept="${d.id}" ${(l.owner.k === 'h' ? city().holdings[l.owner.id].treasury : p.cash) < O.deptOpenCost(l, d.id) ? 'disabled' : ''}>Open department · ${M(O.deptOpenCost(l, d.id))}</button></div></article>`;
   const need = O.needWorkers(l, d.id), a = O.automation(l, d.id);
   // who leads it: the owner, the coop that holds the company, or a co-owner lending a personal specialist
   const c = city(), hq = l.owner.k === 'h' ? c.holdings[l.owner.id] : null, cemp = hq && c.talent ? E.TAL.coopEmp(c, hq) : null;
@@ -250,17 +278,18 @@ function deptCard(l, d) {
   const cand = (emp) => { const id = emp && emp.team && emp.team[d.head]; return id && c.talent[id] && c.talent[id].owner === emp.id ? id : null; };
   const offerBtn = (emp) => { const id = cand(emp); if (!id) return ''; const away = emp.assign && emp.assign[d.head]; return `<button class="btn sm" data-a="assignHead" data-lid="${l.id}" data-dept="${d.id}" data-spec="${d.head}"${emp.coop ? ` data-coop="${emp.id}"` : ''}>Make ${esc(E.TAL.PERSON[id].name)}${emp.coop ? ' (coop)' : ''} head of ${esc(d.name)}${away ? ' (moves from another company)' : ''}</button>`; };
   const offers = [cemp, p].map(offerBtn).join('');
-  const heads = d.head ? (tp ? `<div class="head"><span class="thumb" style="${face(tid)}"></span><div class="grow"><b>${esc(tp.name)}</b><span>Head of ${esc(d.name)} · +${hb}% automation${lead.coop ? ' · coop' : lead.id !== p.id ? ` · lent by ${esc(lead.name)}` : ''}${ts && ts.leave != null ? ' · on leave' : ''}${ts && ts.stress > 70 ? ' · stressed' : ''}</span></div>${canManage ? `<button class="btn sm" data-a="staff" data-id="${tid}"${lead.coop ? ` data-coop="${lead.id}"` : ''}>Manage</button><button class="btn sm" data-a="unassignHead" data-spec="${d.head}"${lead.coop ? ` data-coop="${lead.id}"` : ''}>Remove</button>` : ''}</div>`
+  const heads = dd.head === 'self' ? selfHeadHTML(l, d, dd) : d.head ? (tp ? `<div class="head"><span class="thumb" style="${face(tid)}"></span><div class="grow"><b>${esc(tp.name)}</b><span>Head of ${esc(d.name)} · +${hb}% automation${lead.coop ? ' · coop' : lead.id !== p.id ? ` · lent by ${esc(lead.name)}` : ''}${ts && ts.leave != null ? ' · on leave' : ''}${ts && ts.stress > 70 ? ' · stressed' : ''}</span></div>${canManage ? `<button class="btn sm" data-a="staff" data-id="${tid}"${lead.coop ? ` data-coop="${lead.id}"` : ''}>Manage</button><button class="btn sm" data-a="unassignHead" data-spec="${d.head}"${lead.coop ? ` data-coop="${lead.id}"` : ''}>Remove</button>` : ''}</div>`
     : offers ? `<div class="btns">${offers}</div>`
     : `<p class="muted" style="font-size:13px">Head: sign a ${esc(STAFF_BY[d.head].role.replace(/^(Junior|Senior) /, ''))} to lead this department. <button class="linkbtn" data-a="web" data-u="apextalent.ab/role/${d.head}">Find one on Apex Talent</button></p>`) : '';
   const settings = d.settings.map((s) => `<div class="set"><span class="cap">${esc(s.label)}</span>${seg('deptSet', `data-lid="${l.id}" data-dept="${d.id}" data-k="${s.k}"`, s.opts, dd.set[s.k] ?? O.setting(l, d.id, s.k))}</div>`).join('');
-  const manualAvail = d.manual && a < 1 && !(d.id === 'ops' && o.overtimeM === l.ops.curM + 1);
+  const manualAvail = d.manual && a < 1, manualDone = manualAvail && d.manual.id !== 'restock' && O.taskBlock(city(), l, d.manual.id);
   return `<article class="dept">${deptHeader(l, d, state, true)}<div class="dept-in">
     <div class="wk"><div><span class="cap">Workers</span><div class="stepper"><button data-a="workers" data-lid="${l.id}" data-dept="${d.id}" data-v="-1" aria-label="Lay off one" ${dd.w ? '' : 'disabled'}>−</button><output class="num">${dd.w} / ${need}</output><button data-a="workers" data-lid="${l.id}" data-dept="${d.id}" data-v="1" aria-label="Hire one">+</button></div></div>
       <div style="flex:1;min-width:120px"><span class="cap">Automation ${Math.round(a * 100)}%</span><div class="bar"><i style="width:${a * 100}%;background:${a >= 1 ? 'var(--good)' : 'var(--gold)'}"></i></div></div></div>
     <p class="muted" style="font-size:13px">${esc(a >= 1 ? d.auto : d.without)} Hiring costs ${M(WORKER.hireFee)} per worker, wages ${M(WORKER.salary)} a year each.</p>
-    ${heads}${settings}
-    ${manualAvail ? `<button class="btn" data-a="${d.manual.id === 'restock' ? 'gotoSupplies' : 'scene'}" data-lid="${l.id}" data-task="${d.manual.id}">${esc(d.manual.label)}<span class="muted" style="font-weight:600"> · ${esc(d.manual.note)}</span></button>` : ''}
+    ${heads}${dd.head !== 'self' ? selfHeadHTML(l, d, dd) : ''}${settings}
+    ${manualAvail ? `<button class="btn${manualDone ? ' done' : ''}" data-a="${d.manual.id === 'restock' ? 'gotoSupplies' : 'scene'}" data-lid="${l.id}" data-task="${d.manual.id}">${esc(d.manual.label)}<span class="muted" style="font-weight:600"> · ${esc(manualDone ? 'Done for this month' : d.manual.note)}</span></button>` : ''}
+    ${d.id === 'social' ? adBox(city(), l, false, ui || {}, true) + pressBox(city(), l, false, true) : ''}
     ${d.id !== 'ops' ? `<button class="linkbtn" data-a="deptClose" data-lid="${l.id}" data-dept="${d.id}">Close department</button>` : ''}
   </div></article>`;
 }

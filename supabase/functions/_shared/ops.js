@@ -30,6 +30,13 @@ export const baseCap = (l) => RECIPES[l.type].cap * scale(l);
 export function needWorkers(l, dept) { return Math.max(1, Math.round(DEPT[dept].need * Math.sqrt(scale(l)))); }
 export function deptOpenCost(l, dept) { return r2(DEPT[dept].cost * SIZES[l.size].mult); }
 export function inputCostUnit(l) { return Object.entries(RECIPES[l.type].in).reduce((a, [g, q]) => a + q * GOODS[g].base, 0); }
+// a head brings the role's own effect: a specialist always, the owner leading it themselves from level 3 (career.js)
+export const roleOn = (d) => !!(d && d.head && (d.head !== 'self' || (d.lv >= 3 && d.hb > 0)));
+// the owner's level in a department they lead themselves (0 when a specialist or nobody leads it, or they are away)
+export const selfLv = (l, dept) => { const d = l.ops && l.ops.depts[dept]; return d && d.head === 'self' && d.hb > 0 ? d.lv || 0 : 0; };
+// a specialisation one of the company's owners chose for its sector
+export const hasSp = (l, id) => !!(l.ops && l.ops.sp && l.ops.sp.includes(id));
+const tierOf = (lv, a, b, c) => (lv >= 9 ? c : lv >= 6 ? b : lv >= 3 ? a : 0);
 export function setting(l, dept, k) { const d = l.ops && l.ops.depts[dept]; return (d && d.set && d.set[k] !== undefined) ? d.set[k] : DEPT_DEFAULTS[dept][k]; }
 export function automation(l, dept) {
   if (!l.ops) return 0; if (l.ops.managed) return 1;
@@ -75,7 +82,7 @@ export function runningCosts(l) {
   if (l.ops.depts.hr && setting(l, 'hr', 'training') === 'on') budgets += 0.15 * s;
   if (l.ops.depts.legal && setting(l, 'legal', 'level') === 'strict') budgets += 0.2 * s;
   let mult = 1;
-  if (l.ops.depts.finance) { if (setting(l, 'finance', 'costs') === 'lean') mult -= 0.06; if (automation(l, 'finance') > 0) mult -= 0.03; if (l.ops.depts.finance.head) mult -= 0.05; }
+  if (l.ops.depts.finance) { if (setting(l, 'finance', 'costs') === 'lean') mult -= 0.06; if (automation(l, 'finance') > 0) mult -= 0.03; if (roleOn(l.ops.depts.finance)) mult -= 0.05; const fl = selfLv(l, 'finance'); if (fl >= 6) mult -= 0.02; if (fl >= 9) mult -= 0.02; }
   if (l.ops.booksPenalty) mult += 0.05;
   if (l.ops.costCutM !== undefined && l.ops.costCutM === l.ops.curM) mult -= 0.04;
   return { salaries: r2(salaries * mult), budgets: r2(budgets * mult), total: r2((salaries + budgets) * mult), workers };
@@ -89,14 +96,14 @@ export function capacity(l) {
   const morale = 0.8 + 0.4 * o.morale / 100;
   const training = !o.managed && o.depts.hr && setting(l, 'hr', 'training') === 'on' ? 1.08 : 1;
   const overtime = o.boost && o.boost.m === o.curM ? o.boost.mult : (o.overtimeM === o.curM ? 1.2 : 1);
-  const chief = !o.managed && o.depts.ops && o.depts.ops.head ? 1.1 : 1;
-  return baseCap(l) * staff * shift * morale * training * overtime * chief;
+  const chief = !o.managed && roleOn(o.depts.ops) ? 1.1 : 1, own = selfLv(l, 'ops') >= 6 ? 1.04 : 1, plant = hasSp(l, 'factory') ? 1.06 : 1;
+  return baseCap(l) * staff * shift * morale * training * overtime * chief * own * plant;
 }
 export function demand(city, l) {
   const o = l.ops; const price = PRICE[o.managed ? 'standard' : setting(l, 'sales', 'price')];
   const led = (tid) => !o.managed && Object.values(o.depts).some((d) => d && d.head && d.who === tid);
   const econ = led('dario') ? Math.max(1, ECON_DEMAND[city.econ]) : ECON_DEMAND[city.econ];
-  return baseCap(l) * (o.customers / 100) * (0.8 + 0.4 * o.rep / 100) * price.demand * (1 + 0.06 * o.tech) * econ * (led('rohan') ? 1.15 : 1) * (SOMMELIER.types.includes(l.type) ? Object.keys(SOMMELIER).reduce((a, k) => a * (k !== 'types' && led(k) ? SOMMELIER[k].demand : 1), 1) : 1);
+  return baseCap(l) * (o.customers / 100) * (0.8 + 0.4 * o.rep / 100) * price.demand * (1 + 0.06 * o.tech) * econ * (led('rohan') ? 1.15 : 1) * (1 + tierOf(selfLv(l, 'sales'), 0.03, 0.06, 0.1)) * (hasSp(l, 'host') && SOMMELIER.types.includes(l.type) ? 1.08 : 1) * (SOMMELIER.types.includes(l.type) ? Object.keys(SOMMELIER).reduce((a, k) => a * (k !== 'types' && led(k) ? SOMMELIER[k].demand : 1), 1) : 1);
 }
 export function unitPrice(l, yieldTrade) {
   const price = PRICE[l.ops.managed ? 'standard' : setting(l, 'sales', 'price')];
@@ -110,8 +117,10 @@ export function ensureMarket(city) {
   if (!city.market) { city.market = {}; Object.entries(GOODS).forEach(([g, d]) => (city.market[g] = { p: d.base, h: [d.base], bought: 0, imported: 0, exported: 0, sold: 0 })); }
   if (!city.book) city.book = [];
 }
-export function importPrice(city, g) { let p = GOODS[g].base * (GOODS[g].producer ? 1.5 : 1.1); if (g === 'energy' && city.fx && city.fx.id === 'energy') p *= 1.8; return r4(p); }
-export function exportPrice(city, g) { return r4(GOODS[g].base * 0.7); }
+// cb.px: the national bank's price index (cheap money lifts supply prices, dear money lowers them)
+const pxOf = (city) => (city.cb && city.cb.px) || 1;
+export function importPrice(city, g) { let p = GOODS[g].base * pxOf(city) * (GOODS[g].producer ? 1.5 : 1.1); if (g === 'energy' && city.fx && city.fx.id === 'energy') p *= 1.8; return r4(p); }
+export function exportPrice(city, g) { return r4(GOODS[g].base * pxOf(city) * 0.7); }
 export function offersFor(city, g) { return city.book.filter((o) => o.g === g && o.qty > 0.001).sort((a, b) => a.price - b.price); }
 export function listedQty(city, g) { return city.book.filter((o) => o.g === g).reduce((a, o) => a + o.qty, 0); }
 
@@ -133,6 +142,9 @@ export function buyGoods(city, ctx, buyerL, g, qty, policy, opts) {
     city.book = city.book.filter((o) => o.qty > 0.001);
   }
   const imported = Math.max(0, left); cost += imported * imp;
+  // a national bank levy on this supply is paid on top and goes to the city treasury
+  const levy = city.cb && city.cb.levy && city.cb.levy.supply === g ? cost * city.cb.levy.gp / 100 : 0;
+  if (levy) { cost += levy; city.cb.gl = (city.cb.gl || 0) + levy; }
   mk.bought += fromBook; mk.imported += imported;
   // human-run companies receive goods by carrier: they arrive later and freight is paid now
   if (opts && opts.carrier && ctx.book && !buyerL.ops.managed) {
@@ -172,7 +184,7 @@ export function restock(city, ctx, l, months) {
   let wants = {}; Object.entries(need).forEach(([g, q]) => { const want = q * months - (l.ops.inv[g] || 0) - (ctx.onTheWay ? ctx.onTheWay(city, l, g) : 0); if (want > 0.5) wants[g] = want; });
   if (policy === 'warehouse' && ctx.fromWarehouse) wants = ctx.fromWarehouse(city, l, wants);
   Object.entries(wants).forEach(([g, want]) => { if (want > 0.5) { const r = buyGoods(city, ctx, l, g, Math.ceil(want), policy === 'warehouse' ? 'cheapest' : policy, { carrier: setting(l, 'procurement', 'carrier') }); cost += r.cost; imported += r.imported; } });
-  if (l.ops.depts.procurement && l.ops.depts.procurement.head === 'carlos') { const back = cost * 0.05; ctx.credit(city, l.owner, back); cost -= back; }
+  { const pct = (l.ops.depts.procurement && l.ops.depts.procurement.head === 'carlos' ? 0.05 : 0) + tierOf(selfLv(l, 'procurement'), 0.03, 0.05, 0.07) + (hasSp(l, 'buyer') ? 0.06 : 0); if (pct > 0) { const back = cost * pct; ctx.credit(city, l.owner, back); cost -= back; } }
   return { cost: r2(cost), imported: r2(imported) };
 }
 
@@ -208,29 +220,30 @@ export function produce(city, ctx, l, m) {
   o.customers += (80 - o.customers) * 0.06;
   if (o.depts.social || o.managed) {
     const intensity = o.managed ? 'normal' : setting(l, 'social', 'intensity');
-    const a = o.managed ? 1 : automation(l, 'social'), head = o.depts.social?.head ? 1.5 : 1;
+    const a = o.managed ? 1 : automation(l, 'social'), head = roleOn(o.depts.social) ? 1.5 : 1;
     const g = { off: 0, normal: 0.03, viral: 0.07 }[intensity] * a * head;
-    o.customers *= 1 + g; if (intensity === 'viral' && a > 0) o.rep += 2 * head;
+    o.customers *= 1 + g; if (intensity === 'viral' && a > 0) o.rep += 2 * head + (selfLv(l, 'social') >= 9 ? 1 : 0);
   }
   if (lost > dem * 0.15) { o.rep -= 3; o.customers *= 0.97; }
   else if (!o.managed && setting(l, 'sales', 'price') === 'premium' && o.tech >= 2) o.rep += 1;
   else o.rep += 0.5;
+  o.rep += tierOf(selfLv(l, 'legal'), 0, 0.5, 1);
   o.rep = Math.max(0, Math.min(100, o.rep)); o.customers = Math.max(20, Math.min(400, o.customers));
   // morale and quits
   if (!o.managed) {
     let tgt = { low: 45, market: 65, high: 85 }[setting(l, 'hr', 'wages')];
     if (o.depts.hr && setting(l, 'hr', 'training') === 'on') tgt += 5;
-    tgt -= [0, 0, 10, 20][setting(l, 'ops', 'shifts')];
+    tgt -= [0, 0, 10, 20][setting(l, 'ops', 'shifts')] * (selfLv(l, 'ops') >= 9 ? 0.5 : 1);
     if (o.depts.finance && setting(l, 'finance', 'costs') === 'lean') tgt -= 8;
-    if (o.depts.hr?.head) tgt += 8;
+    if (roleOn(o.depts.hr)) tgt += 8;
     const hr = automation(l, 'hr');
     o.morale += hr > 0 ? (tgt - o.morale) * 0.3 * hr : (tgt - 15 - o.morale) * 0.15;
     if (o.overtimeM === m) o.morale -= 8;
-    o.morale = Math.max(0, Math.min(100, o.morale));
+    o.morale = Math.max(selfLv(l, 'hr') >= 9 ? 50 : 0, Math.min(100, o.morale));
     if (o.morale < 30 && rand() < 0.4) { const k = Object.keys(o.depts).sort((a, b) => o.depts[b].w - o.depts[a].w)[0]; if (o.depts[k].w > 0) { o.depts[k].w--; ctx.notify(city, l, `A worker quit ${TYPES[l.type].name} (${deptFor(l, k).name})`, 'Morale is low. Raise wages, train or hold a team meeting.', 'bad'); } }
   } else o.morale = 70;
   // research
-  if (o.depts.rnd && !o.managed) { const b = { off: 0, low: 10, high: 25 }[setting(l, 'rnd', 'budget')]; o.rp += b * (0.5 + 0.5 * automation(l, 'rnd')) * (o.depts.rnd.head ? 1.5 : 1); }
+  if (o.depts.rnd && !o.managed) { const b = { off: 0, low: 10, high: 25 }[setting(l, 'rnd', 'budget')]; o.rp += b * (0.5 + 0.5 * automation(l, 'rnd')) * (roleOn(o.depts.rnd) ? 1.5 : 1) * (selfLv(l, 'rnd') >= 6 ? 1.2 : 1) * (hasSp(l, 'architect') ? 1.25 : 1); }
   const tech = Math.min(5, Math.floor(o.rp / 100)); if (tech > o.tech) { o.tech = tech; ctx.notify(city, l, `R&D breakthrough at ${TYPES[l.type].name}`, `Technology level ${tech}: better quality, higher price and demand.`, 'good'); }
   // books
   o.booksPenalty = !o.managed && !!o.depts.finance && automation(l, 'finance') === 0 && o.booksM !== m - 1;
@@ -263,7 +276,7 @@ export function marketMonth(city) {
     const imp = importPrice(city, g), exp = exportPrice(city, g), listed = listedQty(city, g), demandQ = mk.bought + mk.imported;
     if (mk.imported > 0.5) mk.p += (imp - mk.p) * 0.25 * Math.min(1, mk.imported / Math.max(1, demandQ));
     else if (listed > demandQ * 0.5 + 1) mk.p -= (mk.p - exp) * 0.15;
-    else mk.p += (GOODS[g].base - mk.p) * 0.05;
+    else mk.p += (GOODS[g].base * pxOf(city) - mk.p) * 0.05;
     mk.p = r4(Math.max(exp, Math.min(imp, mk.p * (1 + (rand() - 0.5) * 0.03))));
     mk.h.push(mk.p); if (mk.h.length > 48) mk.h.shift();
     mk.last = { bought: r2(mk.bought), imported: r2(mk.imported), exported: r2(mk.exported), listed: r2(listed) };
@@ -472,6 +485,9 @@ export function quote(city, l, g, qty, policy, cid) {
     for (const o of offers) { if (left <= 0) break; const q = Math.min(left, o.qty); cost += q * o.price; bookCost += q * o.price; left -= q; fromBook += q; }
   }
   const imported = Math.max(0, left); cost += imported * imp;
+  // a national bank levy on this supply is paid on top and goes to the city treasury
+  const levy = city.cb && city.cb.levy && city.cb.levy.supply === g ? cost * city.cb.levy.gp / 100 : 0;
+  if (levy) { cost += levy; city.cb.gl = (city.cb.gl || 0) + levy; }
   let freight = 0, minDays = 0, maxDays = 0;
   if (cid && freightQuote) { [[fromBook, bookCost, 'local'], [imported, imported * imp, 'import']].forEach(([q, v, route]) => { if (q > 0.001) { const f = freightQuote(cid, v, q, route); freight += f.cost; minDays = Math.max(minDays, f.minDays); maxDays = Math.max(maxDays, f.maxDays); } }); }
   return { cost: r4(cost + freight), goods: r4(cost), freight: r4(freight), minDays, maxDays, fromBook: Math.round(fromBook), imported: Math.round(imported), avg: qty ? r4(cost / qty) : 0 };
@@ -504,8 +520,6 @@ export function tasks(city, l) {
   if (gone.length) out.push({ id: 'archive', dept: 'sales', label: `${gone.length} cancelled ${word}${gone.length > 1 ? 's' : ''} to archive` });
   if (automation(l, 'ops') === 0 && !(o.boost && o.boost.m === m + 1)) out.push({ id: 'runShift', dept: 'ops', label: hotel ? 'No front-desk staff: run reception yourself this month' : 'No production staff: run the line yourself this month', urgent: true });
   if (automation(l, 'procurement') < 1 && coverMonths(l) < 1.05) out.push({ id: 'restock', dept: 'procurement', label: coverMonths(l) < 0.05 ? 'Production is stopped: buy supplies' : `Supplies last ${coverMonths(l).toFixed(1)} months: restock`, urgent: coverMonths(l) < 0.5 });
-  const outs = Object.keys(RECIPES[l.type].out).filter((g) => (o.inv[g] || 0) >= 1);
-  if (automation(l, 'sales') < 1 && outs.length) out.push({ id: 'sellSurplus', dept: 'sales', label: `Sell surplus ${outs.map((g) => GOODS[g].name.toLowerCase()).join(' and ')}` });
   if (automation(l, 'sales') < 1 && o.cd.findCustomers !== m) out.push({ id: 'findCustomers', dept: 'sales', label: hotel ? 'Find new booking partners' : 'Find new clients', interactive: true });
   if (o.depts.social && automation(l, 'social') === 0 && o.cd.postCampaign !== m) out.push({ id: 'postCampaign', dept: 'social', label: 'Shoot a marketing campaign', interactive: true });
   if (automation(l, 'hr') === 0 && o.morale < 70 && o.cd.teamMeeting !== m) out.push({ id: 'teamMeeting', dept: 'hr', label: `Morale is ${Math.round(o.morale)}: hold a team meeting`, urgent: o.morale < 35, interactive: true });
@@ -514,13 +528,30 @@ export function tasks(city, l) {
   if (o.depts.legal && automation(l, 'legal') === 0 && o.legalUntil < m) out.push({ id: 'reviewContracts', dept: 'legal', label: 'Review contracts', interactive: true });
   return out;
 }
+// why a manual task cannot run right now (already done this month, next month already planned…), or null.
+// The browser asks this before starting a 20-second task, and doTask refuses with the same words.
+export function taskBlock(city, l, task) {
+  const o = l && l.ops, m = city.m; if (!o) return 'This company has no operations.';
+  const hotel = hosts(l), cd = (k) => o.cd && o.cd[k] === m;
+  switch (task) {
+    case 'teamMeeting': return cd('teamMeeting') ? 'You already held a team meeting this month. Try again next month.' : null;
+    case 'findCustomers': return cd('findCustomers') ? `You already looked for new ${hotel ? 'booking partners' : 'clients'} this month. Try again next month.` : null;
+    case 'postCampaign': return cd('postCampaign') ? 'You already shot a campaign this month. Try again next month.' : null;
+    case 'runExperiment': return cd('runExperiment') ? 'You already ran an experiment this month. Try again next month.' : null;
+    case 'reviewBooks': return o.booksM === m ? 'The books are already closed this month.' : null;
+    case 'reviewContracts': return o.legalUntil >= m ? `Contracts are already covered${o.legalUntil > m ? ` for ${o.legalUntil - m + 1} more months` : ' this month'}.` : null;
+    case 'overtime': return o.boost && o.boost.m === m + 1 ? 'Next month is already planned.' : null;
+    case 'runShift': return o.boost && o.boost.m === m + 1 ? (hotel ? 'You already run reception this month.' : 'You already worked the line this month.') : null;
+    default: return null;
+  }
+}
 export function doTask(city, ctx, l, task, a = {}) {
   const o = l.ops, m = city.m, s = SIZES[l.size].mult, ch = a.choice;
+  const blocked = taskBlock(city, l, task); if (blocked) return { ok: false, msg: blocked };
   const workers = Object.values(o.depts).reduce((x, d) => x + d.w, 0);
   const once = (k) => { if (o.cd[k] === m) return false; o.cd[k] = m; return true; };
   switch (task) {
     case 'restock': { if (automation(l, 'procurement') < 1) return { ok: false, msg: 'Order each supply by hand below, or fully staff Procurement to restock automatically.' }; const r = restock(city, ctx, l, Number(a.months) || (o.depts.procurement ? setting(l, 'procurement', 'stock') : 1)); return { ok: true, msg: r.cost > 0 ? `Bought supplies for ${r2(r.cost)} M${r.imported > 0 ? ` (${Math.round(r.imported)} units imported)` : ''}.` : 'Stock is already full.' }; }
-    case 'sellSurplus': { let v = 0; Object.keys(RECIPES[l.type].out).forEach((g) => { const mk = city.market[g]; const q = o.inv[g] || 0; if (q >= 1) { listGoods(city, l, g, q, mk.p * B2B[setting(l, 'sales', 'b2b')], false); v += q * mk.p; } }); return { ok: true, msg: `Listed on the city market for about ${r2(v)} M. Buyers pay when they buy.` }; }
     case 'runShift': { if (o.boost && o.boost.m === m + 1) return { ok: false, msg: 'You already worked the line this month.' }; o.boost = { m: m + 1, mult: 2 }; return { ok: true, msg: hosts(l) ? 'You run reception yourself. Rooms next month are doubled. Hire Operations staff to automate it.' : 'You run the line yourself. Output this month is doubled. Hire Operations staff to automate it.' }; }
     case 'teamMeeting': {
       if (!once('teamMeeting')) return { ok: false, msg: 'Already held this month.' };
@@ -571,7 +602,7 @@ export function doTask(city, ctx, l, task, a = {}) {
 export function legallyCovered(l) {
   const o = l.ops; if (!o) return false; if (o.managed) return rand() < 0.5;
   const d = o.depts.legal; if (!d) return false;
-  return !!d.head || (setting(l, 'legal', 'level') === 'strict' && automation(l, 'legal') > 0) || o.legalUntil >= o.curM;
+  return roleOn(d) || (setting(l, 'legal', 'level') === 'strict' && automation(l, 'legal') > 0) || o.legalUntil >= o.curM;
 }
-export function cyberProtected(l) { const o = l.ops; if (!o) return false; if (o.managed) return rand() < 0.5; const d = o.depts.rnd; return !!(d && (d.head === 'anika' || automation(l, 'rnd') >= 1)); }
+export function cyberProtected(l) { const o = l.ops; if (!o) return false; if (o.managed) return rand() < 0.5; const d = o.depts.rnd; return !!((d && (d.head === 'anika' || automation(l, 'rnd') >= 1)) || selfLv(l, 'rnd') >= 9 || hasSp(l, 'guard')); }
 export const DEPTS_BY_HEAD = Object.fromEntries(DEPTS.filter((d) => d.head).map((d) => [d.head, d.id]));

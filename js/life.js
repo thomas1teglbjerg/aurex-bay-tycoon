@@ -3,6 +3,7 @@ import * as E from '../supabase/functions/_shared/engine.js';
 import { HOMES, ROOMS, LIFESTYLES, SALARIES, TAX, LIFE as LC, RARITY, PRESTIGE_TIERS, PRESTIGE_PERKS, COLLECT_CATS, COLLECTIBLES, SETS, DINNER } from '../supabase/functions/_shared/content.js';
 import { city, me, meId, esc, M, P, lineChart, seg, shortDate, msUntilMonth, dur } from './util.js';
 import { cropLayer } from './util.js';
+import { profilePageHTML } from './profile.js';
 
 const L = E.LIFE;
 const CATS = ['art', 'wine', 'watch', 'car'];
@@ -55,7 +56,8 @@ export function lifeHTML(UI) {
   if (st.room) return roomHTML(UI);
   const Lp = p.life, res = Lp.homes.find((h) => h.uid === Lp.res);
   const view = st.view || 'home';
-  const nav = `<div class="lnav">${[['home', 'Home'], ['collection', 'Collection'], ['property', 'Property']].map(([v, l]) => `<button data-a="lifeView" data-v="${v}" aria-pressed="${view === v}">${l}</button>`).join('')}<button class="webnav" data-a="web" data-u="aurexauctions.ab">${WEB_ICON} Shop online${myBids(c).length ? `<i>${myBids(c).length}</i>` : ''}</button></div>`;
+  const nav = `<div class="lnav">${[['home', 'Home'], ['collection', 'Collection'], ['property', 'Property'], ['profile', 'Profile']].map(([v, l]) => `<button data-a="lifeView" data-v="${v}" aria-pressed="${view === v}">${l}</button>`).join('')}<button class="webnav" data-a="web" data-u="aurexauctions.ab">${WEB_ICON} Shop online${myBids(c).length ? `<i>${myBids(c).length}</i>` : ''}</button></div>`;
+  if (view === 'profile') return `<div class="lifep lprof">${nav}</div>${profilePageHTML(UI, meId())}`;
   const body = view === 'collection' ? collectionView(UI) : view === 'property' ? propertyView(UI) : homeView(UI, res);
   return `<div class="lifep">${heroHTML(res)}${nav}${inboxHTML()}${body}</div>`;
 }

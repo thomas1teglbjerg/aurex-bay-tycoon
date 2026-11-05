@@ -23,10 +23,10 @@ const TERMS = {
   'profit / yr (est.)': h('Your money', 'Expected yearly profit for your whole empire: contract income plus company sales from last month, scaled to a year, minus all running costs.'),
   'wages, budgets, interest': h('Your money', 'What your empire pays every year: worker wages, department budgets, specialists, warehouse upkeep, your own salary, maintenance and loan interest.'),
   influence: h('Standing', 'Influence is your clout in Aurex Bay. It adds directly to your score in the city ranking.', 'You gain it from film and music hits, established tech companies, specialists like a PR & Media Officer or Logistics Planner, prestige and some decisions.'),
-  'next world card in': h('Economy', 'Time until the next World Card. Once a quarter a card hits the whole city and can switch the economy between boom, stable, recession and crisis.', 'A Market Research Associate in your team, or in your network, shows the next card early.'),
+  'latest world card': h('Economy', 'The last World Card that hit the city. About once a quarter, at a moment nobody announces, a new card can switch the economy between boom, stable, recession and crisis and move share prices.', 'A Market Research Associate in your team mails you a research note with the signals before each card. Read them yourself, and forward the note to your network if you want.'),
   // Bank
   debt: h('Bank of Aurex', 'What you owe the bank in total.'),
-  rate: h('Bank of Aurex', 'Yearly interest on your loans. A bank or finance company in your portfolio, prestige and some specialists lower it.'),
+  rate: h('Bank of Aurex', 'Yearly interest on your loans. It starts from the bank rate set by the Bank of Aurex. A bank or finance company in your portfolio, prestige and some specialists lower it.'),
   'interest / yr': h('Bank of Aurex', 'Interest you pay on your debt each year. It is taken from your cash continuously.'),
   'credit limit': h('Bank of Aurex', 'The most you can owe the bank. It grows with the value of the companies you own.'),
   // Coop
@@ -139,9 +139,9 @@ const BOXES = {
   'world economy': h('Economy', 'The economy everyone in the city shares. Booms raise Trade income, recessions and crises cut it. World Cards change it once a quarter.'),
   'supplies market': h('Market', 'The city-wide market for supplies. Every company buys and sells here. Prices float between the export floor and the import ceiling.'),
   'your offers': h('Market', 'Supplies you have listed for sale. Buyers pay when they buy. Withdraw to take them back.'),
-  'bank of aurex': h('Bank', 'Borrow money for growth and repay when you can. Interest is charged every year on what you owe.'),
+  'bank of aurex': h('Bank', 'The national bank. Borrow for growth at bankofaurex.ab. Its owner sets the bank rate and levies for the whole city, which tilts the economy.'),
   'aurex bay gazette': h('News', 'City news: World Cards, big deals, hits and what other players do.'),
-  network: h('Network', 'Players you are connected with. Network partners can sign supply contracts and share market insight.'),
+  network: h('Network', 'Players you are connected with. Network partners can sign supply contracts and forward market research to each other.'),
   'waiting for you': h('Network', 'Network requests and supply contract offers that need your answer.'),
   'your network': h('Network', 'Players you are connected with. Partners whose companies fit yours can sign supply contracts for synergy bonuses.'),
   'supply contracts': h('Network', 'Contracts between your company and a partner\'s company. The pair counts as a portfolio synergy, as if you owned both.'),
@@ -202,6 +202,12 @@ const ACTIONS = {
   listGoods: h('Supplies', 'List all stock of this supply on the city market at your Sales price. Buyers pay when they buy.'),
   exportGoods: h('Supplies', 'Sell all stock of this supply abroad at the export price. Always possible, but the lowest price.'),
   cancelOffer: h('Market', 'Take your offer off the market. The units go back to stock.'),
+  dealNew: h('Sell to a contact', 'Offer this supply to someone in your network or a co-owner, at your own price. The buyer picks a carrier, or lets you deliver it yourself as soon as possible for a fee between Ridgeway and Harborline freight.'),
+  dealSend: h('Sell to a contact', 'Send the offer. The units are put aside until the buyer answers, or come back after 4 weeks.'),
+  dealAccept: h('Buy from a contact', 'Buy at the asked price. With a carrier you pay goods and freight now. If the seller delivers, you pay a delivery fee between Ridgeway and Harborline freight and your money is held until the goods leave.'),
+  dealDecline: h('Buy from a contact', 'Say no. The goods go back to the seller.'),
+  dealWithdraw: h('Sell to a contact', 'Take the offer back. The units return to stock.'),
+  dealDeliver: h('Deliver yourself', 'Drive the goods over yourself: a 10-second trip, then they are in the buyer\'s stock and you get the price plus the delivery fee.'),
   deliverOpen: h('Orders', 'Open the delivery map to send accepted orders to your clients.'),
   order: h('Orders', 'Answer the order: accept it, reject it or ask for a better price.'),
   loan: h('Bank', 'Borrow money from the Bank of Aurex. Interest is charged every year on what you owe.'),
@@ -269,10 +275,8 @@ const SETTINGS = {
 const TABS = {
   map: h('Tab', 'The city map. Click a district to zoom in; pins show companies, warehouses and homes.', 'Gold pins are for sale.'),
   empire: h('Tab', 'Your empire: cash, mail, to-dos, companies, warehouses and your team of specialists.'),
-  market: h('Tab', 'The economy, the supplies market, your offers and the Bank of Aurex.'),
-  stocks: h('Tab', 'The Aurex Bay Stock Exchange: buy and sell shares.'),
-  network: h('Tab', 'Other players: your network, supply contracts and the city ranking.'),
-  coop: h('Tab', 'Companies you own together with other players.'),
+  market: h('Tab', 'The supplies market, your offers, the Bank of Aurex, the Gazette and the Aurex Bay Stock Exchange.'),
+  network: h('Tab', 'Companies you own together with other players at the top; your network, supply contracts and the city ranking below.'),
   life: h('Tab', 'Your personal side: wallet, homes, collections, auctions and prestige.')
 };
 
@@ -308,13 +312,14 @@ export function helpAt(el, where = {}) {
   if ((x = q('#tabs [data-tab]'))) return { t: text(x), ...TABS[x.dataset.tab] };
   if (q('.who-c')) return { t: 'Players in the city', k: 'Top bar', d: 'Players online now, with their logo and initials. Dimmed means they have not done anything for 10 minutes.', tip: 'Right-click an icon to chat with that player.' };
   if ((x = q('.money > div'))) return term(text(x.querySelector('small')));
-  if (q('#econ')) return { t: `Economy: ${c ? c.econ : ''}`, k: 'Economy', d: `${c ? ECON_TXT[c.econ] || '' : ''} A World Card can change it once a quarter.`, tip: 'See the Market tab for the latest card.' };
+  if (q('#econ')) return { t: `Economy: ${c ? c.econ : ''}`, k: 'Economy', d: `${c ? ECON_TXT[c.econ] || '' : ''} A World Card can change it about once a quarter.`, tip: 'The Aurex Gazette on the Market tab shows the latest World Card.' };
   if (q('#datelbl, .brand')) return { t: 'Game date', k: 'Time', d: `The date in Aurex Bay. W is the week of the month. At live speed one game year lasts one real week, so a month is about 14 hours.`, tip: 'Companies produce and sell every month; supplies and share prices move every week.' };
   if ((x = q('#speed'))) return { t: 'Game speed', k: 'Time', d: `How fast time runs. ${SPEEDS.map((s) => `${s.label}: ${s.note}`).join('. ')}.`, tip: 'Online, only the administrator changes the speed for everyone.' };
   if (q('#mylogo')) return { t: 'Your parent company', k: 'Brand', d: 'The logo of the parent company that owns your businesses. Click to open your empire.' };
   if (q('.adv')) return { t: 'Advertisement', k: 'Marketing', d: 'An ad campaign a company in Aurex Bay paid for. It runs for a few weeks on the city’s websites. Click it to see the company or the piece.', tip: 'Run your own from the Ad campaigns box of a company with a Marketing department.' };
   if (q('.adbox')) return { t: 'Ad campaigns', k: 'Marketing', d: 'Buy a few weeks of ads on the city’s websites. Advertise the company to win customers and reputation every week, or one piece it makes or you own to lift its market value.', tip: 'Pick a tone, flip through lines with Another line, then launch. A head of marketing makes campaigns 50% stronger.' };
-  if (q('.webbtn')) return { ...ACTIONS.web, t: 'Web browser', k: 'Top bar' };
+  if (q('.webtab')) return { ...ACTIONS.web, t: 'Web browser', k: 'Menu' };
+  if (q('.gzbox')) return { t: 'The Aurex Gazette', k: 'News', d: 'A clipping of the city newspaper: the latest World Card, the three newest stories, this month’s biggest share movers and the Gazette’s own advertisement.', tip: 'Click it to open the full paper in the web browser.' };
   if ((x = q('.mp[data-mk]'))) return markHelp(x.dataset.mk);
   if ((x = q('.zone[data-zone]'))) { const d = DISTRICT[x.dataset.zone]; return d && { t: d.name, k: 'District', d: d.blurb, tip: 'Click to zoom into the district and see its companies, warehouses and homes.' }; }
   if (q('.mn-crumb')) return { t: 'Where you are', k: 'Map', d: 'The part of the city you are looking at. In a district, ‹ Aurex Bay takes you back to the whole city and the arrows step to the previous or next district.' };

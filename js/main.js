@@ -7,15 +7,16 @@ import { S, city, me, meId, now, $, esc, kfix, lname, coImg, faceUrl, M, K, P, N
 import { companyHTML, companyRow } from './company.js';
 import { stocksHTML, stockModal, livePrice, liveH, PX } from './stocks.js';
 import { deliveryHTML, warehouseHTML, MODE_LABEL } from './interact.js';
-import { taskButton } from './company.js';
-import { SCENES, startScene, endScene, scenesHTML, sceneFor, tickScenes, sceneTitle } from './scenes.js';
+import { SCENES, startScene, endScene, sceneFor, tickScenes, sceneTitle } from './scenes.js';
 import { WAREHOUSE_SITES, HOMES, TAKEOVER as GC_T } from '../supabase/functions/_shared/content.js';
-import { webHTML, parseUrl, HOME_URL } from './web.js';
+import { webHTML, parseUrl, HOME_URL, gazetteBox } from './web.js';
 import { teamBoxHTML, talentModal, talentStep } from './team.js';
 import { lifeHTML, lifeModal, newDinner, startDinner, dinnerHTML, money, bidBase } from './life.js';
 import { logoMark, logoFull, symbolIcon } from './brand.js';
 import { initChat, openChat, unreadFrom, inboxOf } from './chat.js';
+import { dealsToDo, dealsNeedingMe, newDealHTML, deliveryRun, DUI, RUN_S } from './deals.js';
 import { mailBoxHTML, mailPageHTML, mails, isRead as mailRead, markRead } from './mail.js';
+import { profilePageHTML, portraitUrl, canView } from './profile.js';
 import { authHTML, avatarHTML, passwordHTML, secureHTML, foundHTML, foundPreview, newFound } from './onboard.js';
 
 const ECON_COL = { Boom: '#23905a', Stable: '#2f6fb0', Recession: '#d08a1e', Crisis: '#c0392b' };
@@ -32,7 +33,8 @@ function ownerLabel(c, l) {
 function avatar(p, size) {
   const st = size ? `width:${size}px;height:${size}px;` : '';
   if (!p) return '';
-  if (p.avatar) return `<span class="av" style="${st}background-image:url(${p.avatar});--avc:${p.color}" aria-hidden="true"></span>`;
+  const pic = p.avatar || (city() ? portraitUrl(city(), p) : null);
+  if (pic) return `<span class="av" style="${st}background-image:url(${pic});background-size:cover;background-position:center 18%;--avc:${p.color}" aria-hidden="true"></span>`;
   const ini = p.name.split(' ').map((w) => w[0]).slice(0, 2).join('');
   return `<span class="av" style="${st}background:${p.color};--avc:${p.color}" aria-hidden="true">${esc(ini)}</span>`;
 }
@@ -41,8 +43,13 @@ function toast(msg, kind) {
   const t = document.createElement('div'); t.className = 'toast ' + (kind || ''); t.textContent = kfix(msg); $('app').appendChild(t);
   setTimeout(() => t.remove(), 3400);
 }
+// a click while the same action is still on its way to the server does nothing but say so
+const INFLIGHT = new Set();
 async function act(action, args, okMsg) {
-  const r = await B.act(action, args);
+  const key = action + ':' + JSON.stringify(args || {});
+  if (INFLIGHT.has(key)) { toast('Working on it…'); return { ok: false, msg: 'busy' }; }
+  INFLIGHT.add(key); let r;
+  try { r = await B.act(action, args); } finally { INFLIGHT.delete(key); }
   if (r && r.ok === false) { toast(r.msg, 'bad'); return r; }
   if (okMsg || (r && r.msg)) toast(okMsg || r.msg, 'good');
   if (me() && E.BR.needsParent(city(), meId())) { gate(); return r; } // e.g. left a co-owned parent company
@@ -382,6 +389,7 @@ function renderTop() {
   renderWho();
   $('datelbl').textContent = c.over ? `Season ${c.season} is over` : `${dateLabel(c.m)} · W${((c.wk ?? c.m * 4) % 4) + 1}`;
   $('econ').innerHTML = `<i style="background:${ECON_COL[c.econ]}"></i>${c.econ}`;
+  $('econ').title = `Economy: ${c.econ}. Booms raise Trade income 30%. Recessions cut it 40%, crises 60%. Every player in the city lives in the same economy.`;
   const brand = E.BR.brandOf(c, p.id), lg = $('mylogo'), key = brand ? [brand.name, brand.color, brand.font, brand.sym].join('|') : '';
   lg.hidden = !brand; if (lg.dataset.k !== key) { lg.dataset.k = key; lg.innerHTML = brand ? logoFull(brand, { size: 30 }) : ''; }
   const est = E.annualEstimate(c, 'p', p.id), st = E.standings(c);
@@ -399,7 +407,7 @@ function renderTop() {
   const net = c.netReqs.filter((x) => x.status === 'open' && x.to === p.id).length + c.contracts.filter((x) => x.status === 'pending' && x.to === p.id).length;
   const coop = Object.values(c.holdings).filter((h) => h.invites.some((i) => i.pid === p.id)).length + E.myHoldings(c, p.id).reduce((a, h) => a + h.proposals.filter((x) => x.status === 'open' && !(p.id in x.votes)).length, 0);
   const lifeN = c.life && p.life ? c.life.trades.filter((t) => t.status === 'open' && t.to === p.id).length + (p.life.offer && p.life.offer.until >= c.m ? 1 : 0) : 0;
-  [['empire', inbox], ['network', net], ['coop', coop], ['life', lifeN]].forEach(([k, n]) => { const d = $('dot-' + k); d.hidden = !n; d.textContent = n; });
+  [['empire', inbox], ['network', net + coop], ['life', lifeN]].forEach(([k, n]) => { const d = $('dot-' + k); d.hidden = !n; d.textContent = n; });
 }
 // numbers that move every frame
 let lastTicker = 0;
@@ -409,7 +417,7 @@ function liveUpdate() {
   tickScenes((st) => { toast(`${sceneTitle(st)}: your call`, 'good'); renderAll(); });
   if (UI.modal && UI.modal.t === 'dinner') tickDinner();
   // share prices tick between weekly closes: refresh the exchange views every second or so
-  if (Date.now() - lastTicker > 1200) { lastTicker = Date.now(); if ((UI.tab === 'stocks' || UI.tab === 'market') && !UI.company && !$('panel').hidden) renderPanel(); if (UI.modal && UI.modal.t === 'stock') openStock(UI.modal.id); }
+  if (Date.now() - lastTicker > 1200) { lastTicker = Date.now(); if (UI.tab === 'market' && !UI.company && !$('panel').hidden) renderPanel(); if (UI.modal && UI.modal.t === 'stock') openStock(UI.modal.id); }
   const t = now();
   document.querySelectorAll('[data-live]').forEach((el) => {
     const [k, id] = el.dataset.live.split(':');
@@ -443,6 +451,7 @@ function listingActions(l) {
   const c = city(), p = me(), o = ownerLabel(c, l), out = [];
   if (!l.owner) {
     const price = E.listingPrice(l);
+    if (E.CB.isBank(l)) { const e = E.cbEligible(c, p); out.push(`<p class="empty" style="font-size:13.5px">The national bank: its owner sets the bank rate and levies for the whole city. ${e.ok ? '' : esc(e.why)} <a href="#" data-a="webGo" data-u="bankofaurex.ab/policy">How it works ›</a></p>`); if (!e.ok) return out.join(''); }
     out.push(`<button class="btn gold" data-a="buy" data-lid="${l.id}" ${p.cash < price ? 'disabled' : ''}>Buy for ${M(price)}${p.cash < price ? ` · you have ${M(p.cash)}` : ''}</button>`);
     E.myHoldings(c, p.id).forEach((h) => out.push(`<button class="btn coop" data-a="buyas" data-lid="${l.id}" data-hid="${h.id}" ${h.treasury < price ? 'disabled' : ''}>Buy with ${esc(h.name)} · treasury ${M(h.treasury)}</button>`));
   } else if (o.mine && !o.coop) {
@@ -490,10 +499,19 @@ function staffCard(s) {
 }
 
 // ---------------------------------------------------------------- panels
+// your own profile sits under Personal › Profile; other tycoons' profiles open in the Network tab
+function openProfile(pid) {
+  closeModal();
+  if (pid === meId()) { if (UI.tab !== 'life') setTab('life'); UI.life.view = 'profile'; UI.life.room = null; UI.company = null; }
+  else { if (UI.tab !== 'network') setTab('network'); UI.company = 'profile:' + pid; }
+  $('panel').scrollTop = 0; renderAll();
+}
 function setTab(t) {
+  if (t === 'coop') t = 'network'; // Coop and Network are one tab now
+  if (t === 'stocks') t = 'market'; // so are Market and Stocks
   UI.company = null;
   UI.tab = t;
-  document.querySelectorAll('#tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
+  document.querySelectorAll('#tabs button[data-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
   if (t === 'life') UI.life.room = null;
   $('panel').classList.toggle('dark', t === 'life');
   hideMapCard(); $('mapnav').hidden = t !== 'map';
@@ -503,16 +521,17 @@ function renderPanel() {
   if (UI.tab === 'map' || !me()) return;
   const el = $('panel'), st = el.scrollTop, active = document.activeElement && el.contains(document.activeElement) && document.activeElement.tagName === 'INPUT';
   if (active) return; // never wipe a field someone is typing in
-  const html = UI.tab === 'empire' && String(UI.company || '').startsWith('mail') ? mailPageHTML(UI) : (UI.tab === 'empire' || UI.tab === 'coop') && UI.company ? companyHTML(UI.company, UI) : { empire: empireHTML, market: marketHTML, stocks: () => stocksHTML(UI), network: networkHTML, coop: coopHTML, life: () => lifeHTML(UI) }[UI.tab]();
+  const html = UI.tab === 'empire' && String(UI.company || '').startsWith('mail') ? mailPageHTML(UI, !!B.admin) : UI.tab === 'network' && String(UI.company || '').startsWith('profile:') ? profilePageHTML(UI) : (UI.tab === 'empire' || UI.tab === 'network') && UI.company ? companyHTML(UI.company, UI) : { empire: empireHTML, market: marketHTML, network: () => coopHTML() + networkHTML(), life: () => lifeHTML(UI) }[UI.tab]();
   el.innerHTML = `<div class="panel-in">${html}</div>`;
   applyCollapsed(el);
   el.scrollTop = st; liveUpdate();
 }
 // every box on a page can be folded away; the choice is remembered per page and box title
-const boxKey = (h2) => `${UI.company || UI.tab}:${(h2.childNodes[0] && h2.childNodes[0].textContent || '').trim()}`;
+const boxKey = (h2) => `${UI.company || UI.tab}:${h2.dataset.k || (h2.childNodes[0] && h2.childNodes[0].textContent || '').trim()}`;
+const FOLD = '.box > h2, .fold > .dh'; // box titles and the headers of departments not opened yet
 function applyCollapsed(el) {
   let closed = UI.closed; if (!closed) { try { closed = new Set(JSON.parse(localStorage.getItem('ab-closed') || '[]')); } catch { closed = new Set(); } UI.closed = closed; }
-  el.querySelectorAll('.box > h2').forEach((h2) => { const box = h2.parentElement; h2.setAttribute('role', 'button'); h2.tabIndex = 0; const shut = closed.has(boxKey(h2)); box.classList.toggle('closed', shut); h2.setAttribute('aria-expanded', String(!shut)); });
+  el.querySelectorAll(FOLD).forEach((h2) => { const box = h2.parentElement; h2.setAttribute('role', 'button'); h2.tabIndex = 0; const shut = closed.has(boxKey(h2)); box.classList.toggle('closed', shut); h2.setAttribute('aria-expanded', String(!shut)); });
 }
 function toggleBox(h2) {
   const k = boxKey(h2), box = h2.parentElement; if (UI.closed.has(k)) UI.closed.delete(k); else UI.closed.add(k);
@@ -528,25 +547,24 @@ function empireHTML() {
   const offers = c.offers.filter((o) => o.status === 'open' && o.to === p.id);
   const offerHTML = offers.map((o) => { const l = E.listing(c, o.lid), b = c.players[o.from]; return `<div class="row ${o.hostile ? 'hostile' : ''}">${avatar(b)}<div class="grow"><b>${o.hostile ? `Hostile bid: ${esc(b.name)} wants your company for ${M(o.amount)}` : `${esc(b.name)} offers ${M(o.amount)}`}</b>${o.hostile ? `<span class="down">Goes through in <span data-live="until:${o.dueM}">…</span> unless you reject it</span>` : ''}<span>for your ${esc(TYPES[l.type].name)} in ${esc(l.district)} (value ${M(E.listingValue(l))})</span></div><div class="btns"><button class="btn sm gold" data-a="offerAccept" data-id="${o.id}">Sell</button><button class="btn sm" data-a="offerDecline" data-id="${o.id}">Decline</button></div></div>`; }).join('');
   const comps = mine.map(companyRow).join('');
-  const allTasks = mine.flatMap((l) => E.OPS.tasks(c, l).map((t) => ({ ...t, l })));
+  const dealHTML = dealsToDo();
   const orderValue = mine.reduce((a, l) => a + (l.ops ? l.ops.pending.reduce((x, o) => x + o.value, 0) : 0), 0);
   const specs = STAFF.map((s) => { const hired = E.hasStaff(p, s.id), a = p.assign && p.assign[s.id], al = a ? E.listing(c, a.lid) : null;
     return `<button class="row" style="width:100%;text-align:left" data-a="staff" data-id="${s.id}"><span class="thumb" style="background-image:url(${faceUrl(s.id)});background-position:center 20%"></span><div class="grow"><b>${esc(s.name)}</b><span>${esc(s.role)} · leads ${esc(E.OPS.DEPT[deptOfSpec(s.id)].name)}</span>${hired ? `<span class="${al ? 'up' : 'down'}">${al ? `Heads ${esc(E.OPS.deptFor(al, a.dept).name)} at ${esc(TYPES[al.type].name)}, ${esc(al.district)}` : 'Hired, not assigned: open a company and make them head of a department'}</span>` : ''}</div>${hired ? '<span class="chip good">Hired</span>' : `<span class="chip num">${M(E.staffCost(p, s.id))}</span>`}</button>`; }).join('');
   return `<div class="grid"><div class="col">
-      ${parentBox(c, p)}
       <div class="box"><h2>${esc(p.name)}'s empire<small>LIVE</small></h2><div class="in">
         <div><div class="cap">Cash, counting in real time</div><div class="hero-cash num" data-live="cash">$0</div></div>
         <div class="stats"><div class="stat"><small>Profit / yr (est.)</small><b class="num ${E.annualEstimate(c, 'p', p.id) >= 0 ? 'up' : 'down'}">${M(E.annualEstimate(c, 'p', p.id), true)}</b></div><div class="stat"><small>Wages, budgets, interest</small><b class="num down">${M(-r.costs)}</b></div><div class="stat"><small>Net worth</small><b class="num">${M(E.netWorth(c, p.id))}</b></div><div class="stat"><small>Influence</small><b class="num">${p.inf}</b></div></div>
         ${hist.length > 1 ? `<div>${spark(hist, 320, 46)}<div class="cap" style="margin-top:2px">Net worth since you arrived</div></div>` : ''}
         <p class="empty" style="font-size:13.5px">Your companies keep earning while you are away. At live speed one game year lasts one real week.</p></div></div>
       ${mailBoxHTML()}
-      ${offers.length || allTasks.length || Object.keys(SCENES).length ? `<div class="box"><h2>To do<small>${offers.length + allTasks.length}</small></h2><div class="in">
-        ${Object.keys(SCENES).length ? `<div class="cap">Running now</div>${scenesHTML(() => true, true)}` : ''}
-        ${allTasks.filter((t) => !(t.interactive && sceneFor(t.l.id, t.id))).length ? `<div class="cap">Company to-dos</div><div class="rows">${allTasks.filter((t) => !(t.interactive && sceneFor(t.l.id, t.id))).slice(0, 6).map((t) => `<div class="row"><span class="thumb" style="background-image:url(${coImg(t.l)})"></span><div class="grow"><b>${esc(t.label)}</b><span>${esc(lname(t.l))} · ${esc(t.l.district)}${t.value ? ` · ${M(t.value)}` : ''}</span></div>${taskButton(t.l, t)}</div>`).join('')}</div>${allTasks.length > 6 ? `<p class="empty" style="font-size:13px">${allTasks.length - 6} more inside your companies.</p>` : ''}` : ''}
-        ${offerHTML ? `<div class="rows">${offerHTML}</div>` : ''}</div></div>` : ''}
+      ${offerHTML || dealHTML ? `<div class="box"><h2>Offers and deals<small>${offers.length + dealsNeedingMe()}</small></h2><div class="in">
+        ${offerHTML ? `<div class="rows">${offerHTML}</div>` : ''}
+        ${dealHTML ? `<div class="cap">Sales between tycoons</div><div class="deals">${dealHTML}</div>` : ''}</div></div>` : ''}
       <div class="box"><h2>Autopilot</h2><div class="in"><p class="empty">When you don't answer a mail in time, your managers answer for you.</p>
         <div class="seg" role="group">${[['cautious', 'Cautious'], ['balanced', 'Balanced'], ['bold', 'Bold']].map(([k, l]) => `<button data-a="policy" data-v="${k}" aria-pressed="${p.policy === k}">${l}</button>`).join('')}</div></div></div>
       <div class="box"><h2>Your companies<small>${mine.length}</small></h2><div class="in">${mine.length ? `<div class="rows">${comps}</div><p class="empty" style="font-size:13px">Open a company to run its departments, supplies and orders.</p>` : '<p class="empty">You own no companies yet. Tap a gold pin on the map to buy your first one.</p>'}<button class="btn" data-a="tab" data-v="map">Find companies on the map</button></div></div>
+      ${parentBox(c, p)}
       <div class="box"><h2>Warehouses<small>${E.LOG.ownedWarehouses(c, p.id).length} OWNED</small></h2><div class="in">${E.LOG.ownedWarehouses(c, p.id).length ? `<div class="rows">${E.LOG.ownedWarehouses(c, p.id).map((w) => { const site = E.LOG.SITE[w.id]; return `<button class="row" style="width:100%;text-align:left" data-a="wh" data-wid="${w.id}"><span class="thumb wthumb wh-${site.mode}">${WH_ICON[site.mode]}</span><div class="grow"><b>${esc(site.name)}</b><span>${N(E.LOG.stored(w))} / ${N(E.LOG.capacityOf(w))} units stored · ${N(E.LOG.inbound(c, w))} on the way${w.auto.supply ? ' · supplies your companies' : ''}</span></div></button>`; }).join('')}</div>` : '<p class="empty">Warehouses let you import cheaper, keep a buffer and truck supplies to your companies. Tap a warehouse on the map. The airport has the biggest one.</p>'}</div></div>
     </div><div class="col">
       ${teamBoxHTML()}
@@ -554,30 +572,22 @@ function empireHTML() {
     </div></div>`;
 }
 function marketHTML() {
-  const c = city(), p = me(), intel = E.intelFor(c, p.id), q = UI.qty, nextQ = (Math.floor(c.m / 3) + 1) * 3;
-  const last = c.lastCard ? WORLD.find((w) => w.id === c.lastCard.id) : null;
+  const c = city(), p = me(), q = UI.qty;
   const stocks = STOCKS.map((s) => { const st = { p: livePrice(c, s.id) }, h = liveH(c, s.id), ch = h.length > 1 ? (h[h.length - 1] / h[h.length - 2] - 1) * 100 : 0, own = p.shares[s.id] || 0;
     return `<div class="srow"><img src="img/k-${s.id}.jpg" alt=""><div style="min-width:0"><b style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.name)}</b><span class="num muted" style="font-size:13px">${PX(st.p)} <span class="${ch >= 0 ? 'up' : 'down'}">${ch >= 0 ? '+' : ''}${ch.toFixed(1)}%</span> · own ${own}</span></div>
       <div class="btns" style="flex-wrap:nowrap;gap:6px">${spark(h.slice(-48), 54, 24)}<button class="btn sm gold" data-a="trade" data-id="${s.id}" data-q="${q}" ${p.cash < q * st.p ? 'disabled' : ''}>Buy</button><button class="btn sm" data-a="trade" data-id="${s.id}" data-q="${-q}" ${own ? '' : 'disabled'}>Sell</button></div></div>`; }).join('');
   const supplies = Object.entries(GOODS).map(([g, d]) => { const mk = c.market[g], last = mk.last || {}, vs = (mk.p / d.base - 1) * 100;
     return `<tr><td><b>${esc(d.name)}</b><span>${d.producer ? 'Made by ' + esc(TYPES[d.producer].name) : 'Import only'}</span></td><td class="num">${K(mk.p)}</td><td class="num ${vs > 5 ? 'down' : vs < -5 ? 'up' : ''}">${P(vs)}</td><td>${spark(mk.h.slice(-18), 60, 22)}</td><td class="num muted">${K(E.OPS.importPrice(c, g))}</td><td class="num muted">${K(E.OPS.exportPrice(c, g))}</td><td class="num">${N(E.OPS.listedQty(c, g))}</td><td class="num">${N(last.bought || 0)}</td><td class="num">${N(last.imported || 0)}</td></tr>`; }).join('');
   const myOffers = (c.book || []).filter((x) => x.seller.k === 'p' && x.seller.id === p.id).map((x) => { const l = E.listing(c, x.lid); return `<div class="row"><div class="grow"><b>${N(x.qty)} ${esc(GOODS[x.g].unit)} ${esc(GOODS[x.g].name.toLowerCase())}</b><span>${K(x.price)} each · from ${esc(l ? TYPES[l.type].name : '')}${x.auto ? ' · listed by Sales' : ''}</span></div><button class="btn sm" data-a="cancelOffer" data-id="${x.id}">Withdraw</button></div>`; }).join('');
-  const debt = E.debt(p), r = E.rates(c, 'p', p.id);
   return `<div class="grid"><div class="col">
-      <div class="box"><h2>World economy<small>${c.econ.toUpperCase()}</small></h2><div class="in">
-        ${last ? `<div><div class="cap">Latest World Card · ${esc(dateLabel(c.lastCard.m))}</div><b style="font-family:var(--head);font-size:18px">${esc(last.title)}</b><p class="empty" style="margin-top:4px">${esc(last.text)}</p></div>` : ''}
-        <div class="stat"><small>Next World Card in</small><b class="num" data-live="until:${nextQ}">…</b></div>
-        ${intel ? `<div class="prop"><span class="cap">Market insight from ${esc(intel.from)}</span><b>Next quarter: ${esc(intel.next.title)}</b><span class="muted" style="font-size:13.5px">${esc(intel.next.text)}</span></div>` : '<p class="empty" style="font-size:13.5px">Hire Jason Miller, or add someone who has him to your network, to see the next World Card before it hits.</p>'}
-        <p class="empty" style="font-size:13.5px">Booms raise Trade income 30%. Recessions cut it 40%, crises 60%. Every player in the city lives in the same economy.</p></div></div>
       <div class="box"><h2>Supplies market<small>CITY-WIDE</small></h2><div class="in">
         <p class="empty" style="font-size:13.5px">Every company in Aurex Bay buys and sells here. Prices float between the export floor and the import ceiling, driven by what players produce and need.</p>
         <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Supply</th><th>Price</th><th>vs normal</th><th>Trend</th><th>Import</th><th>Export</th><th>On offer</th><th>Bought last mo</th><th>Imported</th></tr></thead><tbody>${supplies}</tbody></table></div></div></div>
       ${myOffers ? `<div class="box"><h2>Your offers<small>OPEN</small></h2><div class="in"><div class="rows">${myOffers}</div></div></div>` : ''}
     </div><div class="col">
-      <div class="box"><h2>Bank of Aurex</h2><div class="in"><div class="stats"><div class="stat"><small>Debt</small><b class="num down">${M(-debt)}</b></div><div class="stat"><small>Rate</small><b class="num">${E.loanRate(c, p)}%</b></div><div class="stat"><small>Interest / yr</small><b class="num">${M(-r.interest)}</b></div><div class="stat"><small>Credit limit</small><b class="num">${M(E.loanCap(c, p))}</b></div></div>
-        <div class="btns"><button class="btn navy" data-a="loan" data-v="5">Borrow 5 M</button><button class="btn navy" data-a="loan" data-v="20">Borrow 20 M</button><button class="btn" data-a="repay" data-v="5" ${debt ? '' : 'disabled'}>Repay 5 M</button><button class="btn" data-a="repay" data-v="999" ${debt ? '' : 'disabled'}>Repay all</button></div></div></div>
-      <div class="box"><h2>Aurex Bay Gazette<small>CITY NEWS</small></h2><div class="in">${feedHTML(c.news, 16)}</div></div>
-    </div></div>`;
+      ${gazetteBox()}
+    </div></div>
+    ${stocksHTML(UI)}`;
 }
 function networkHTML() {
   const c = city(), p = me(), st = E.standings(c);
@@ -586,10 +596,10 @@ function networkHTML() {
   const conLabel = (k) => { const a = E.listing(c, k.a), b = E.listing(c, k.b); return `${TYPES[a.type].name} (${c.players[k.from].name.split(' ')[0]}) ↔ ${TYPES[b.type].name} (${c.players[k.to].name.split(' ')[0]})`; };
   const members = p.net.map((id) => c.players[id]).filter(Boolean).map((m) => { const ls = E.ownedBy(c, 'p', m.id);
     let n = 0; ls.forEach((ol) => E.ownedBy(c, 'p', p.id).forEach((ml) => { if (E.contractValid(c, ml.id, ol.id, p.id, m.id).ok) n++; }));
-    return `<div class="row">${avatar(m)}<div class="grow"><b>${esc(m.name)}</b><span>${M(E.netWorth(c, m.id))} · ${ls.map((l) => TYPES[l.type].name).join(', ') || 'no companies yet'}</span>${n ? `<span class="up">${n} possible supply contract${n > 1 ? 's' : ''}: open one of your companies to offer</span>` : ''}${E.hasStaff(m, 'jason') ? '<span>Shares market insight with you</span>' : ''}</div><button class="btn sm" data-a="netRemove" data-pid="${m.id}">Remove</button></div>`; }).join('');
+    return `<div class="row">${avatar(m)}<div class="grow"><b>${esc(m.name)}</b><span>${M(E.netWorth(c, m.id))} · ${ls.map((l) => TYPES[l.type].name).join(', ') || 'no companies yet'}</span>${n ? `<span class="up">${n} possible supply contract${n > 1 ? 's' : ''}: open one of your companies to offer</span>` : ''}</div><button class="btn sm" data-a="profile" data-pid="${m.id}">Profile</button><button class="btn sm" data-a="netRemove" data-pid="${m.id}">Remove</button></div>`; }).join('');
   const board = st.map((r, i) => { const x = c.players[r.id], inNet = p.net.includes(r.id), pend = outReq.some((q) => q.to === r.id);
     return `<div class="row"><b class="num" style="width:24px">${i + 1}</b>${avatar(x)}<div class="grow"><b>${esc(r.id === p.id ? r.name + ' (you)' : r.name)}</b>${E.BR.brandOf(c, r.id) ? `<span class="lgline">${logoMark(E.BR.brandOf(c, r.id), 16)}${esc(E.BR.brandOf(c, r.id).name)}</span>` : ''}<span>${M(r.nw)} net worth · ${r.inf} influence · ${E.ownedBy(c, 'p', r.id).length} companies</span></div>${r.id === p.id ? '' : inNet ? '<span class="chip">In network</span>' : pend ? '<span class="chip">Requested</span>' : `<button class="btn sm navy" data-a="netRequest" data-pid="${r.id}">Add</button>`}</div>`; }).join('');
-  return `<h2 class="ph1">Network</h2><p class="lede">Play together while each of you keeps your own companies. People in your network can sign supply contracts that give both companies a synergy bonus, and share market insight.</p>
+  return `<h2 class="ph1" style="margin-top:28px">Your network</h2><p class="lede">Play together while each of you keeps your own companies. People in your network can sign supply contracts that give both companies a synergy bonus, and forward market research to each other.</p>
     <div class="grid"><div class="col">
       ${inReq.length || inCon.length ? `<div class="box"><h2>Waiting for you<small>${inReq.length + inCon.length}</small></h2><div class="in"><div class="rows">
         ${inReq.map((r) => `<div class="row">${avatar(c.players[r.from])}<div class="grow"><b>${esc(c.players[r.from].name)}</b><span>wants to join your network</span></div><div class="btns"><button class="btn sm gold" data-a="netAccept" data-pid="${r.from}">Accept</button><button class="btn sm" data-a="netDecline" data-pid="${r.from}">Decline</button></div></div>`).join('')}
@@ -629,7 +639,7 @@ function coopHTML() {
         <button class="btn danger" data-a="hleave" data-hid="${h.id}">${Object.keys(h.members).length === 1 ? 'Dissolve' : 'Sell my stake'}</button></div>
     </div></div>`;
   };
-  return `<h2 class="ph1">Coop parent companies</h2><p class="lede">Pool money with other players in a shared parent company. Every owner holds a stake in proportion to what they put in. Purchases, sales, upgrades and dividends are decided by vote: more than half of the stakes decides at once, otherwise the majority of votes cast after one game month. Sale money goes to the treasury. Owners don't need to be online at the same time: open votes close after one game month.</p>
+  return `<h2 class="ph1">Network</h2><p class="lede"><b>Coop parent companies.</b> Pool money with other players in a shared parent company. Every owner holds a stake in proportion to what they put in. Purchases, sales, upgrades and dividends are decided by vote: more than half of the stakes decides at once, otherwise the majority of votes cast after one game month. Sale money goes to the treasury. Owners don't need to be online at the same time: open votes close after one game month.</p>
     ${invites.length ? `<div class="box"><h2>Invitations<small>${invites.length}</small></h2><div class="in"><div class="rows">${invites.map((h) => `<div class="row"><div class="grow"><b>${esc(h.name)}</b><span>Value ${M(E.holdingNav(c, h))} · ${Object.keys(h.members).length} owners</span></div><button class="btn sm coop" data-a="hjoin" data-hid="${h.id}">Invest ${M(UI.coopAmt)}</button></div>`).join('')}</div></div></div>` : ''}
     <div class="grid"><div class="col">${mineH.map((h) => card(h) + (!h.bot && c.talent ? teamBoxHTML(E.TAL.coopEmp(c, h)) : '')).join('') || '<div class="box"><div class="in"><p class="empty">You are not part of a coop yet. Found one to buy companies that are too expensive alone.</p></div></div>'}</div>
     <div class="col">
@@ -646,6 +656,8 @@ function closeModal() { $('modal').hidden = true; $('modal').innerHTML = ''; UI.
 function openListing(lid) { UI.modal = { t: 'listing', id: lid }; const st = $('modal').scrollTop; modal(companyCard(E.listing(city(), lid))); $('modal').scrollTop = st; }
 function openStaff(id, keep, coop) { if (!keep || !UI.modal || UI.modal.id !== id) UI.modal = { t: 'staff', id, coop: coop || UI.talentFor || null }; const sc = $('modal').scrollTop; modal(c0().talent ? talentModal(UI.modal) : staffCard(STAFF_BY[id])); if (keep) $('modal').scrollTop = sc; }
 const c0 = () => city();
+function openDeal(st) { UI.modal = st; const sc = $('modal').scrollTop; modal(newDealHTML(st)); $('modal').scrollTop = sc; }
+const keepPrice = () => { const i = $('dl-price'); if (i && UI.modal) UI.modal.price = Number(i.value); };
 function openStock(id) { UI.modal = { t: 'stock', id }; const st = $('modal').scrollTop; modal(stockModal(id, UI.sqty)); $('modal').scrollTop = st; }
 function openWarehouse(id) { UI.modal = { t: 'wh', id }; const st = $('modal').scrollTop; modal(warehouseHTML(id, UI)); $('modal').scrollTop = st; }
 function openDelivery(lid, sel) {
@@ -664,7 +676,7 @@ function tickDinner() {
   if (Date.now() - lastDinner > 450) { lastDinner = Date.now(); const el = document.querySelector('.scene'); if (el) el.outerHTML = dinnerHTML(st); }
 }
 const GC_DINNER_MS = 20000;
-function refreshModal() { if (!UI.modal) return; if (LIFE_MODALS.includes(UI.modal.t)) openLife(UI.modal); if (UI.modal.t === 'wh') openWarehouse(UI.modal.id); if (UI.modal.t === 'deliv' && !UI.modal.truck) renderDelivery(); if (UI.modal.t === 'listing') openListing(UI.modal.id); if (UI.modal.t === 'staff') openStaff(UI.modal.id, true); if (UI.modal.t === 'stock') openStock(UI.modal.id); }
+function refreshModal() { if (!UI.modal) return; if (LIFE_MODALS.includes(UI.modal.t)) openLife(UI.modal); if (UI.modal.t === 'wh') openWarehouse(UI.modal.id); if (UI.modal.t === 'deliv' && !UI.modal.truck) renderDelivery(); if (UI.modal.t === 'listing') openListing(UI.modal.id); if (UI.modal.t === 'staff') openStaff(UI.modal.id, true); if (UI.modal.t === 'stock') openStock(UI.modal.id); if (UI.modal.t === 'dealNew') openDeal(UI.modal); }
 // ---------------------------------------------------------------- account and parent company (shown before the game)
 // Order: log in (online) → avatar name → parent company → game. Older guest players are asked once to add e-mail + password.
 function parentBox(c, p) {
@@ -674,8 +686,16 @@ function parentBox(c, p) {
   return `<div class="box parentbox" style="--brand:${E.BR.colorHex(b.color)}"><div class="in">
     <div class="pb-logo">${logoFull(b, { size: 44 })}</div>
     <p class="pb-sub">${h ? `Co-owned parent company · your stake ${Math.round(E.holdingStake(c, h, p.id) * 100)}%${owners.length ? ' · with ' + esc(owners.join(', ')) : ''} · buy-in ${M(h.buyIn || E.BR.MIN_STAKE)}` : `Parent company of ${esc(p.name)} · 100% yours`}</p>
-    <div class="btns">${!h || h.founder === p.id ? '<button class="btn sm" data-a="editLogo">Edit logo</button>' : ''}${h ? '<button class="btn sm coop" data-a="tab" data-v="coop">Co-owners and buy-in</button>' : ''}
-      ${acc ? (acc.anon ? '<button class="btn sm gold" data-a="secure">Save your city</button>' : `<span class="pb-acc">${esc(acc.email)}</span><button class="linkbtn" data-a="signOut">Log out</button>`) : ''}</div></div></div>`;
+    <div class="btns">${!h || h.founder === p.id ? '<button class="btn sm" data-a="editLogo">Edit logo</button>' : ''}${h ? '<button class="btn sm coop" data-a="tab" data-v="network">Co-owners and buy-in</button>' : ''}
+      ${acc ? (acc.anon ? '<button class="btn sm gold" data-a="secure">Save your city</button>' : `<span class="pb-acc">${esc(acc.email)}</span><button class="linkbtn" data-a="signOut">Log out</button>`) : ''}</div>
+    ${coOwnedHTML(c, p, h)}</div></div>`;
+}
+// companies owned together with other players: the parent company's own first, then any other coop you are in
+function coOwnedHTML(c, p, parent) {
+  const hs = E.myHoldings(c, p.id).sort((a, b) => (b === parent) - (a === parent)), many = hs.length > 1 || (hs.length && hs[0] !== parent);
+  const groups = hs.map((h) => ({ h, ls: E.ownedBy(c, 'h', h.id) })), n = groups.reduce((a, g) => a + g.ls.length, 0);
+  if (!hs.length) return '';
+  return `<div class="cap" style="margin-top:12px">Co-owned companies · ${n}</div>${groups.map(({ h, ls }) => `${many ? `<div class="cap pb-co">${esc(h.name)}</div>` : ''}${ls.length ? `<div class="rows">${ls.map(companyRow).join('')}</div>` : '<p class="empty" style="font-size:13px">No companies yet. Propose a purchase under Network.</p>'}`).join('')}`;
 }
 function obState() { if (!UI.ob) UI.ob = { view: 'signup', first: '', last: '', email: '' }; return UI.ob; }
 function renderOb() {
@@ -748,7 +768,7 @@ function showSeasonEnd() {
 // ---------------------------------------------------------------- events
 async function onClick(e) {
   { const p0 = me(), c1 = city(); if (p0 && c1 && c1.m - (p0.lastAct ?? c1.m) >= 1) B.act('ping', {}); } // being here counts as being active
-  { const h2 = e.target.closest('#panel .box > h2'); if (h2 && !e.target.closest('[data-a]')) { toggleBox(h2); return; } }
+  { const h2 = e.target.closest(`#panel :is(${FOLD})`); if (h2 && !e.target.closest('[data-a]')) { toggleBox(h2); return; } }
   const t = e.target.closest('[data-a]'); if (!t || t.disabled) return;
   if (t.tagName === 'A') e.preventDefault();
   const d = t.dataset, a = d.a, c = city();
@@ -765,10 +785,20 @@ async function onClick(e) {
     case 'webGo': if (UI.web) navWeb(d.u); else openWeb(d.u); return;
     // ---- mail
     case 'mailOpen': closeModal(); if (UI.tab !== 'empire') setTab('empire'); UI.company = d.id ? 'mail:' + d.id : 'mail'; if (d.id) markRead(d.id); $('panel').scrollTop = 0; renderAll(); return;
+    case 'profile': openProfile(d.pid || meId()); return;
+    case 'meHead': await act('meHead', { lid: d.lid, dept: d.dept }); return;
+    case 'meLeave': await act('meLeave', { lid: d.lid, dept: d.dept }, 'You stepped down.'); return;
+    case 'meSpec': await act('meSpec', { sector: d.sector, pick: d.pick }); return;
     case 'mailFolder': UI.mailF = d.v; UI.company = 'mail'; renderPanel(); return;
     case 'mailAnswer': await act('mailAnswer', { id: d.id, opt: Number(d.opt) }); return;
     case 'adCo': closeWeb(); hideMapCard(); openListing(d.lid); return;
     // ---- Marketing: ad campaigns
+    case 'gzRate': await act('gzSet', { rate: Math.round(((city().gz && city().gz.rate) || 1) * 100 + Number(d.v) * 100) / 100 }); return;
+    case 'gzFee': await act('gzSet', { press: Math.round(((city().gz && city().gz.press) || 0.1) * 100 + Number(d.v) * 100) / 100 }); return;
+    case 'gzHand': await act('gzSet', { hand: d.v === '1' }); return;
+    case 'gzReview': await act('gzReview', { id: d.id, ok: d.ok === '1' }); return;
+    case 'gzPress': await act('gzPress', { lid: d.lid, kind: d.kind }); return;
+    case 'houseAd': { const r = await B.setHouseAd({ [d.v]: true }); toast(r && r.msg ? r.msg : 'Saved.', r && r.ok === false ? 'bad' : 'good'); renderAll(); renderWeb(); return; }
     case 'adSet': adUI(d.lid)[d.k] = d.k === 'weeks' ? Number(d.v) : d.v; if (d.k === 'tone') adUI(d.lid).n = 0; renderPanel(); return;
     case 'adNext': adUI(d.lid).n = (adUI(d.lid).n || 0) + 1; renderPanel(); return;
     case 'adLaunch': { const r = await act('adLaunch', { lid: d.lid, subj: d.subj, tone: d.tone, n: Number(d.n), weeks: Number(d.weeks) }); if (r && r.ok !== false && UI.ad) delete UI.ad[d.lid]; return; }
@@ -791,7 +821,14 @@ async function onClick(e) {
     case 'viewCompany': UI.company = d.lid; $('panel').scrollTop = 0; renderPanel(); return;
     case 'gotoSupplies': { if (UI.company !== d.lid) { closeModal(); setTab('empire'); UI.company = d.lid; renderPanel(); } const el = $('supplies-box'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
     case 'gotoOrders': { if (UI.company !== d.lid) { closeModal(); setTab('empire'); UI.company = d.lid; renderPanel(); } const el = $('orders-box'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
-    case 'scene': if (!sceneFor(d.lid, d.task)) startScene(d.lid, d.task, d.from); renderAll(); return;
+    case 'scene': {
+      // one task at a time: never start a second one, and never start one that cannot finish this month
+      if (sceneFor(d.lid, d.task)) { toast('That task is already under way. Finish it first.', 'bad'); return; }
+      const busy = Object.values(SCENES).find((st) => st.phase !== 'done');
+      if (busy) { toast(`You are busy: ${sceneTitle(busy)}. Finish that first.`, 'bad'); return; }
+      const why = E.OPS.taskBlock(c, E.listing(c, d.lid), d.task); if (why) { toast(why, 'bad'); return; }
+      startScene(d.lid, d.task, d.from); renderAll(); return;
+    }
     case 'sceneClose': endScene(d.k); renderAll(); return;
     case 'interChoose': { const st = SCENES[d.k]; if (!st || st.phase !== 'decide') return; st.phase = 'busy'; const r = await B.act('task', { lid: st.lid, task: st.task, choice: d.v }); st.phase = 'done'; st.result = r && r.msg ? r.msg : (r && r.ok === false ? 'Could not do that now.' : 'Done.'); renderAll(); return; }
     case 'deliverOpen': openDelivery(d.lid, d.oid); return;
@@ -835,6 +872,21 @@ async function onClick(e) {
     case 'listGoods': await act('listGoods', { lid: d.lid, g: d.g }); return;
     case 'exportGoods': await act('exportGoods', { lid: d.lid, g: d.g, carrier: d.c }); return;
     case 'cancelOffer': await act('cancelOffer', { id: d.id }); return;
+    case 'dealNew': openDeal({ t: 'dealNew', lid: d.lid, g: d.g }); return;
+    case 'dealTo': keepPrice(); UI.modal.to = d.v; openDeal(UI.modal); return;
+    case 'dealQty': { keepPrice(); const l = E.listing(c, UI.modal.lid), have = Math.floor(l.ops.inv[UI.modal.g] || 0); UI.modal.qty = Math.max(1, Math.min(have, (UI.modal.qty || have) + Number(d.v))); openDeal(UI.modal); return; }
+    case 'dealQtySet': keepPrice(); UI.modal.qty = Number(d.v); openDeal(UI.modal); return;
+    case 'dealSend': { const price = Number($('dl-price').value) / 1000; const r = await act('dealOffer', { lid: d.lid, g: d.g, qty: Number(d.q), to: d.to, price }); if (r && r.ok !== false) closeModal(); return; }
+    case 'dealCo': DUI.deal[d.id] = { ...DUI.deal[d.id], co: d.v }; renderAll(); return;
+    case 'dealHow': DUI.deal[d.id] = { ...DUI.deal[d.id], how: d.v }; renderAll(); return;
+    case 'dealAccept': await act('dealAccept', { id: d.id, blid: d.co, how: d.how }); return;
+    case 'dealDecline': await act('dealDecline', { id: d.id }); return;
+    case 'dealWithdraw': await act('dealWithdraw', { id: d.id }); return;
+    case 'dealDeliver': { // a 10-second drive in the browser, then the goods land in the buyer's stock
+      const id = d.id; if (DUI.run[id]) return; DUI.run[id] = Date.now(); renderAll();
+      const tick = setInterval(() => { const dl = (city().deals || []).find((x) => x.id === id); document.querySelectorAll(`[data-dealrun="${id}"]`).forEach((el) => { if (dl) el.outerHTML = deliveryRun(dl); }); }, 400);
+      setTimeout(async () => { clearInterval(tick); try { await act('dealDeliver', { id }); } finally { delete DUI.run[id]; renderAll(); } }, RUN_S * 1000);
+      return; }
     case 'assignHead': await act('assignHead', { lid: d.lid, dept: d.dept, spec: d.spec, coop: d.coop }); return;
     case 'unassignHead': await act('unassignHead', { spec: d.spec, coop: d.coop }, 'Head removed.'); return;
     case 'approveAll': await act('approveAll', {}); return;
@@ -857,6 +909,8 @@ async function onClick(e) {
     case 'editLogo': editLogo(); return;
     case 'signOut': await B.signOut(); return;
     case 'buy': await act('buy', { lid: d.lid }); return;
+    case 'cbRate': await act('cbRate', { target: Number(d.v) }); return;
+    case 'cbLevy': await act('cbLevy', { sector: d.sector || null, sp: Number(d.sp) || 0, supply: d.supply || null, gp: Number(d.gp) || 0 }); return;
     case 'buyas': await act('buy', { lid: d.lid, as: d.hid }); return;
     case 'sell': await act('sell', { lid: d.lid }); return;
     case 'upgrade': await act('upgrade', { lid: d.lid }); return;
@@ -954,7 +1008,7 @@ function renderWeb(top) {
   const el = $('web'); if (!UI.web || el.hidden) return;
   const act0 = document.activeElement; if (!top && act0 && el.contains(act0) && act0.tagName === 'INPUT') return;
   const pg = $('wpage'), sc = pg ? pg.scrollTop : 0;
-  el.innerHTML = webHTML(UI.web); if (!top) $('wpage').scrollTop = sc;
+  UI.web.admin = !!B.admin; el.innerHTML = webHTML(UI.web); if (!top) $('wpage').scrollTop = sc;
 }
 // ---------------------------------------------------------------- back / forward (mouse buttons, browser, phone)
 // Every view change (tab, company, map district, Life room, in-game web page, card) becomes a browser history entry,
@@ -1044,7 +1098,7 @@ async function boot(hot) {
   $('boot').remove();
   buildMap(); setupPanZoom(); setupMapEvents(); mapImg(MAP.img); preloadDistricts();
   document.addEventListener('click', onClick);
-  document.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('#panel .box > h2')) { e.preventDefault(); toggleBox(e.target); } });
+  document.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches(`#panel :is(${FOLD})`)) { e.preventDefault(); toggleBox(e.target); } });
   document.addEventListener('change', async (e) => {
     const t = e.target, d = t.dataset;
     if (d.a === 'whTarget') { UI.whTarget[d.g] = t.value; refreshModal(); }
@@ -1060,6 +1114,10 @@ async function boot(hot) {
     if (wf) { e.preventDefault(); const v = wf.querySelector('input').value.trim(); wf.querySelector('input').blur(); if (wf.dataset.form === 'addr') navWeb(v || HOME_URL); else { UI.web.q = v; renderWeb(true); } return; }
     const ob = e.target.closest('[data-form="auth"], [data-form="avatar"], [data-form="password"], [data-form="secure"]');
     if (ob) { e.preventDefault(); await obSubmit(ob.dataset.form); return; }
+    const hf = e.target.closest('[data-form="house"]');
+    if (hf) { e.preventDefault(); const v = (n) => (hf.elements[n] ? hf.elements[n].value : ''); const r = await B.setHouseAd({ pic: v('pic'), from: v('from'), head: v('head'), line: v('line') }); toast(r && r.msg ? r.msg : 'Saved.', r && r.ok === false ? 'bad' : 'good'); if (r && r.ok !== false && UI.web) navWeb('aurexgazette.ab'); renderAll(); return; }
+    const ma = e.target.closest('[data-form="mailAll"]');
+    if (ma) { e.preventDefault(); const r = await B.mailAll({ subj: ma.elements.subj.value, body: ma.elements.body.value }); toast(r && r.msg ? r.msg : 'Sent.', r && r.ok === false ? 'bad' : 'good'); if (r && r.ok !== false) { UI.mailF = 'all'; UI.company = 'mail'; } renderAll(); return; }
     const f = e.target.closest('[data-form="post"]'); if (!f) return; e.preventDefault();
     const inp = f.querySelector('input'), text = inp.value.trim(); if (!text) return;
     inp.value = ''; inp.blur(); await act('post', { lid: f.dataset.lid, text }, 'Posted to the company board.');
@@ -1072,7 +1130,7 @@ async function boot(hot) {
     const r = await B.setSpeed(sp.id); renderAll();
     if (r && r.ok === false) toast(r.msg, 'bad'); else toast(B.mode === 'online' ? `Admin: everyone now plays at ${sp.note}` : sp.note, 'good');
   });
-  document.querySelectorAll('#tabs button').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); setTab(b.dataset.tab); }));
+  document.querySelectorAll('#tabs button[data-tab]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); setTab(b.dataset.tab); }));
   $('modal').addEventListener('click', (e) => { if (e.target.id === 'modal' && UI.modal && UI.modal.t !== 'ob') closeModal(); });
   B.subscribe(() => { renderAll(); if (UI.modal && ['listing', 'wh', 'deliv', 'home', 'lot'].includes(UI.modal.t)) refreshModal(); if (city().over && me() && !shownSeasonEnd) { shownSeasonEnd = true; showSeasonEnd(); } });
   updatePins();
@@ -1085,7 +1143,7 @@ async function boot(hot) {
   // any click or key press in the game counts as activity for the online bar (game actions do too, in B.act)
   const touch = () => { if (B.touch && me()) B.touch(); };
   document.addEventListener('pointerdown', touch, true); document.addEventListener('keydown', touch, true);
-  initChat({ B, toast, renderWho: () => { renderWho(); measureTop(); }, navBack, setTab, initials, where: () => ({ tab: UI.tab, company: UI.company, modal: UI.modal }) });
+  initChat({ B, toast, renderWho: () => { renderWho(); measureTop(); }, navBack, setTab, openProfile, initials, where: () => ({ tab: UI.tab, company: UI.company, modal: UI.modal }) });
   setInterval(renderWho, 20 * 1000); // players turn inactive without any event
 }
 window.claude?.hot?.snapshot?.(() => ({ ...(B && B.snapshot ? B.snapshot() : {}), tab: UI.tab }));

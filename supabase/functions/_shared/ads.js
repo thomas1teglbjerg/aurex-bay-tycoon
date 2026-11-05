@@ -3,6 +3,8 @@
 // company makes or the owner holds, with a line of copy in the tone the player picks.
 import { TYPES, SIZES, AD, AD_NOUN, AD_CATS, AD_COPY } from './content.js';
 import * as LIFE from './life.js';
+import { roleOn, selfLv, hasSp } from './ops.js';
+import { rate as paperRate } from './gazette.js';
 
 const r4 = (v) => Math.round(v * 1e4) / 1e4;
 const rand = Math.random;
@@ -11,11 +13,12 @@ const ok = (msg) => ({ ok: true, msg });
 const err = (msg) => ({ ok: false, msg });
 
 export const coName = (l) => l.title || TYPES[l.type].name;
-export const cost = (l, weeks) => r4(AD.perWeek * SIZES[l.size].mult * weeks);
+// the price follows the rate The Aurex Gazette's owner sets for the ad desk (gazette.js)
+export const cost = (l, weeks, city) => r4(AD.perWeek * SIZES[l.size].mult * weeks * (selfLv(l, 'social') >= 6 ? 0.9 : 1) * (city ? paperRate(city) : 1));
 export const TONES = AD.tones.map(([k]) => k);
 export const live = (city, g = city.g) => (city.ads || []).filter((a) => a.until > g + 1e-9 && !a.bot);
 export const running = (city, lid, g) => live(city, g).find((a) => a.lid === lid);
-export const strength = (l) => (l.ops && l.ops.depts.social && l.ops.depts.social.head ? AD.head : 1);
+export const strength = (l) => (l.ops && roleOn(l.ops.depts.social) ? AD.head : 1) * (l.ops && hasSp(l, 'star') ? 1.1 : 1);
 
 // pieces this company can advertise: what it made itself (its cellar, or already in the owner's collection)
 // and pieces from the player's own collection that fit its trade (cars for a dealership, wine for a restaurant…)
@@ -52,7 +55,7 @@ export function launch(city, p, l, a, payer) {
     const pr = products(city, p, l).find((x) => x.uid === a.subj); if (!pr) return err('That piece is not yours to advertise.');
     kind = 'item'; cid = pr.cid; pu = pr.uid;
   }
-  const c = cost(l, weeks); if (payer.cash < c) return err(`A ${weeks}-week campaign costs ${c} M.`);
+  const c = cost(l, weeks, city); if (payer.cash < c) return err(`A ${weeks}-week campaign costs ${c} M.`);
   payer.cash -= c; o.cur.ads = r4((o.cur.ads || 0) + c);
   const t = copy(l, tone, a.n, cid, p.name);
   const ad = { id: uid(), lid: l.id, by: p.id, kind, cid, uid: pu, tone, head: t.head, line: t.line, weeks, from: city.g, until: r4(city.g + weeks / 48), cost: c, views: 0 };
@@ -70,7 +73,7 @@ export function weekStep(city, g, ctx) {
   if (!city.ads || !city.ads.length) return;
   city.ads.forEach((ad) => {
     const l = city.listings.find((x) => x.id === ad.lid);
-    if (!l || !l.owner || !l.ops || ad.bot || (l.owner.k === 'p' && city.players[l.owner.id] && city.players[l.owner.id].bot)) { ad.until = 0; ad.bot = true; return; } // only players advertise
+    if (!l || !l.owner || !l.ops || ad.bot || (l.owner.k === 'p' ? !!(city.players[l.owner.id] && city.players[l.owner.id].bot) : !!(city.holdings && city.holdings[l.owner.id] && city.holdings[l.owner.id].bot))) { ad.until = 0; ad.bot = true; return; } // only players advertise
     if (ad.from >= g || ad.until < g - 1e-9) return;
     const k = strength(l), o = l.ops;
     ad.views += Math.round((600 + rand() * 500) * SIZES[l.size].mult * k);

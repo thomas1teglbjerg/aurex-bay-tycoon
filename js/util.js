@@ -6,7 +6,7 @@ export const lname = (l) => l.title || TYPES[l.type].name;
 // a listing may have its own picture (img in LISTINGS), otherwise the picture of its type
 const LIMG = Object.fromEntries(LISTINGS.filter((l) => l.img).map((l) => [l.id, l.img]));
 // Bump FACE_V when portraits in img/s-*.jpg change: /img is cached as immutable for a week.
-const FACE_V = 3;
+const FACE_V = 4;
 export const faceUrl = (id) => `img/s-${id}.jpg?v=${FACE_V}`;
 export const coImg = (l) => `img/${LIMG[l.id] || 'c-' + l.type}.jpg`;
 

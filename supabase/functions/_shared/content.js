@@ -31,13 +31,15 @@ export const TYPES = {
     perks: [{ t: 'Hit Single', d: '+3 M & +1 Influence on a hit (2 in 6 per year) when Marketing runs or a PR & Media Officer leads it' }, { t: 'Studio Buzz', d: '+1 Influence per year' }], neg: [{ t: 'Fickle Charts', d: '−0.4 M YPI during a recession' }] },
   film: { name: 'Film Production', sector: 'Media & Entertainment', price: 38, trade: 2.5, ypi: 3.5, group: 'media', tags: ['Media', 'Influence'],
     perks: [{ t: 'Influence Boost', d: '+1 Influence per year' }, { t: 'Blockbuster Success', d: '+8 M & +1 Influence on a blockbuster (2 in 6 per year)' }], neg: [{ t: 'Influencer Staff Requirement', d: 'Blockbusters need a PR & Media Officer at HQ' }] },
+  newspaper: { name: 'Newspaper', sector: 'Media · News & Publishing', price: 14, trade: 1, ypi: 1.6, group: 'media', tags: ['Media', 'Community'],
+    perks: [{ t: 'Ad Desk', d: 'Every ad campaign in the city is booked through the paper: you set the price and keep the money' }, { t: 'Front Page', d: 'Pick the story of the week; the company on the front page wins customers and reputation' }], neg: [{ t: 'Thin Ad Pages', d: '−0.3 M YPI during a recession' }] },
   vineyard: { name: 'Vineyard', sector: 'Food & Drink · Wine Estate', price: 12, trade: 1.2, ypi: 1.6, group: 'service', tags: ['Wine', 'Collectibles'],
     perks: [{ t: 'Vintage Year', d: 'Every harvest: 50% chance to bottle a collectible wine. Sell it to the dealer, at auction or to other players' }, { t: 'Estate Specialists', d: 'Each specialist leading a department raises the odds and the rarity' }, { t: 'House Wine', d: '+YPI to a Restaurant in the portfolio' }],
     neg: [{ t: 'Small Harvests', d: 'Small estates rarely bottle anything above Rare and never a Legendary' }, { t: 'Crisis Hangover', d: '−0.4 M YPI during a crisis' }] }
 };
 
 // Portfolio synergies: owning (or contracting with) the first type boosts the second
-export const SYNERGY = [['car', 'dealer'], ['autorepair', 'dealer'], ['car', 'autorepair'], ['metal', 'car'], ['metal', 'chip'], ['chip', 'data'], ['chip', 'pharma'], ['film', 'fashion'], ['hotel', 'fashion'], ['finance', 'data'], ['vineyard', 'restaurant']];
+export const SYNERGY = [['car', 'dealer'], ['autorepair', 'dealer'], ['car', 'autorepair'], ['metal', 'car'], ['metal', 'chip'], ['chip', 'data'], ['chip', 'pharma'], ['film', 'fashion'], ['hotel', 'fashion'], ['finance', 'data'], ['vineyard', 'restaurant'], ['newspaper', 'film'], ['newspaper', 'music']];
 
 export const SIZES = { S: { label: 'Small', mult: 0.6 }, M: { label: 'Medium', mult: 1 }, L: { label: 'Large', mult: 1.5 } };
 
@@ -61,21 +63,38 @@ DISTRICTS.forEach((d) => { d.x = Math.round(d.box.x + d.box.w / 2); d.y = Math.r
 export const DISTRICT = Object.fromEntries(DISTRICTS.map((d) => [d.id, d]));
 export function placeOn(d, p) { const b = DISTRICT[d].box; return { x: Math.round(b.x + p[0] * b.w), y: Math.round(b.y + p[1] * b.h) }; }
 
-// 32 unique listings: [type, district, size, x, y within the district view, title, own picture in img/]
+// 33 unique listings: [type, district, size, x, y within the district view, title, own picture in img/]
 export const LISTINGS = [
   ['clothing', 'ironport', 'S', 0.24, 0.31, 'Eastbridge Supply Co.'], ['fashion', 'aurex', 'L', 0.6, 0.72], ['fashion', 'marina', 'S', 0.54, 0.5],
   ['hotel', 'marina', 'L', 0.2, 0.3], ['hotel', 'marina', 'M', 0.42, 0.4], ['hotel', 'sunset', 'S', 0.45, 0.4, null, 'c-hotel-sunset'],
   ['metal', 'harbor', 'L', 0.4, 0.53], ['metal', 'ironport', 'S', 0.08, 0.1], ['metal', 'harbor', 'M', 0.44, 0.66],
   ['car', 'harbor', 'L', 0.53, 0.46], ['dealer', 'ironport', 'M', 0.42, 0.83, 'Kazen Motors'], ['car', 'aurex', 'S', 0.3, 0.84],
-  ['finance', 'aurex', 'L', 0.5, 0.34], ['finance', 'aurex', 'M', 0.76, 0.36], ['bank', 'ironport', 'S', 0.48, 0.44, 'Aurex Bank'],
+  ['finance', 'aurex', 'L', 0.5, 0.34, 'Bank of Aurex', 'c-bankofaurex'], ['finance', 'aurex', 'M', 0.76, 0.36, 'Harbor Trust', 'c-harbortrust'], ['bank', 'ironport', 'S', 0.48, 0.44, 'Aurex Bank'],
   ['chip', 'nevus', 'L', 0.44, 0.25], ['chip', 'greenfield', 'M', 0.28, 0.17], ['chip', 'harbor', 'S', 0.47, 0.36],
   ['data', 'aurex', 'L', 0.24, 0.26], ['data', 'aurex', 'M', 0.9, 0.58], ['data', 'nevus', 'S', 0.62, 0.42],
   ['pharma', 'nevus', 'L', 0.78, 0.63], ['pharma', 'greenfield', 'M', 0.43, 0.3], ['pharma', 'crown', 'S', 0.86, 0.38],
   ['film', 'crown', 'L', 0.11, 0.17], ['music', 'ironport', 'M', 0.75, 0.88, 'Watertower Sound'], ['film', 'harbor', 'S', 0.58, 0.3],
   ['autorepair', 'ironport', 'S', 0.3, 0.6, 'Kingside Auto Works'],
   ['restaurant', 'ironport', 'S', 0.62, 0.6, 'Ground Café'],
-  ['vineyard', 'greenfield', 'S', 0.66, 0.2, 'Greenfield Hill Vines'], ['vineyard', 'crown', 'M', 0.815, 0.6, 'Aurex Bay Vineyard'], ['vineyard', 'nevus', 'L', 0.33, 0.42, 'Nevus Cliff Estate']
+  ['vineyard', 'greenfield', 'S', 0.66, 0.2, 'Greenfield Hill Vines'], ['vineyard', 'crown', 'M', 0.815, 0.6, 'Aurex Bay Vineyard'], ['vineyard', 'nevus', 'L', 0.33, 0.42, 'Nevus Cliff Estate'],
+  ['newspaper', 'aurex', 'M', 0.8, 0.5, 'The Aurex Gazette', 'c-gazette']
 ].map(([type, d, size, px, py, title, img], i) => ({ id: 'L' + (i + 1), type, d, p: [px, py], district: DISTRICT[d].name, size, ...(title ? { title } : {}), ...(img ? { img } : {}), ...placeOn(d, [px, py]) }));
+
+// the national bank: the Bank of Aurex site in Aurex City (bankofaurex.ab in the in-game browser)
+export const CENTRAL_BANK = 'L13';
+// national bank rules (central.js): the bank rate the governor steers, levies, and how both move the economy
+export const CENTRAL = {
+  start: 8, min: 2, max: 10, step: 0.25, moveMax: 0.5, neutral: 6, quarter: 3,
+  calm: [5, 8],                  // between these the rate leaves the economy alone
+  ownerCut: 0.1,                 // the bank earns this share of the interest other tycoons pay on bank loans
+  levyMax: 10, levyPick: 3,      // up to 10% on one of the 3 most crowded sectors and one of the 3 most traded supplies
+  levyLoad: 8,                   // levies above this (sector % + supply % / 2) weigh on the economy
+  tiltMax: 0.25,                 // at most this much extra chance that a world card moves the economy one step
+  px: [0.85, 1.25], pxMove: 0.012, // supply price index: cheap money lifts it, dear money lowers it (per month at the extremes)
+  extreme: [3, 9], extremeMonths: 12, ministry: 0.2, // a year outside 3–9% and the Finance Ministry may step in each month
+  needTier: 3, needFinance: 6,   // Elite prestige and Finance level 6 to buy the bank
+  mortgage: 0.5, savings: 0.3    // personal mortgage and savings rates follow the bank rate by this share
+};
 
 export const STAFF = [
   { id: 'michael', role: 'Junior Financial Analyst', name: 'Michael Turner', cost: 1.5, upkeep: 0.5, passive: ['Loan Bonus', 'Gain +0.5 M when taking a loan. Your interest drops 1 M a year.'], hq: 'Head of Finance: running costs −5% in that company.', tags: 'Finance · Risk' },
@@ -85,7 +104,7 @@ export const STAFF = [
   { id: 'emily', role: 'HR Recruitment Officer', name: 'Emily Carter', cost: 2, upkeep: 0.5, passive: ['Talent Network', 'Specialists cost −0.5 M to recruit.'], hq: 'Head of HR: hiring costs −50% and morale +8 in that company.', tags: 'HR · Growth · Infrastructure' },
   { id: 'carlos', role: 'Logistics Planner', name: 'Carlos Mendoza', cost: 4, upkeep: 1, passive: ['Supply Chain', 'Runs your warehouses: auto-import, auto-supply and warehouse sourcing. +1 Influence a year, and his industrial company +1 M YPI.'], hq: 'Head of Procurement: supplies 5% cheaper for that company.', tags: 'Transport · Mobility' },
   { id: 'marco', role: 'Workshop Chief', name: 'Marco Vitale', cost: 1, upkeep: 0.3, passive: ['Quick Turnaround', 'The auto repair, dealership or car company he works in earns +1 M YPI.'], hq: 'Head of Operations: output +10% in that company.', tags: 'Operations · Automotive' },
-  { id: 'jason', role: 'Market Research Associate', name: 'Jason Miller', cost: 4, upkeep: 0.5, passive: ['Market Insight', 'You and your whole network see the next World Card.'], hq: 'Head of Sales: +50% sales automation in that company.', tags: 'Strategy · Information' }
+  { id: 'jason', role: 'Market Research Associate', name: 'Jason Miller', cost: 4, upkeep: 0.5, passive: ['Market Insight', 'Mails you a technical research note before each World Card. You decide if your network gets it too.'], hq: 'Head of Sales: +50% sales automation in that company.', tags: 'Strategy · Information' }
 ];
 
 // drift per year: [boom, stable, recession, crisis]
@@ -181,6 +200,41 @@ export const WORLD = [
   { id: 'calm', title: 'A Steady Quarter', econ: 'Stable', text: 'No surprises this quarter. Markets move sideways and businesses get on with the work.', shock: {}, at: [610, 380] }
 ];
 
+// Market insight: the research note a Market Research Associate mails before each World Card.
+// It never names the card: the specialist tells what their contacts see per sector and leaves the conclusion to the player.
+export const INSIGHT = {
+  // per stock: what the specialist hears when it is about to go up, and when it is about to go down
+  hint: {
+    pharma: ['Lab suppliers tell me reagent orders are through the roof. Someone is getting the pharma labs ready for a busy quarter.', 'The pharma labs are cancelling reagent orders. Not a good sign for that sector.'],
+    ai: ['GPU lease rates are climbing fast. The AI people are buying every chip they can get.', 'Data centers are quietly handing back GPU leases. The AI crowd is nervous.'],
+    oil: ['Oil traders are paying up for barrels months ahead. They expect crude to get a lot dearer.', 'Crude buyers are holding back. Oil looks soft.'],
+    gold: ['The vaults on Harbor Row are taking in more bullion than usual. Money is looking for a safe place.', 'Bullion is leaving the vaults. Investors feel brave enough to skip gold.'],
+    energy: ['Power for next quarter is selling at a premium. The utilities stand to gain.', 'Power prices for next quarter are sliding. Energy companies will feel it.'],
+    diamonds: ['Bids at the rough-stone tenders are high. Diamond dealers expect rich buyers.', 'Diamond tenders are going unsold. The luxury buyers have gone quiet.'],
+    military: ['Defence filings at City Hall have piled up. Contractors are lining up new orders.', 'Defence contracts are being postponed. Military tech could cool off.'],
+    streaming: ['Bandwidth at night is way above normal. People are staying home and streaming.', 'Evening bandwidth is down. People are out, not watching.'],
+    taxi: ['Ride-hail surge pricing is everywhere. The taxis can barely keep up.', 'Taxi drivers are idling at the ranks. Ride demand is drying up.'],
+    airline: ['Forward bookings at Clowd are full. Everyone wants to fly.', 'Forward bookings at Clowd Airline are collapsing. People are cancelling trips.'],
+    fashion: ['The textile mills have more orders than they can sew. Demiware is betting on a big season.', 'Textile mills are cutting shifts. Fashion looks weak.'],
+    watches: ['Second-hand Vanthoben watches sell above list price. Luxury demand is hot.', 'Second-hand luxury watches are piling up at the dealers. Luxury is cooling.']
+  },
+  strong: ['This one is big.', 'I would bet on this one.', 'Very clear signal.'],
+  weak: ['Smaller move, I think.', 'Not huge, but real.'],
+  rumour: 'One more thing, but only a rumour I could not confirm: {x}',
+  macro: {
+    Boom: 'On the big picture: hiring is up, people are borrowing to spend, and the shops are full. It feels like good times are coming.',
+    Recession: 'On the big picture: jobless claims are rising and the banks are tightening loans. I would not be surprised if the economy slows down.',
+    Crisis: 'On the big picture: the market is very jumpy and the banks barely lend to each other. Something serious may be coming. Brace for it.',
+    Stable: 'On the big picture: things are calming down. Normal numbers, normal mood.',
+    none: 'On the big picture: nothing changes, as far as I can tell.'
+  },
+  fx: { energy: 'The grid operator warns that power reserves are almost gone. Factories that need a lot of energy could stand still.', cyber: 'Hacker forums are full of chatter about breaking into data centers. Tech companies without good protection should watch out.',
+    regulation: 'City Hall is hiring auditors. Tech and finance companies should get their papers in order.', viral: 'Old Grid streetwear is all over social media right now. Fashion stores could cash in.',
+    tourism: 'The cruise berths at Harbor Row are fully booked. Hotels will be busy.', ai: 'Aurex City labs have filed a record number of patents. Something big may come out of them.' },
+  open: ['Here is what my contacts tell me about the coming quarter.', 'A few things I picked up this week that you should know about.', 'My read on what is coming. I only tell you what I see; the trades are your call.'],
+  close: ['When it hits, I do not know. Probably within the quarter.', 'I cannot tell you the day. Most likely before the quarter is out.']
+};
+
 // Decisions land in a player's inbox. If nobody answers before the deadline, the autopilot picks by policy.
 export const DECISIONS = [
   { id: 'union', needs: 'car', title: 'Union Demands at Your Car Factory', text: 'Workers want a raise and threaten to walk out before the new model launch.',
@@ -257,6 +311,7 @@ export const RECIPES = {
   // guests: no finished stock and no deliveries. Bookings come in, guests check in when a room and supplies are free, and use the supplies during their stay.
   hotel: { cap: 25, unit: 'guest stays', in: { food: 2, textiles: 0.5, energy: 1, media: 0.3 }, out: {}, guests: { client: 'Booking channel' } },
   finance: { cap: 20, unit: 'client accounts', in: { software: 0.5, energy: 0.5 }, out: {} },
+  newspaper: { cap: 30, unit: 'editions', in: { software: 0.3, energy: 0.2, textiles: 0.2 }, out: {} },
   vineyard: { cap: 20, unit: 'barrels', in: { chemicals: 0.3, energy: 0.3, food: 0.2 }, out: {} }
 };
 
@@ -302,7 +357,7 @@ export const WORKER = { salary: 0.08, hireFee: 0.02 };
 // ---------------------------------------------------------------- clients and orders
 // B2B companies have a few large corporate clients who negotiate hard but stay loyal.
 // B2C companies sell through many retail channels with smaller, faster, more impatient orders.
-export const MARKET_KIND = { bank: 'b2c', dealer: 'b2c', restaurant: 'b2c', autorepair: 'b2c', metal: 'b2b', chip: 'b2b', data: 'b2b', finance: 'b2b', pharma: 'b2b', car: 'b2c', clothing: 'b2c', fashion: 'b2c', hotel: 'b2c', music: 'b2c', film: 'b2c', vineyard: 'b2c' };
+export const MARKET_KIND = { bank: 'b2c', dealer: 'b2c', restaurant: 'b2c', autorepair: 'b2c', metal: 'b2b', chip: 'b2b', data: 'b2b', finance: 'b2b', pharma: 'b2b', car: 'b2c', clothing: 'b2c', fashion: 'b2c', hotel: 'b2c', music: 'b2c', film: 'b2c', vineyard: 'b2c', newspaper: 'b2c' };
 export const CLIENT_RULES = {
   b2b: { start: 4, weight: [1, 2.5], orderChance: 0.55, expire: 3, renegotiate: 0.6, rejectHit: 18, label: 'Corporate client' },
   b2c: { start: 6, weight: [0.4, 1.2], orderChance: 0.7, expire: 2, renegotiate: 0.42, rejectHit: 10, label: 'Retail channel' }
@@ -333,6 +388,7 @@ export const CLIENT_NAMES = {
   fashion: ['Boutique Lumen', 'Old Grid Department Store', 'Aurex Mall', 'Sunset Surf & Style', 'Crown Hills Atelier', 'Harbor Outlet', 'Midtown Sneaker Lab', 'Lagoon Resort Shops', 'Nevus Concept Store'],
   hotel: ['Northwind Travel', 'Cruise Terminal Desk', 'Aurex Business Travel', 'Wedding Planners Co', 'Conference Bureau', 'Sunset Tour Operators', 'Harbor Row Events', 'Crown Hills Golf Club', 'Airport Shuttle Partners'],
   music: ['StreamBay', 'Aurex FM', 'Old Grid Jazz Club', 'Ironport warehouse nights', 'Indie artists', 'Midtown ad agencies', 'Sunset Open Air', 'Crown Hills Film Festival', 'Podcast networks'],
+  newspaper: ['Harbor Row newsstands', 'Aurex City subscribers', 'Crown Hills home delivery', 'Midtown coffee bars', 'Ironport commuters', 'Hotel lobbies', 'Old Grid library', 'Sunset Strand kiosks', 'Online readers'],
   vineyard: ['Cellar Door wine merchants', 'Crown Hills Golf Club', 'Marina Bay restaurants', 'Wine club members', 'Sunset Strand beach bars', 'Aurex Bay Hotel', 'Tasting room visitors', 'Wedding Planners Co', 'Duty-free at the airport'],
   film: ['Grand Cinema Midtown', 'Harbor Row Drive-in', 'StreamBay', 'Crown Hills Film Festival', 'Old Grid Arthouse', 'Nevus Media Network', 'Sunset Open Air', 'Aurex TV', 'Lagoon IMAX']
 };
@@ -440,6 +496,9 @@ export const WAREHOUSE_SITES = [
   { id: 'W4', name: 'Pier 9 Logistics Park', d: 'harbor', p: [0.7, 0.52], mode: 'road', price: 10, upkeep: 0.5, cap: 1200, importMult: 0.97, importDays: 6, exportMult: 1, desc: 'Trucks from the coastal highway. Close to Nevus Isle and the east side.' },
   { id: 'W5', name: 'Crown Hills Depot', d: 'crown', p: [0.9, 0.2], mode: 'road', price: 8, upkeep: 0.4, cap: 900, importMult: 0.98, importDays: 6, exportMult: 0.95, desc: 'A small depot in the north. Cheap to own, short trips to the Old Grid and the hills.' }
 ];
+// direct sales between tycoons (deals.js): an offer waits openWeeks for an answer; when the seller delivers it, they have deliverWeeks to send it.
+// The price per unit must stay between minPrice and maxPrice × the supply's normal price. When the seller delivers, the buyer pays them halfway between Ridgeway's and Harborline's freight (DEAL.fee).
+export const DEALS = { openWeeks: 4, deliverWeeks: 4, minPrice: 0.25, maxPrice: 4 };
 export const LOGISTICS = { truckDaysPer100px: 0.9, minTruckDays: 1, bulkDiscountQty: 500, bulkDiscount: 0.05, upgradeCostMult: 0.5, levelCap: 1.5 };
 
 // ---------------------------------------------------------------- personal life
@@ -606,9 +665,9 @@ export const DINNER = {
 export const TALENT = [
   { id: 'michael', kind: 'michael', name: 'Michael Turner', rating: 3, img: true }, { id: 't-priya', kind: 'michael', name: 'Priya Shah', rating: 4 }, { id: 't-henrik', kind: 'michael', name: 'Henrik Vos', rating: 2 },
   { id: 'anika', kind: 'anika', name: 'Anika Rao', rating: 3, img: true }, { id: 't-diego', kind: 'anika', name: 'Diego Alvarez', rating: 5 }, { id: 't-mei', kind: 'anika', name: 'Mei Lin', rating: 2 },
-  { id: 'sofia', kind: 'sofia', name: 'Sofia Lindström', rating: 3, img: true }, { id: 't-jamal', kind: 'sofia', name: 'Jamal Reed', rating: 4 }, { id: 't-clara', kind: 'sofia', name: 'Clara Novak', rating: 2 },
+  { id: 'sofia', kind: 'sofia', name: 'Sofia Lindström', rating: 3, img: true }, { id: 't-jamal', kind: 'sofia', name: 'Jamal Reed', rating: 4, img: true }, { id: 't-clara', kind: 'sofia', name: 'Clara Novak', rating: 2 },
   { id: 'robert', kind: 'robert', name: 'Robert Hayes', rating: 3, img: true }, { id: 't-ingrid', kind: 'robert', name: 'Ingrid Falk', rating: 4 }, { id: 't-tomas', kind: 'robert', name: 'Tomás Silva', rating: 2 },
-  { id: 'emily', kind: 'emily', name: 'Emily Carter', rating: 3, img: true }, { id: 't-yara', kind: 'emily', name: 'Yara Haddad', rating: 4 }, { id: 't-noah', kind: 'emily', name: 'Noah Brooks', rating: 2 },
+  { id: 'emily', kind: 'emily', name: 'Emily Carter', rating: 3, img: true }, { id: 't-yara', kind: 'emily', name: 'Yara Haddad', rating: 4 }, { id: 't-noah', kind: 'emily', name: 'Noah Brooks', rating: 2, img: true },
   { id: 'carlos', kind: 'carlos', name: 'Carlos Mendoza', rating: 4, img: true }, { id: 'mack', kind: 'carlos', name: 'Mack Brennan', rating: 1, img: true, starter: true, role: 'Logistics Operator', pay: 0.6 }, { id: 't-olga', kind: 'carlos', name: 'Olga Petrova', rating: 3 }, { id: 't-sam', kind: 'carlos', name: 'Sam Okoye', rating: 2 },
   { id: 'marco', kind: 'marco', name: 'Marco Vitale', rating: 2, img: true, starter: true }, { id: 't-dana', kind: 'marco', name: 'Dana Kowalski', rating: 3 }, { id: 't-viktor', kind: 'marco', name: 'Viktor Hale', rating: 4 },
   { id: 'rohan', kind: 'jason', name: 'Rohan Mehta', rating: 3, img: true, role: 'Sales Executive', pay: 1.1,
@@ -617,7 +676,7 @@ export const TALENT = [
   { id: 'dario', kind: 'marco', name: 'Dario Russo', rating: 4, img: true, role: 'General Manager', pay: 2,
     bio: 'Turned around two failing dealerships in the last downturn. Calm, demanding and allergic to excuses. When the market drops, his numbers do not.',
     passive: ['Steady Hand', 'Recessions and crises never cut customer demand in the company where he heads Operations.'] },
-  { id: 'jason', kind: 'jason', name: 'Jason Miller', rating: 3, img: true }, { id: 't-elena', kind: 'jason', name: 'Elena Rossi', rating: 5 }, { id: 't-kofi', kind: 'jason', name: 'Kofi Mensah', rating: 2 },
+  { id: 'jason', kind: 'jason', name: 'Jason Miller', rating: 3, img: true }, { id: 't-elena', kind: 'jason', name: 'Elena Rossi', rating: 5, img: true }, { id: 't-kofi', kind: 'jason', name: 'Kofi Mensah', rating: 2 },
   { id: 'laurent', kind: 'marco', name: 'Laurent Beaumont', rating: 5, img: true, role: 'Master Sommelier', pay: 1.8,
     bio: 'Forty harvests in Crown Hills. Names the vintage, the slope and the weather that year from one sip, and has sent back wine at every five-star table in the bay.',
     passive: ['Grand Palate', 'At a hotel, restaurant or vineyard where he heads Operations: +1 M YPI. At a vineyard: +15% chance of a collectible vintage and +20% chance it comes out one rarity higher.'] },
@@ -662,10 +721,41 @@ export const CARRIERS = [
 // ---------------------------------------------------------------- Marketing: ad campaigns on the city's websites
 // A campaign runs for a few weeks and shows ads in the in-game browser. Cost per week = perWeek × company size.
 // Company campaigns grow customers and reputation every week; a product campaign lifts the market value of that one piece.
+// The house ad: one advertisement run by the administrator / system (never by players). It shows in the
+// Gazette box on the Market tab and stays fixed on The Aurex Gazette website. Change it here.
+export const HOUSE_AD = { img: 'img/x-bergwald-s7.jpg', pos: '50% 60%', from: 'Bergwald', head: 'Bergwald cars is coming to Aurex Bay', line: 'See you soon' };
+// pictures the administrator can pick for the house ad (paths under img/)
+export const HOUSE_PICS = [['x-bergwald-s7', 'Bergwald S7'], ['x-bergwald-x7', 'Bergwald X7'], ['x-bergwald-gt', 'Bergwald GT'], ['x-bergwald-crown', 'Bergwald Crown Hills'], ['x-tuner-gtrs', 'Valtor GT-RS'], ['x-c4', 'Vellano V9'], ['c-gazette', 'The Aurex Gazette'], ['c-bankofaurex', 'Bank of Aurex'], ['c-harbortrust', 'Harbor Trust'], ['h1-watch', 'Watches'], ['h1-wine', 'Wine'], ['h1-art', 'Art'], ['h1-ext', 'Villa'], ['map', 'Aurex Bay']];
+
+// The Aurex Gazette as a company (gazette.js): its owner runs the city's ad desk, prints press releases and picks the front page
+export const PAPER = {
+  id: 'L33',                       // The Aurex Gazette site in Aurex City
+  rate: [0.5, 2], rateStep: 0.25,  // ad price multiplier the owner sets (1 = the normal Marketing price)
+  press: [0.05, 0.5], pressStart: 0.1, pressStep: 0.05, // price of one press release (M)
+  pressWeeks: 4,                   // one press release per company every 4 weeks
+  pressRep: 3, pressCust: 0.02,    // what a press release does for the company
+  reviewWait: 1 / 48,              // ads waiting for approval: the autopilot approves after one week
+  front: { rep: 4, cust: 0.04, paperRep: 1, cands: 3 }, // the front page story of the week
+  PRESS: {
+    open: ['{co} opens its doors', '{owner} invites Aurex Bay to {co} in {d}.'],
+    grow: ['{co} is growing', 'More {thing} for Aurex Bay: {co} in {d} expands.'],
+    hire: ['{co} is hiring', '{co} in {d} is looking for new people.'],
+    thanks: ['{co} thanks its customers', 'A year of {thing} in {d}. {owner} says thank you.'],
+    news: ['Big news from {co}', 'Something new is coming from {co} in {d}. Watch this space.']
+  },
+  PRESS_LABEL: { open: 'Grand opening', grow: 'We are growing', hire: 'We are hiring', thanks: 'Thank you', news: 'Big news' },
+  FRONT: [
+    ['{co} is the talk of {d}', 'Customers queue around the block at {co}.'],
+    ['Inside {co}', 'A day with the team behind {thing} in {d}.'],
+    ['How {co} won {d}', '{owner} on building one of the busiest {type} businesses in town.'],
+    ['{co}: a {d} success story', 'Readers vote it the best place for {thing} this season.'],
+    ['The people of {co}', 'Meet the staff who keep {co} running.']
+  ]
+};
 export const AD = { perWeek: 0.04, weeks: [2, 4, 8], cust: 0.015, rep: 0.5, lift: 0.004, head: 1.5,
   tones: [['irony', 'Ironic'], ['sarcasm', 'Sarcastic'], ['wink', 'Tongue-in-cheek']] };
 // what each business sells, for the ad copy
-export const AD_NOUN = { bank: 'banking', dealer: 'cars', restaurant: 'dinner', autorepair: 'repairs', clothing: 'clothes', fashion: 'fashion', hotel: 'hotel rooms', metal: 'steel', car: 'cars', finance: 'investments', chip: 'microchips', data: 'software', pharma: 'medicine', music: 'music', film: 'films', vineyard: 'wine' };
+export const AD_NOUN = { bank: 'banking', dealer: 'cars', restaurant: 'dinner', autorepair: 'repairs', clothing: 'clothes', fashion: 'fashion', hotel: 'hotel rooms', metal: 'steel', car: 'cars', finance: 'investments', chip: 'microchips', data: 'software', pharma: 'medicine', music: 'music', film: 'films', vineyard: 'wine', newspaper: 'the news' };
 // besides what it makes itself, a company may advertise pieces from the owner's collection that fit its trade
 export const AD_CATS = { dealer: ['car'], autorepair: ['car'], car: ['car'], vineyard: ['wine'], restaurant: ['wine'], hotel: ['wine', 'art'], fashion: ['watch', 'art'], clothing: ['watch'], bank: ['art', 'watch'], finance: ['art', 'watch'], film: ['art'], music: ['art'] };
 // [headline, line]. {co} company, {d} district, {thing} what it sells, {type} kind of business, {item} {maker} {year} a piece, {owner} the tycoon
@@ -700,3 +790,36 @@ export const AD_COPY = {
     art: { irony: [['It is just paint on canvas.', 'Very expensive paint. {item} by {maker}.'], ['Nobody will notice it.', 'Said no one, ever, about {item}.']], sarcasm: [['Your walls are fine. If you like beige.', '{item}, {maker}, {year}.'], ['Another poster from the furniture store?', 'Bold. Or there is {item}.']], wink: [['Hang it upside down. We will not tell.', '{item} by {maker}.'], ['Looks great above a sofa.', 'Any sofa. {item}, {year}.']] }
   }
 };
+
+// ---------------------------------------------------------------- the tycoon's own career (career.js)
+// XP per source; levels are total XP; a head's rating = ceil(level / 2). Sector XP from leading or to-dos = sectorShare × field XP.
+export const CAREER = {
+  levels: [0, 150, 400, 800, 1400, 2200, 3300, 4800, 6800, 9500],
+  xp: { lead: 10, task: 3, order: 1, own: 2, stock: 2, tier: 50, crisis: 30 },
+  sectorShare: 0.6, size: { S: 0.7, M: 1, L: 1.3 }, mentor: 1.25, mentorRating: 4,
+  caps: { task: 5, order: 10, ownPerSector: 3, ownProfit: 5, stockYear: 40 },
+  seedCap: 400, rustAfter: 24, rust: 0.01, specLevel: 5, respec: 0.25,
+  seats: [0, 25, 70],
+  titles: [{ min: 0, name: 'Entrepreneur' }, { min: 10, name: 'Director' }, { min: 25, name: 'Magnate' }, { min: 45, name: 'Tycoon' }, { min: 70, name: 'Legend' }],
+  sectors: {
+    service: { name: 'Service', specs: [{ id: 'host', name: 'The Host', d: 'Customer demand +8% at your hotels, restaurants and vineyards.' }, { id: 'motor', name: 'The Car Guy', d: '+0.5 M YPI × size at your auto repair shops and car dealerships.' }] },
+    industry: { name: 'Industry', specs: [{ id: 'factory', name: 'Plant Boss', d: 'Output +6% at your industrial companies.' }, { id: 'buyer', name: 'Master Buyer', d: 'Supplies 6% cheaper at your industrial companies.' }] },
+    tech: { name: 'Tech', specs: [{ id: 'architect', name: 'Architect', d: 'Research 25% faster at your tech companies.' }, { id: 'guard', name: 'Watchdog', d: 'Cyberattacks never hit your tech companies.' }] },
+    finance: { name: 'Finance', specs: [{ id: 'banker', name: 'Banker', d: 'Your bank loans cost 1 point less interest.' }, { id: 'investor', name: 'Investor', d: 'Your stock trades move the price half as much.' }] },
+    health: { name: 'Health', specs: [{ id: 'crisis', name: 'Crisis Manager', d: '+2 M YPI × size at your pharma companies during a crisis.' }, { id: 'research', name: 'Researcher', d: '+1 Influence every year.' }] },
+    media: { name: 'Media', specs: [{ id: 'hit', name: 'Hitmaker', d: 'Hits and blockbusters 50% more likely at your studios.' }, { id: 'star', name: 'The Star', d: '+1 Influence every year, and ads 10% stronger at your media companies.' }] }
+  },
+  // perks in a department you lead yourself (level 3 always brings the role's own effect, like a specialist head)
+  perks: {
+    ops: [{ lv: 3, t: 'Head of Operations: output +10%' }, { lv: 6, t: 'Output +4% more' }, { lv: 9, t: 'Extra shifts hurt morale half as much' }],
+    procurement: [{ lv: 3, t: 'Supplies 3% cheaper' }, { lv: 6, t: 'Supplies 5% cheaper' }, { lv: 9, t: 'Supplies 7% cheaper' }],
+    sales: [{ lv: 3, t: 'Customer demand +3%' }, { lv: 6, t: 'Customer demand +6%' }, { lv: 9, t: 'Customer demand +10%' }],
+    social: [{ lv: 3, t: 'Head of Marketing: campaigns and ads 50% stronger' }, { lv: 6, t: 'Ads 10% cheaper' }, { lv: 9, t: 'Going big adds +1 more reputation' }],
+    hr: [{ lv: 3, t: 'Head of HR: morale +8' }, { lv: 6, t: 'Hiring workers 25% cheaper' }, { lv: 9, t: 'Morale never drops below 50' }],
+    finance: [{ lv: 3, t: 'Head of Finance: running costs −5%' }, { lv: 6, t: 'Running costs −2% more' }, { lv: 9, t: 'Running costs −2% more' }],
+    rnd: [{ lv: 3, t: 'Head of R&D: research 50% faster' }, { lv: 6, t: 'Research 20% faster still' }, { lv: 9, t: 'Cyberattacks are blocked' }],
+    legal: [{ lv: 3, t: 'Head of Legal: full protection from regulation fines' }, { lv: 6, t: 'Reputation +0.5 a month' }, { lv: 9, t: 'Reputation +1 a month' }]
+  }
+};
+// personal portraits: only the first player in the city with this avatar name gets it (img/<pic>.jpg)
+export const PORTRAITS = { 'Thomas Teglbjærg': 'p-thomas-debenhams', 'Mikkel Teglbjærg': 'p-mikkel-debenhams', 'Thomas Debenhams': 'p-thomas-debenhams', 'Mikkel Debenhams': 'p-mikkel-debenhams' };
