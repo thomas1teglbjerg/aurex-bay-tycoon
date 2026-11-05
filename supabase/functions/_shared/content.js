@@ -333,7 +333,7 @@ export const RECIPES = {
   construction: { cap: 20, unit: 'building projects', in: { concrete: 1.5, steel: 0.8, chemicals: 0.2, energy: 0.4 }, out: {} },
   // concrete: 1 part cement, 2 sand, 4 gravel, 0.5 water by weight (7.5 parts make 7.5 t), plus mixer power
   // yard: what the company's Warehouse box holds at most, raw materials and finished goods (raw materials start half full).
-  // manual: nothing is used by the month; the owner mixes batches by hand (OPS.mix, action mixBatch)
+  // manual: nothing is used by the month; the owner mixes batches by hand (OPS.mixStart/mixEnd, a slider game in js/mixer.js)
   concrete: { cap: 600, unit: 't mixed', in: { cement: 1 / 7.5, sand: 2 / 7.5, gravel: 4 / 7.5, water: 0.5 / 7.5, energy: 0.02 }, out: { concrete: 1 }, yard: { gravel: 4000, sand: 2000, cement: 1000, concrete: 2000 }, manual: true,
     mixNote: 'Recipe: 1 part cement, 2 parts sand, 4 parts gravel and ½ part water, plus 20 kWh of power per tonne.' },
   textile: { cap: 40, unit: 'loom runs', in: { energy: 0.5, chemicals: 0.1 }, out: { textiles: 1 } },

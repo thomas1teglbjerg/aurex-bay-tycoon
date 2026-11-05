@@ -57,14 +57,30 @@ export const yardRoom = (city, ctx, l, g) => Math.max(0, yardCap(l, g) - ((l.ops
 // manual plants (RECIPES[type].manual) only produce when the owner mixes a batch; bot-run ones still run by the month
 export const isManual = (l) => !!RECIPES[l.type].manual && !!l.ops && !l.ops.managed;
 export function mixMax(l) { const o = l.ops, rec = RECIPES[l.type]; let n = Math.max(0, capacity(l) - (o.mixed || 0)); Object.entries(rec.in).forEach(([g, q]) => { n = Math.min(n, (o.inv[g] || 0) / q); }); Object.entries(rec.out).forEach(([g, q]) => { n = Math.min(n, Math.max(0, yardCap(l, g) - (o.inv[g] || 0)) / q); }); return Math.floor(n); }
-export function mix(l, qty) {
+// hand mixing (manual plants): the supplies go into the mixer at the start, the owner keeps the mixture right in
+// the browser for MIX.perT seconds per tonne (js/mixer.js), then mixEnd pours finished stock or throws the batch out
+export const MIX = { perT: 1, grace: 5 * 60 * 1000 };
+export const mixDue = (b) => b.at + b.qty * MIX.perT * 1000;
+export function mixStart(l, qty, now) {
   const o = l.ops, rec = RECIPES[l.type]; if (!isManual(l)) return { ok: false, msg: 'This company runs by itself.' };
+  if (o.batch && now < mixDue(o.batch) + MIX.grace) return { ok: false, msg: 'The mixer is already running.' };
+  o.batch = null; // a batch left in the mixer too long has set and is lost
   const max = mixMax(l), n = Math.min(Math.floor(Number(qty) || 0), max);
   if (n < 1) return { ok: false, msg: capacity(l) - (o.mixed || 0) < 1 ? 'The mixers are booked out this month.' : Object.keys(rec.out).some((g) => yardCap(l, g) - (o.inv[g] || 0) < 1) ? 'The yard is full of finished stock. Sell some first.' : `Not enough ${Object.entries(rec.in).filter(([g, q]) => (o.inv[g] || 0) < q).map(([g]) => GOODS[g].name.toLowerCase()).join(', ') || 'supplies'} for a batch.` };
   Object.entries(rec.in).forEach(([g, q]) => { o.inv[g] = Math.max(0, (o.inv[g] || 0) - q * n); });
-  Object.entries(rec.out).forEach(([g, q]) => { o.inv[g] = (o.inv[g] || 0) + q * n; });
-  o.fg = (o.fg || 0) + n; o.mixed = (o.mixed || 0) + n;
-  return { ok: true, msg: `Mixed ${n} ${Object.keys(rec.out).map((g) => GOODS[g].unit).join('') || 'units'} of ${Object.keys(rec.out).map((g) => GOODS[g].name.toLowerCase()).join(', ')}.`, n };
+  o.mixed = (o.mixed || 0) + n; o.batch = { qty: n, at: now };
+  return { ok: true, msg: `The mixer is running: ${n} t. Keep the mixture right for ${n * MIX.perT} seconds.`, n };
+}
+export function mixEnd(l, good, now) {
+  const o = l.ops, rec = RECIPES[l.type], b = o.batch; if (!b) return { ok: false, msg: 'There is no batch in the mixer.' };
+  const what = Object.keys(rec.out).map((g) => GOODS[g].name.toLowerCase()).join(', ');
+  if (!good) { o.batch = null; return { ok: true, msg: `The mix went wrong: ${b.qty} t of ${what} was thrown out.`, ruined: true }; }
+  if (now < mixDue(b) - 2000) return { ok: false, msg: 'The batch is still mixing.' };
+  o.batch = null;
+  if (now > mixDue(b) + MIX.grace) return { ok: true, msg: `The batch set in the mixer: ${b.qty} t of ${what} was thrown out.`, ruined: true };
+  Object.entries(rec.out).forEach(([g, q]) => { o.inv[g] = Math.min(yardCap(l, g), (o.inv[g] || 0) + q * b.qty); });
+  o.fg = (o.fg || 0) + b.qty;
+  return { ok: true, msg: `${b.qty} t of ${what} is ready in the yard.`, n: b.qty };
 }
 // a yard company that never had its starting stock (older saves): fill each raw material to half
 export function fillYard(l) { const rec = RECIPES[l.type], y = rec.yard; if (!y || !l.ops || l.ops.yardV) return; Object.entries(y).forEach(([g, cap]) => { if (g in rec.in) l.ops.inv[g] = Math.max(l.ops.inv[g] || 0, cap / 2); }); l.ops.yardV = 1; }
