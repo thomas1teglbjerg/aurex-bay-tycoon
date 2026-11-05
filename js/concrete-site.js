@@ -67,8 +67,7 @@ export const buyerCos = (c, pid) => E.DEAL.buyerCompanies(c, E.dctx(c), pid, 'co
 function quoteForm(c, l, st) {
   const p = me(), ctx = E.dctx(c), g = 'concrete';
   if (!QT.taking(ctx, l)) return `<h2 class="bc-h">Get a quote</h2>${closed(l)}`;
-  if (E.canRun(c, p.id, l)) return `<h2 class="bc-h">Get a quote</h2><div class="bc-card"><p>You run Bayside Concrete yourself. Requests from other tycoons land in the <a href="#" data-a="webGo" data-u="${HOST}/office">Plant office</a>.</p></div>`;
-  const cos = buyerCos(c, p.id).filter((x) => !(x.owner.k === l.owner.k && x.owner.id === l.owner.id));
+  const cos = buyerCos(c, p.id);
   if (!cos.length) return `<h2 class="bc-h">Get a quote</h2><div class="bc-card"><p><b>We deliver to companies that build with concrete.</b> None of yours does yet. A construction company uses it for every project.</p></div>`;
   const f = (st.qf = st.qf || {}), co = cos.find((x) => x.id === f.co) || cos[0];
   const qty = Math.max(QUOTES.minQty, Math.min(QUOTES.maxQty, Math.round(Number(f.qty) || 100))), min = Math.max(1, Math.min(qty, Math.round(Number(f.min) || qty))), wk = Math.max(1, Math.min(QUOTES.maxWeeks, Math.round(Number(f.wk) || 2)));
