@@ -45,6 +45,7 @@ Deno.serve(async (req) => {
   if (action === 'adminSpeed' && !isAdmin) return json({ result: { ok: false, msg: 'Only an admin can change the game speed.' } });
   if (action === 'adminMove' && !isAdmin) return json({ result: { ok: false, msg: 'Only an admin can move companies on the map.' } });
   if (action === 'adminHouseAd' && !isAdmin) return json({ result: { ok: false, msg: 'Only an admin can change the house ad.' } });
+  if (action === 'adminMailAll' && !isAdmin) return json({ result: { ok: false, msg: 'Only an admin can write to every player.' } });
   // The administrator (unlimited money) and the test player: only admin accounts may create them or act as them.
   const asId = Engine.AS_IDS.includes(String(body.as)) ? String(body.as) : null;
   const asAdmin = asId === Engine.ADMIN_ID;
@@ -106,6 +107,12 @@ Deno.serve(async (req) => {
       result = Engine.setHouseAd(city, args);
       if (!(result as { ok: boolean }).ok) return out({ result, city });
       console.log(JSON.stringify({ city: cityId, admin: user?.email, houseAd: args }));
+      changed = true;
+    } else if (action === 'adminMailAll') {
+      // one mail from the city to every human tycoon (changelogs, announcements)
+      result = Engine.mailAll(city, args);
+      if (!(result as { ok: boolean }).ok) return out({ result, city });
+      console.log(JSON.stringify({ city: cityId, admin: user?.email, mailAll: args.subj, to: (result as { n: number }).n }));
       changed = true;
     } else if (action !== 'sync' && action !== 'tick') {
       if (asId) Engine.ensureAs(city, asId, now);

@@ -521,7 +521,7 @@ function renderPanel() {
   if (UI.tab === 'map' || !me()) return;
   const el = $('panel'), st = el.scrollTop, active = document.activeElement && el.contains(document.activeElement) && document.activeElement.tagName === 'INPUT';
   if (active) return; // never wipe a field someone is typing in
-  const html = UI.tab === 'empire' && String(UI.company || '').startsWith('mail') ? mailPageHTML(UI) : UI.tab === 'network' && String(UI.company || '').startsWith('profile:') ? profilePageHTML(UI) : (UI.tab === 'empire' || UI.tab === 'network') && UI.company ? companyHTML(UI.company, UI) : { empire: empireHTML, market: marketHTML, network: () => coopHTML() + networkHTML(), life: () => lifeHTML(UI) }[UI.tab]();
+  const html = UI.tab === 'empire' && String(UI.company || '').startsWith('mail') ? mailPageHTML(UI, !!B.admin) : UI.tab === 'network' && String(UI.company || '').startsWith('profile:') ? profilePageHTML(UI) : (UI.tab === 'empire' || UI.tab === 'network') && UI.company ? companyHTML(UI.company, UI) : { empire: empireHTML, market: marketHTML, network: () => coopHTML() + networkHTML(), life: () => lifeHTML(UI) }[UI.tab]();
   el.innerHTML = `<div class="panel-in">${html}</div>`;
   applyCollapsed(el);
   el.scrollTop = st; liveUpdate();
@@ -1119,6 +1119,8 @@ async function boot(hot) {
     if (ob) { e.preventDefault(); await obSubmit(ob.dataset.form); return; }
     const hf = e.target.closest('[data-form="house"]');
     if (hf) { e.preventDefault(); const v = (n) => (hf.elements[n] ? hf.elements[n].value : ''); const r = await B.setHouseAd({ pic: v('pic'), from: v('from'), head: v('head'), line: v('line') }); toast(r && r.msg ? r.msg : 'Saved.', r && r.ok === false ? 'bad' : 'good'); if (r && r.ok !== false && UI.web) navWeb('aurexgazette.ab'); renderAll(); return; }
+    const ma = e.target.closest('[data-form="mailAll"]');
+    if (ma) { e.preventDefault(); const r = await B.mailAll({ subj: ma.elements.subj.value, body: ma.elements.body.value }); toast(r && r.msg ? r.msg : 'Sent.', r && r.ok === false ? 'bad' : 'good'); if (r && r.ok !== false) { UI.mailF = 'all'; UI.company = 'mail'; } renderAll(); return; }
     const f = e.target.closest('[data-form="post"]'); if (!f) return; e.preventDefault();
     const inp = f.querySelector('input'), text = inp.value.trim(); if (!text) return;
     inp.value = ''; inp.blur(); await act('post', { lid: f.dataset.lid, text }, 'Posted to the company board.');
