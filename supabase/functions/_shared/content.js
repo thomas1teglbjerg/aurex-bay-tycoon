@@ -20,6 +20,9 @@ export const TYPES = {
   textile: { name: 'Textile Mill', sector: 'Manufacturing · Textiles', starter: true, price: 12, trade: 1.2, ypi: 1.8, group: 'industry', tags: ['Textiles', 'Industry', 'Starter'],
     perks: [{ t: 'Local Fabric', d: 'Weaves the textiles clothing stores, fashion houses, hotels and the paper buy, and sells them on the city market' }, { t: 'Mill Synergy', d: '+YPI to Clothing Stores and Fashion Houses in the portfolio' }],
     neg: [{ t: 'Fast Fashion Slump', d: '−0.3 M YPI during a recession' }] },
+  chemical: { name: 'Chemical Plant', sector: 'Industry · Specialty Chemicals', price: 16, trade: 1.6, ypi: 2.4, group: 'industry', tags: ['Chemicals', 'Industry', 'Premium'],
+    perks: [{ t: 'Local Chemicals', d: 'Makes the chemicals pharma, chip factories, textile mills, vineyards and garages buy, and sells them on the city market' }, { t: 'Chemical Synergy', d: '+YPI to Pharma and Chip Factories in the portfolio' }],
+    neg: [{ t: 'Safety Inspections', d: '1 M maintenance per year' }, { t: 'Spill Risk', d: '−1 M YPI during a crisis' }] },
   car: { name: 'Car Factory', sector: 'Automotive Manufacturing', price: 21, trade: 3, ypi: 3.5, group: 'industry', tags: ['Automotive', 'Industry'],
     perks: [{ t: 'Metal Synergy', d: '+1 M Trade with Metal Production in the portfolio' }], neg: [{ t: 'Energy Dependence', d: 'No Trade income during an energy shortage or oil shock' }] },
   finance: { name: 'Finance & Banking', sector: 'Finance · Banking Sector', price: 22, trade: 3, ypi: 3.5, group: 'finance', tags: ['Finance', 'Loans'],
@@ -42,7 +45,9 @@ export const TYPES = {
 };
 
 // Portfolio synergies: owning (or contracting with) the first type boosts the second
-export const SYNERGY = [['car', 'dealer'], ['autorepair', 'dealer'], ['car', 'autorepair'], ['metal', 'car'], ['metal', 'chip'], ['chip', 'data'], ['chip', 'pharma'], ['film', 'fashion'], ['hotel', 'fashion'], ['finance', 'data'], ['vineyard', 'restaurant'], ['newspaper', 'film'], ['newspaper', 'music'], ['textile', 'clothing'], ['textile', 'fashion']];
+export const SYNERGY = [['car', 'dealer'], ['autorepair', 'dealer'], ['car', 'autorepair'], ['metal', 'car'], ['metal', 'chip'], ['chip', 'data'], ['chip', 'pharma'], ['film', 'fashion'], ['hotel', 'fashion'], ['finance', 'data'], ['vineyard', 'restaurant'], ['newspaper', 'film'], ['newspaper', 'music'], ['textile', 'clothing'], ['textile', 'fashion'], ['chemical', 'pharma'], ['chemical', 'chip']];
+// yearly maintenance in M per size multiplier (heavy plants)
+export const MAINT = { metal: 2, chemical: 1 };
 
 export const SIZES = { S: { label: 'Small', mult: 0.6 }, M: { label: 'Medium', mult: 1 }, L: { label: 'Large', mult: 1.5 } };
 
@@ -66,7 +71,7 @@ DISTRICTS.forEach((d) => { d.x = Math.round(d.box.x + d.box.w / 2); d.y = Math.r
 export const DISTRICT = Object.fromEntries(DISTRICTS.map((d) => [d.id, d]));
 export function placeOn(d, p) { const b = DISTRICT[d].box; return { x: Math.round(b.x + p[0] * b.w), y: Math.round(b.y + p[1] * b.h) }; }
 
-// 34 unique listings: [type, district, size, x, y within the district view, title, own picture in img/]
+// 35 unique listings: [type, district, size, x, y within the district view, title, own picture in img/]
 export const LISTINGS = [
   ['clothing', 'ironport', 'S', 0.24, 0.31, 'Eastbridge Supply Co.'], ['fashion', 'aurex', 'L', 0.6, 0.72], ['fashion', 'marina', 'S', 0.54, 0.5],
   ['hotel', 'marina', 'L', 0.2, 0.3], ['hotel', 'marina', 'M', 0.42, 0.4], ['hotel', 'sunset', 'S', 0.45, 0.4, null, 'c-hotel-sunset'],
@@ -81,7 +86,8 @@ export const LISTINGS = [
   ['restaurant', 'ironport', 'S', 0.62, 0.6, 'Ground Café'],
   ['vineyard', 'greenfield', 'S', 0.66, 0.2, 'Greenfield Hill Vines'], ['vineyard', 'crown', 'M', 0.815, 0.6, 'Aurex Bay Vineyard'], ['vineyard', 'nevus', 'L', 0.33, 0.42, 'Nevus Cliff Estate'],
   ['newspaper', 'aurex', 'M', 0.8, 0.5, 'The Aurex Gazette', 'c-gazette'],
-  ['textile', 'ironport', 'S', 0.07, 0.84, 'S.O.F.T Textiles']
+  ['textile', 'ironport', 'S', 0.07, 0.84, 'S.O.F.T Textiles'],
+  ['chemical', 'harbor', 'L', 0.31, 0.37, 'SAFE Chemicals']
 ].map(([type, d, size, px, py, title, img], i) => ({ id: 'L' + (i + 1), type, d, p: [px, py], district: DISTRICT[d].name, size, ...(title ? { title } : {}), ...(img ? { img } : {}), ...placeOn(d, [px, py]) }));
 
 // the national bank: the Bank of Aurex site in Aurex City (bankofaurex.ab in the in-game browser)
@@ -293,7 +299,7 @@ export const GOODS = {
   media: { name: 'Media content', base: 0.01, unit: 'packages', producer: 'film' },
   energy: { name: 'Energy', base: 0.002, unit: 'MWh', producer: null },
   textiles: { name: 'Textiles', base: 0.003, unit: 'bales', producer: 'textile' },
-  chemicals: { name: 'Chemicals', base: 0.007, unit: 'drums', producer: null },
+  chemicals: { name: 'Chemicals', base: 0.007, unit: 'drums', producer: 'chemical' },
   food: { name: 'Food & beverages', base: 0.002, unit: 'crates', producer: null }
 };
 
@@ -310,6 +316,7 @@ export const RECIPES = {
   pharma: { cap: 15, unit: 'treatment batches', in: { chemicals: 2, chips: 0.5, software: 0.5 }, out: {} },
   music: { cap: 20, unit: 'recording sessions', in: { software: 0.4, energy: 0.3 }, out: { media: 0.4 } },
   film: { cap: 12, unit: 'productions', in: { software: 1, energy: 1 }, out: { media: 1 } },
+  chemical: { cap: 30, unit: 'reactor batches', in: { energy: 1, steel: 0.2 }, out: { chemicals: 1 } },
   textile: { cap: 40, unit: 'loom runs', in: { energy: 0.5, chemicals: 0.1 }, out: { textiles: 1 } },
   clothing: { cap: 40, unit: 'garment drops', in: { textiles: 1, energy: 0.2 }, out: {} },
   fashion: { cap: 20, unit: 'collections', in: { textiles: 3, media: 0.3 }, out: {} },
@@ -364,7 +371,7 @@ export const WORKER = { salary: 0.08, hireFee: 0.02 };
 // ---------------------------------------------------------------- clients and orders
 // B2B companies have a few large corporate clients who negotiate hard but stay loyal.
 // B2C companies sell through many retail channels with smaller, faster, more impatient orders.
-export const MARKET_KIND = { bank: 'b2c', dealer: 'b2c', restaurant: 'b2c', autorepair: 'b2c', metal: 'b2b', textile: 'b2b', chip: 'b2b', data: 'b2b', finance: 'b2b', pharma: 'b2b', car: 'b2c', clothing: 'b2c', fashion: 'b2c', hotel: 'b2c', music: 'b2c', film: 'b2c', vineyard: 'b2c', newspaper: 'b2c' };
+export const MARKET_KIND = { bank: 'b2c', dealer: 'b2c', restaurant: 'b2c', autorepair: 'b2c', metal: 'b2b', textile: 'b2b', chemical: 'b2b', chip: 'b2b', data: 'b2b', finance: 'b2b', pharma: 'b2b', car: 'b2c', clothing: 'b2c', fashion: 'b2c', hotel: 'b2c', music: 'b2c', film: 'b2c', vineyard: 'b2c', newspaper: 'b2c' };
 export const CLIENT_RULES = {
   b2b: { start: 4, weight: [1, 2.5], orderChance: 0.55, expire: 3, renegotiate: 0.6, rejectHit: 18, label: 'Corporate client' },
   b2c: { start: 6, weight: [0.4, 1.2], orderChance: 0.7, expire: 2, renegotiate: 0.42, rejectHit: 10, label: 'Retail channel' }
@@ -386,6 +393,7 @@ export const CLIENT_NAMES = {
   restaurant: ['Walk-ins', 'Office lunch orders', 'Weekend brunch crowd', 'Ironport Shipyards canteen', 'Delivery apps', 'Old Grid Gallery events', 'Night shift regulars', 'Aurex Bay Food Tours', 'Birthday parties'],
   autorepair: ['Aurex Taxi Co', 'Ironport Couriers', 'Harbor Row Rentals', 'Old Grid Car Club', 'Midtown Rideshare', 'Kestrel Delivery Vans', 'Sunset Strand Rentals', 'City Fleet Services', 'Walk-in customers'],
   metal: ['Ironport Shipyards', 'Southgate Assembly', 'Bluewater Engineering', 'Aurex Rail Works', 'Harbor Cranes Ltd', 'Kestrel Robotics', 'Crown Bridge Builders', 'Lagoon Marine'],
+  chemical: ['Nevus Pharma Labs', 'Kestrel Semiconductors', 'S.O.F.T Textiles', 'Crown Hills Vintners', 'Aurex Water Works', 'Harbor Coatings Ltd', 'Greenfield Agro', 'City Fleet Services'],
   textile: ['Eastbridge Supply Co.', 'Demiware Apparel', 'Old Grid Upholstery', 'Harbor Sailmakers', 'Aurex Uniform Co', 'Sunset Surf & Style', 'Hotel linen services', 'Crown Hills Atelier'],
   chip: ['Kestrel Robotics', 'Aurex Devices', 'Nevus Instruments', 'Midtown Telecom', 'Greenfield Sensors', 'Harbor Drones', 'Solace Computing', 'Vantage Auto Systems'],
   data: ['Aurex Transit', 'Midtown Holdings', 'Harbor Logistics', 'Sunset Resorts Group', 'Crown Insurance', 'Greenfield Labs', 'City of Aurex Bay', 'Northlagoon Energy'],
@@ -777,7 +785,7 @@ export const PAPER = {
 export const AD = { perWeek: 0.04, weeks: [2, 4, 8], cust: 0.015, rep: 0.5, lift: 0.004, head: 1.5,
   tones: [['irony', 'Ironic'], ['sarcasm', 'Sarcastic'], ['wink', 'Tongue-in-cheek']] };
 // what each business sells, for the ad copy
-export const AD_NOUN = { bank: 'banking', dealer: 'cars', restaurant: 'dinner', autorepair: 'repairs', clothing: 'clothes', fashion: 'fashion', hotel: 'hotel rooms', metal: 'steel', textile: 'fabric', car: 'cars', finance: 'investments', chip: 'microchips', data: 'software', pharma: 'medicine', music: 'music', film: 'films', vineyard: 'wine', newspaper: 'the news' };
+export const AD_NOUN = { bank: 'banking', dealer: 'cars', restaurant: 'dinner', autorepair: 'repairs', clothing: 'clothes', fashion: 'fashion', hotel: 'hotel rooms', metal: 'steel', textile: 'fabric', chemical: 'chemicals', car: 'cars', finance: 'investments', chip: 'microchips', data: 'software', pharma: 'medicine', music: 'music', film: 'films', vineyard: 'wine', newspaper: 'the news' };
 // besides what it makes itself, a company may advertise pieces from the owner's collection that fit its trade
 export const AD_CATS = { dealer: ['car'], autorepair: ['car'], car: ['car'], vineyard: ['wine'], restaurant: ['wine'], hotel: ['wine', 'art'], fashion: ['watch', 'art'], clothing: ['watch'], bank: ['art', 'watch'], finance: ['art', 'watch'], film: ['art'], music: ['art'] };
 // [headline, line]. {co} company, {d} district, {thing} what it sells, {type} kind of business, {item} {maker} {year} a piece, {owner} the tycoon
@@ -795,6 +803,7 @@ export const AD_COPY = {
     clothing: { sarcasm: [['Wearing that again? Bold.', 'Or pop into {co} in {d}.']], wink: [['Dress for the job you want.', 'Tycoon, obviously. {co}.']] },
     fashion: { irony: [['Fashion is fleeting.', 'This season it flees straight to {co}.']], sarcasm: [['Last season called.', 'It wants its coat back. {co}, {d}.']] },
     hotel: { wink: [['Room service has feelings too.', 'Order anyway. {co}, {d}.']], irony: [['Terrible views. Just the sea.', 'From every single room. {co}.']] },
+    chemical: { irony: [['Safety first. Also second.', 'Chemistry you can trust from {co}, {d}.']], wink: [['We have great chemistry.', 'By the drum from {co}.']] },
     textile: { wink: [['Soft on the skin, hard on prices.', 'Fabric by the bale from {co}, {d}.']], irony: [['Your shirt came from somewhere.', 'Probably {co}.']] },
     metal: { irony: [['Soft skills? We prefer steel.', 'Strong opinions, stronger alloys. {co}.']], wink: [['Heavy metal, quiet prices.', '{co}, {d}.']] },
     car: { sarcasm: [['Bicycles are lovely. In the rain.', 'Or drive one built by {co}.']], wink: [['0 to happy in 4 seconds.', 'Built in {d} by {co}.']] },

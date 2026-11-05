@@ -1,7 +1,7 @@
 // Aurex Bay Tycoon — game engine.
 // Pure functions over one plain "city" object, so the exact same rules run in the browser demo
 // and server-side in the Supabase Edge Function. Time is real time: 1 game year = 1 real week (speed 1).
-import { DISTRICTS, TYPES, SYNERGY, SIZES, LISTINGS, STAFF, STOCKS, WORLD, DECISIONS, HAPPENINGS, BOTS, CONFIG, VINTAGE, VIP, DEPT_DEFAULTS, WORKER, GOODS, TAKEOVER, SOMMELIER, CRAFT, MAIL_HAP, DEC_FROM, GAZETTE, PRESTIGE_TIERS, placeOn } from './content.js';
+import { DISTRICTS, TYPES, SYNERGY, SIZES, LISTINGS, STAFF, STOCKS, WORLD, DECISIONS, HAPPENINGS, BOTS, CONFIG, VINTAGE, VIP, DEPT_DEFAULTS, WORKER, GOODS, TAKEOVER, SOMMELIER, CRAFT, MAIL_HAP, DEC_FROM, GAZETTE, PRESTIGE_TIERS, MAINT, placeOn } from './content.js';
 import * as OPS from './ops.js';
 import * as LOG from './logistics.js';
 import * as LIFE from './life.js';
@@ -304,6 +304,7 @@ export function listingYield(city, l, owner) {
   if (l.type === 'car' && types.has('metal')) { trade += s; notes.push(`Metal synergy Trade +${r2(s)}`); }
   if (l.type === 'hotel' && econ === 'Boom') { ypi += s; notes.push(`Boom +${r2(s)}`); }
   if (l.type === 'hotel' && econ === 'Recession') { ypi -= s; notes.push(`Recession −${r2(s)}`); }
+  if (l.type === 'chemical' && econ === 'Crisis') { ypi -= s; notes.push(`Spill risk −${r2(s)}`); }
   if (l.type === 'metal' && econ === 'Crisis') { ypi -= 3 * s; notes.push(`Crisis −${r2(3 * s)}`); }
   if (l.type === 'pharma' && econ === 'Crisis') { ypi += 3 * s; notes.push(`Emergency profits +${r2(3 * s)}`); }
   if (l.type === 'newspaper' && econ === 'Recession') { ypi -= 0.3 * s; notes.push(`Thin ad pages −${r2(0.3 * s)}`); }
@@ -344,14 +345,14 @@ export function monthLines(city, l) {
   let heads = 0;
   const p = bossOf(city, l.owner);
   if (p && !p.bot && city.talent) Object.entries(p.assign || {}).forEach(([spec, a]) => { if (a && a.lid === l.id) { const t = city.talent[p.team && p.team[spec]]; if (t) heads += t.salary / 12; } });
-  return { ypi: Math.max(0, y.ypi) * eff / 12, maint: l.type === 'metal' ? 2 * s / 12 : 0, heads };
+  return { ypi: Math.max(0, y.ypi) * eff / 12, maint: (MAINT[l.type] || 0) * s / 12, heads };
 }
 // yearly rates for a player or a holding
 export function rates(city, k, id) {
   const ls = ownedBy(city, k, id), lines = ls.map((l) => ({ l, y: listingYield(city, l, { k, id }), eff: l.ops ? l.ops.eff : 1, run: OPS.runningCosts(l).total }));
   const income = lines.reduce((a, x) => a + Math.max(0, x.y.ypi) * x.eff, 0);
   const running = lines.reduce((a, x) => a + x.run, 0);
-  const maint = ls.filter((l) => l.type === 'metal').reduce((a, l) => a + 2 * SIZES[l.size].mult, 0);
+  const maint = ls.reduce((a, l) => a + (MAINT[l.type] || 0) * SIZES[l.size].mult, 0);
   let upkeep = 0, interest = 0;
   if (k === 'h' && city.talent && city.holdings[id]) upkeep = TAL.salaries(city, TAL.coopEmp(city, city.holdings[id]));
   if (k === 'p') {

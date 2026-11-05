@@ -1,6 +1,6 @@
 // Company dashboard: one page per company with production, supplies, orders and departments
 import * as E from '../supabase/functions/_shared/engine.js';
-import { TYPES, SIZES, GOODS, RECIPES, DEPTS, STAFF, WORKER, MARKET_KIND, CLIENT_RULES, LIFE as LC, CRAFT, AD, AD_CATS, PAPER } from '../supabase/functions/_shared/content.js';
+import { TYPES, SIZES, GOODS, RECIPES, DEPTS, STAFF, WORKER, MARKET_KIND, CLIENT_RULES, LIFE as LC, CRAFT, AD, AD_CATS, PAPER, MAINT } from '../supabase/functions/_shared/content.js';
 import { adHTML } from './web.js';
 import { carrierPicker, deliveriesBox } from './freight.js';
 import { money, cardHTML } from './life.js';
@@ -66,7 +66,7 @@ function boardHTML(l, ro) {
 // ---------------------------------------------------------------- accounts: a full income statement per company
 function acctMonth(l, x, y) {
   const o = l.ops, sal = x.sal ?? x.run ?? 0, bud = x.sal == null ? 0 : (x.bud || 0);
-  const r = { m: x.m, b2c: x.b2c || 0, goods: x.goods || 0, ypi: x.ypi ?? Math.max(0, y.ypi) * (x.eff ?? o.eff) / 12, sup: x.sup || 0, fr: x.fr || 0, sal, bud, heads: x.heads || 0, maint: x.maint ?? (l.type === 'metal' ? 2 * SIZES[l.size].mult / 12 : 0), units: x.units || 0, sold: x.sold || 0, orders: x.orders || 0, workers: x.workers || 0 };
+  const r = { m: x.m, b2c: x.b2c || 0, goods: x.goods || 0, ypi: x.ypi ?? Math.max(0, y.ypi) * (x.eff ?? o.eff) / 12, sup: x.sup || 0, fr: x.fr || 0, sal, bud, heads: x.heads || 0, maint: x.maint ?? (MAINT[l.type] || 0) * SIZES[l.size].mult / 12, units: x.units || 0, sold: x.sold || 0, orders: x.orders || 0, workers: x.workers || 0 };
   r.rev = r.b2c + r.goods + r.ypi; r.cost = r.sup + r.fr + r.sal + r.bud + r.heads + r.maint; r.profit = r.rev - r.cost; return r;
 }
 const sumAcct = (ms) => ms.reduce((a, r) => { Object.keys(r).forEach((k) => { if (k !== 'm' && k !== 'workers') a[k] = (a[k] || 0) + r[k]; }); a.workers = r.workers; return a; }, {});
