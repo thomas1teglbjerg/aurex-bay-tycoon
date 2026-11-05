@@ -842,6 +842,17 @@ a.adv:hover .adv-t em { text-decoration: underline; }
 .s-boltexpress, .s-ridgeway, .s-harborline { background: var(--cbg); color: #16202e; }
 .s-aurexfreight { --cc: #1e293b; background: #f4f6fa; color: #16202e; } .s-aurexfreight .shrow .grow > span { color: #55657d; }
 .s-aurexfreight .cr-head nav { flex-wrap: wrap; gap: 6px 14px; } .s-aurexfreight .cr-head nav a { display: inline-flex; align-items: center; gap: 5px; }
+/* ---------------- yard bar graph (Warehouse box: yardBox in company.js) */
+.yg { display: grid; grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); gap: 12px; align-items: start; padding: 4px 0 8px; }
+.yg-col { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; text-align: center; }
+.yg-v { font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.yg-bar { position: relative; width: min(64px, 100%); height: 150px; border-radius: 8px 8px 4px 4px; background: var(--panel-2); border: 1px solid var(--line); overflow: hidden; }
+.yg-fill, .yg-way { position: absolute; left: 0; right: 0; bottom: 0; display: block; transition: height .4s ease; }
+.yg-fill.good { background: var(--good); } .yg-fill.warn, .yg-fill.gold { background: var(--gold); } .yg-fill.bad { background: var(--bad); }
+.yg-way { background: repeating-linear-gradient(45deg, rgba(120,120,120,0.28) 0 5px, rgba(120,120,120,0.12) 5px 10px); }
+.yg-pct { position: absolute; left: 0; right: 0; top: 6px; font-size: 12px; font-weight: 800; color: var(--ink-2); }
+.yg-n { font-weight: 800; font-size: 13.5px; } .yg-c { font-size: 11.5px; color: var(--ink-2); line-height: 1.25; }
+.yg-col.made .yg-bar { border-color: var(--gold); }
 /* ---------------- Bayside Concrete (baysideconcrete.ab): quotes for ready-mix concrete */
 .s-baysideconcrete { --bc: #f28c28; --bc-ink: #1d2024; --bc-2: #5d646e; --bc-line: #dfe2e6; background: #eef0f2; color: var(--bc-ink); }
 .bc-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; padding: 12px 18px; background: #24272c; color: #fff; border-bottom: 4px solid var(--bc); }
