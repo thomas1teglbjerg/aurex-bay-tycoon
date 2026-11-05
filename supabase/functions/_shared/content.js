@@ -758,7 +758,7 @@ export const PAPER = {
     ['The people of {co}', 'Meet the staff who keep {co} running.']
   ]
 };
-export const AD = { perWeek: 0.04, weeks: [2, 4, 8], cust: 0.015, rep: 0.5, lift: 0.004, head: 1.5, botMax: 4,
+export const AD = { perWeek: 0.04, weeks: [2, 4, 8], cust: 0.015, rep: 0.5, lift: 0.004, head: 1.5,
   tones: [['irony', 'Ironic'], ['sarcasm', 'Sarcastic'], ['wink', 'Tongue-in-cheek']] };
 // what each business sells, for the ad copy
 export const AD_NOUN = { bank: 'banking', dealer: 'cars', restaurant: 'dinner', autorepair: 'repairs', clothing: 'clothes', fashion: 'fashion', hotel: 'hotel rooms', metal: 'steel', textile: 'fabric', car: 'cars', finance: 'investments', chip: 'microchips', data: 'software', pharma: 'medicine', music: 'music', film: 'films', vineyard: 'wine', newspaper: 'the news' };

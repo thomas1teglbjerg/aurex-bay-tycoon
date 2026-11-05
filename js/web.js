@@ -62,7 +62,7 @@ export function adHTML(ad, cls = '', preview = false) {
 }
 // one ad for a slot on a page; slots on the same page show different campaigns, and they rotate week by week
 function adSlot(slot, cls = '') {
-  const c = city(), list = ADS.live(c).filter((a) => E.listing(c, a.lid)).sort((a, b) => (a.bot ? 1 : 0) - (b.bot ? 1 : 0) || a.from - b.from);
+  const c = city(), list = ADS.live(c).filter((a) => E.listing(c, a.lid)).sort((a, b) => a.from - b.from);
   if (!list.length) return '';
   return adHTML(list[(c.wk + slot) % list.length], cls);
 }

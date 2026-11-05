@@ -742,7 +742,6 @@ function monthBoundary(city, m) {
   if (m > 0) newsletterMonth(city, m);
   botHoldingsAct(city, m);
   botSocial(city, m);
-  ADS.botMonth(city, (id) => !!(city.players[id] && city.players[id].bot));
   Object.values(city.players).forEach((p) => solvency(city, p, m));
   Object.values(city.players).forEach((p) => {
     p.hist.push([m, netWorth(city, p.id)]); if (p.hist.length > 130) p.hist.shift();
