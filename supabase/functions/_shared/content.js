@@ -537,6 +537,10 @@ export const WAREHOUSE_SITES = [
 // direct sales between tycoons (deals.js): an offer waits openWeeks for an answer; when the seller delivers it, they have deliverWeeks to send it.
 // The price per unit must stay between minPrice and maxPrice × the supply's normal price. When the seller delivers, the buyer pays them halfway between Ridgeway's and Harborline's freight (DEAL.fee).
 export const DEALS = { openWeeks: 4, deliverWeeks: 4, minPrice: 0.25, maxPrice: 4 };
+// quote requests on a company website: a tycoon asks, the company answers with an offer, the buyer accepts (quotes.js)
+export const QUOTES = { minQty: 10, maxQty: 2000, maxWeeks: 12, answerWeeks: 2, acceptWeeks: 2, maxOpen: 6, markup: 1.15, tiers: [[250, 0.05], [1000, 0.1]] };
+// company websites that take quote requests: host → the listing and the good it sells
+export const SITE_CO = { 'baysideconcrete.ab': { lid: 'L37', g: 'concrete' } };
 export const LOGISTICS = { truckDaysPer100px: 0.9, minTruckDays: 1, bulkDiscountQty: 500, bulkDiscount: 0.05, upgradeCostMult: 0.5, levelCap: 1.5 };
 
 // ---------------------------------------------------------------- personal life

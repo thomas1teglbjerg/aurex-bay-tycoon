@@ -817,7 +817,7 @@ async function onClick(e) {
     case 'mapGo': setLevel(d.v); return;
     case 'pinEdit': pinEdit = !pinEdit && !!B.admin; hideMapCard(); renderMapNav(); renderMarks(); return;
     case 'mapHome': hideMapCard(); openMark('h:' + d.hid); return;
-    case 'company': closeModal(); setTab('empire'); UI.company = d.lid; $('panel').scrollTop = 0; renderPanel(); return;
+    case 'company': closeModal(); if (t.closest('#web')) closeWeb(); setTab('empire'); UI.company = d.lid; $('panel').scrollTop = 0; renderPanel(); return;
     case 'back': UI.company = null; $('panel').scrollTop = 0; renderPanel(); return;
     case 'viewCompany': UI.company = d.lid; $('panel').scrollTop = 0; renderPanel(); return;
     case 'gotoSupplies': { if (UI.company !== d.lid) { closeModal(); setTab('empire'); UI.company = d.lid; renderPanel(); } const el = $('supplies-box'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
@@ -883,6 +883,17 @@ async function onClick(e) {
     case 'dealCo': DUI.deal[d.id] = { ...DUI.deal[d.id], co: d.v }; renderAll(); return;
     case 'dealHow': DUI.deal[d.id] = { ...DUI.deal[d.id], how: d.v }; renderAll(); return;
     case 'dealAccept': await act('dealAccept', { id: d.id, blid: d.co, how: d.how }); return;
+    case 'qfSet': UI.web.qf = { ...(UI.web.qf || {}), [d.k]: d.v }; renderWeb(); return;
+    case 'quoteAsk': { const f = UI.web.qf || {}, r = await act('quoteAsk', { site: 'baysideconcrete.ab', blid: d.co, qty: Number(f.qty) || 100, min: Number(f.min) || Number(f.qty) || 100, weeks: Number(f.wk) || 2, note: f.note || '' }); if (r && r.ok) { UI.web.qf = { co: d.co }; navWeb('baysideconcrete.ab/orders'); } return; }
+    case 'quoteOffer': { const q = (city().quotes || []).find((x) => x.id === d.id), f = (UI.web.qo || {})[d.id] || {}; if (!q) return;
+      const site = E.QT.plant(city(), E.dctx(city()), 'baysideconcrete.ab'), qty = Math.max(q.min, Math.min(q.qty, Math.round(Number(f.qty) || q.qty)));
+      const price = f.price ? Number(f.price) / 1000 : E.QT.guide(city(), site, q.g, qty), weeks = Number(f.wk) || Math.max(1, Math.min(12, Math.round((q.when - E.gameNow(city(), now())) * 48)));
+      const r = await act('quoteOffer', { id: d.id, qty, price, weeks }); if (r && r.ok && UI.web.qo) delete UI.web.qo[d.id]; return; }
+    case 'quoteRefuse': await act('quoteRefuse', { id: d.id }); return;
+    case 'quoteCancel': await act('quoteCancel', { id: d.id }); return;
+    case 'quoteAccept': await act('quoteAccept', { id: d.id }); return;
+    case 'quoteDecline': await act('quoteDecline', { id: d.id }); return;
+    case 'quoteList': { const v = Number($('bc-list') && $('bc-list').value) / 1000; await act('quoteList', { site: 'baysideconcrete.ab', price: v }); return; }
     case 'dealDecline': await act('dealDecline', { id: d.id }); return;
     case 'dealWithdraw': await act('dealWithdraw', { id: d.id }); return;
     case 'dealDeliver': { // a 10-second drive in the browser, then the goods land in the buyer's stock
@@ -1110,8 +1121,16 @@ async function boot(hot) {
     if (d.a === 'tradeTo') { UI.modal.to = t.value; UI.modal.get = []; openLife(UI.modal); }
     if (t.id === 'ob-end') { UI.found.end = t.value; foundPreview(UI.found); }
     if (t.id === 'ob-open') UI.found.open = t.checked;
+    webForm(t, true);
   });
-  document.addEventListener('input', (e) => { if (e.target.id === 'ob-base' && UI.found) { UI.found.base = e.target.value; foundPreview(UI.found); } });
+  document.addEventListener('input', (e) => { if (e.target.id === 'ob-base' && UI.found) { UI.found.base = e.target.value; foundPreview(UI.found); } webForm(e.target, false); });
+  // Bayside Concrete's site: the request form (data-qf) and the plant's answers (data-qo = id:field) keep their values across renders
+  function webForm(t, redraw) {
+    if (!UI.web || !t.dataset || (!t.dataset.qf && !t.dataset.qo)) return;
+    if (t.dataset.qf) (UI.web.qf = UI.web.qf || {})[t.dataset.qf] = t.value;
+    else { const [id, k] = t.dataset.qo.split(':'); UI.web.qo = UI.web.qo || {}; (UI.web.qo[id] = UI.web.qo[id] || {})[k] = t.value; }
+    if (redraw && t.tagName === 'SELECT') renderWeb();
+  }
   document.addEventListener('submit', async (e) => {
     const wf = e.target.closest('[data-form="addr"], [data-form="search"]');
     if (wf) { e.preventDefault(); const v = wf.querySelector('input').value.trim(); wf.querySelector('input').blur(); if (wf.dataset.form === 'addr') navWeb(v || HOME_URL); else { UI.web.q = v; renderWeb(true); } return; }
