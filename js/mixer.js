@@ -7,13 +7,16 @@ import { RECIPES, GOODS } from '../supabase/functions/_shared/content.js';
 import { city, now, esc, N } from './util.js';
 
 const PARTS = ['cement', 'sand', 'gravel', 'water'];
-const TOL = 0.06;           // ± share that still counts as right (fairly easy); small parts (water) get a band
-const tol = (g) => Math.min(TOL, MX.target[g] * 0.45); // in proportion to their share
-const DRAIN = 9, HEAL = 5;  // quality points per second out of / inside the band
+const TOL = 0.08;           // ± share that still counts as right (fairly easy); small parts (water) get a band
+const tol = (g) => Math.min(TOL, MX.target[g] * 0.6); // in proportion to their share
+const DRAIN = 5, HEAL = 8;  // quality points per second out of / inside the band
 let MX = null;
 
 function targets(l) { const r = RECIPES[l.type].in, sum = PARTS.reduce((a, g) => a + (r[g] || 0), 0); return Object.fromEntries(PARTS.map((g) => [g, (r[g] || 0) / sum])); }
-function shares() { const v = PARTS.map((g) => MX.feed[g] * MX.drift[g]), sum = v.reduce((a, x) => a + x, 0) || 1; return Object.fromEntries(PARTS.map((g, i) => [g, v[i] / sum])); }
+// a slider is a correction on that material's normal feed: the middle is normal, the ends 0.4× and 2.5×,
+// always wider than the drift (0.7×–1.4×), so a line can always be brought back
+const corr = (v) => Math.pow(2.5, (v - 50) / 50);
+function shares() { const v = PARTS.map((g) => MX.target[g] * corr(MX.feed[g]) * MX.drift[g]), sum = v.reduce((a, x) => a + x, 0) || 1; return Object.fromEntries(PARTS.map((g, i) => [g, v[i] / sum])); }
 const inBand = (sh) => PARTS.every((g) => Math.abs(sh[g] - MX.target[g]) <= tol(g));
 
 function css() {
@@ -53,7 +56,7 @@ function render() {
     <div class="mx-top"><div class="mx-time" id="mx-time"></div><div class="mx-q"><small>Mix quality</small><div class="mx-bar"><i id="mx-q"></i></div></div></div>
     ${PARTS.map((g) => `<div class="mx-row" id="mx-r-${g}"><div class="mx-head"><b>${esc(GOODS[g].name)}</b><span id="mx-v-${g}"></span></div>
       <div class="mx-gauge"><div class="mx-band" style="left:${(MX.target[g] - tol(g)) * 100}%;width:${tol(g) * 200}%"></div><div class="mx-dot" id="mx-d-${g}"></div></div>
-      <small>Feed</small><input type="range" min="1" max="100" step="1" value="${Math.round(MX.feed[g])}" data-mx="${g}" aria-label="${esc(GOODS[g].name)} feed"></div>`).join('')}
+      <small>Feed · less ← → more</small><input type="range" min="0" max="100" step="1" value="${Math.round(MX.feed[g])}" data-mx="${g}" aria-label="${esc(GOODS[g].name)} feed"></div>`).join('')}
     <div class="mx-msg" id="mx-msg"></div>
     <div class="mx-btns" id="mx-btns"><button class="btn" data-mxa="quit">Stop and throw out</button></div></div>`;
   if (!el.parentNode) document.body.appendChild(el);
@@ -79,7 +82,7 @@ function tick() {
   if (!MX || MX.done) return;
   const t = now(), dt = Math.min(0.5, (t - MX.last) / 1000); MX.last = t;
   // each material wanders slowly, pulled back toward normal so the game stays fair
-  PARTS.forEach((g) => { MX.vel[g] += (Math.random() - 0.5) * 0.35 * dt - (MX.drift[g] - 1) * 0.12 * dt; MX.vel[g] *= 0.97; MX.drift[g] = Math.max(0.55, Math.min(1.6, MX.drift[g] + MX.vel[g] * dt)); });
+  PARTS.forEach((g) => { MX.vel[g] += (Math.random() - 0.5) * 0.25 * dt - (MX.drift[g] - 1) * 0.15 * dt; MX.vel[g] *= 0.97; MX.drift[g] = Math.max(0.7, Math.min(1.4, MX.drift[g] + MX.vel[g] * dt)); });
   const ok = inBand(shares());
   MX.q = Math.max(0, Math.min(100, MX.q + (ok ? HEAL : -DRAIN) * dt));
   if (MX.q <= 0) return finish(false);
@@ -113,7 +116,7 @@ export function openMixer(lid, act) {
   closeMixer(); css();
   const target = targets(l);
   MX = { lid, act, qty: b.qty, target, end: Math.max(now() + 1000, E.OPS.mixDue(b)), q: 100, last: now(), done: false,
-    feed: Object.fromEntries(PARTS.map((g) => [g, Math.round(target[g] * 100)])), drift: Object.fromEntries(PARTS.map((g) => [g, 1])), vel: Object.fromEntries(PARTS.map((g) => [g, 0])) };
+    feed: Object.fromEntries(PARTS.map((g) => [g, 50])), drift: Object.fromEntries(PARTS.map((g) => [g, 1])), vel: Object.fromEntries(PARTS.map((g) => [g, 0])) };
   render(); MX.timer = setInterval(tick, 100);
   return true;
 }
