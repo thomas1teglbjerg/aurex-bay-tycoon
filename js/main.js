@@ -590,7 +590,7 @@ function marketHTML() {
       ${myOffers ? `<div class="box"><h2>Your offers<small>OPEN</small></h2><div class="in"><div class="rows">${myOffers}</div></div></div>` : ''}
     </div><div class="col">
       <div class="box"><h2>Bank of Aurex</h2><div class="in"><div class="stats"><div class="stat"><small>Debt</small><b class="num down">${M(-debt)}</b></div><div class="stat"><small>Rate</small><b class="num">${E.loanRate(c, p)}%</b></div><div class="stat"><small>Interest / yr</small><b class="num">${M(-r.interest)}</b></div><div class="stat"><small>Credit limit</small><b class="num">${M(E.loanCap(c, p))}</b></div></div>
-        <div class="btns"><button class="btn navy" data-a="loan" data-v="5">Borrow 5 M</button><button class="btn navy" data-a="loan" data-v="20">Borrow 20 M</button><button class="btn" data-a="repay" data-v="5" ${debt ? '' : 'disabled'}>Repay 5 M</button><button class="btn" data-a="repay" data-v="999" ${debt ? '' : 'disabled'}>Repay all</button></div></div></div>
+        <div class="btns"><button class="btn navy" data-a="webGo" data-u="bankofaurex.ab/loans">Manage loans at bankofaurex.ab ›</button></div></div></div>
       <div class="box"><h2>Aurex Bay Gazette<small>CITY NEWS</small></h2><div class="in">${feedHTML(c.news, 16)}</div></div>
     </div></div>`;
 }

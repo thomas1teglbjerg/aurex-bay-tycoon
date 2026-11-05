@@ -216,7 +216,16 @@ export function netWorth(city, pid) {
   return r2(p.cash + stockValue(city, p) + comps + hold + wh - debt(p) + (city.life ? LIFE.netWorth(city, p) : 0));
 }
 export function loanCap(city, p) { return Math.max(10, Math.floor((ownedBy(city, 'p', p.id).reduce((a, l) => a + listingValue(l), 0) * 0.5 + 10) / 5) * 5); }
-export function loanRate(city, p) { const life = (city.life ? LIFE.tierOf(city, p) * 0.5 + LIFE.bankCut(city, p) : 0) + (CAR.hasSpec(p, 'banker') ? 1 : 0); return Math.max(1, r2(CONFIG.LOAN_RATE - (ownedBy(city, 'p', p.id).some((l) => l.type === 'finance') && city.econ !== 'Recession' ? 2 : ownedBy(city, 'p', p.id).some((l) => l.type === 'bank') ? 0.5 : 0) - life)); }
+// what makes up a player's bank rate: the base rate and every discount, as [label, points] (points negative = cheaper)
+export function loanRateParts(city, p) {
+  const own = ownedBy(city, 'p', p.id), parts = [['Base rate', CONFIG.LOAN_RATE]];
+  if (own.some((l) => l.type === 'finance') && city.econ !== 'Recession') parts.push(['Finance company you own', -2]);
+  else if (own.some((l) => l.type === 'bank')) parts.push(['Bank you own', -0.5]);
+  if (city.life) { const t = LIFE.tierOf(city, p); if (t) parts.push(['Prestige tier', -t * 0.5]); const cut = LIFE.bankCut(city, p); if (cut) parts.push(['Friends among bankers', -cut]); }
+  if (CAR.hasSpec(p, 'banker')) parts.push(['Banker specialisation', -1]);
+  return parts;
+}
+export function loanRate(city, p) { return Math.max(1, r2(loanRateParts(city, p).reduce((a, [, v]) => a + v, 0))); }
 export function standings(city) {
   return Object.values(city.players).filter((p) => !p.admin).map((p) => ({ id: p.id, name: p.name, bot: p.bot, color: p.color, avatar: p.avatar, nw: netWorth(city, p.id), inf: p.inf, score: r2(netWorth(city, p.id) + p.inf) })).sort((a, b) => b.score - a.score);
 }
@@ -365,6 +374,8 @@ function migrateMap(city) {
   });
   city.listings = city.listings.filter((l) => known[l.id] === l.type);
   LISTINGS.forEach((n) => { if (!city.listings.some((l) => l.id === n.id)) city.listings.push({ ...n, level: 1, owner: null, boughtM: null, upgrade: null, contracts: 0 }); });
+  // names and pictures follow content.js (a site can be renamed without changing its business)
+  city.listings.forEach((l) => { const n = LISTINGS.find((x) => x.id === l.id); if (!n) return; if (n.title) l.title = n.title; else delete l.title; if (n.img) l.img = n.img; else delete l.img; });
   if (city.mapV === 4) return;
   const byId = Object.fromEntries(LISTINGS.map((l) => [l.id, l]));
   city.listings.forEach((l) => { const n = byId[l.id]; if (n) Object.assign(l, { d: n.d, p: n.p, x: n.x, y: n.y, district: n.district }); });
