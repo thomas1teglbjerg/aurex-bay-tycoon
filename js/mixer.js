@@ -104,7 +104,7 @@ function tick() {
 async function finish(good) {
   MX.done = true; clearInterval(MX.timer);
   const msg = document.getElementById('mx-msg'), btns = document.getElementById('mx-btns');
-  msg.textContent = good ? 'Pouring the batch…' : 'The mix failed.'; msg.className = 'mx-msg ' + (good ? 'good' : 'bad');
+  msg.textContent = good ? 'Into the drum…' : 'The mix failed.'; msg.className = 'mx-msg ' + (good ? 'good' : 'bad');
   btns.innerHTML = '';
   const r = await MX.act('mixEnd', { lid: MX.lid, ok: good });
   if (!document.getElementById('mixer')) return;
@@ -123,7 +123,7 @@ export const mixerOpen = (lid) => !!MX && MX.lid === lid;
 
 // open the mixer for the batch in this company's drum (also after a reload: the clock runs from the server's start)
 export function openMixer(lid, act) {
-  const l = E.listing(city(), lid), b = l && l.ops && l.ops.batch; if (!b) return false;
+  const l = E.listing(city(), lid), b = l && l.ops && l.ops.batch; if (!b || b.drum) return false;
   if (MX && MX.lid === lid) return true;
   closeMixer(); css();
   const target = targets(l);

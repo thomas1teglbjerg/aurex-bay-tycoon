@@ -4,7 +4,7 @@ import { MAP, DISTRICT, TYPES, SIZES, DISTRICTS, STAFF, STOCKS, WORLD, SPEEDS, G
 import { CONFIG } from './config.js';
 import { createLocalBackend, createOnlineBackend } from './backends.js';
 import { S, city, me, meId, now, $, esc, kfix, lname, coImg, faceUrl, M, K, P, N, dollars, msUntilMonth, dur, dateLabel, ICON, spark, cropStyle } from './util.js';
-import { companyHTML, companyRow } from './company.js';
+import { companyHTML, companyRow, drumClock } from './company.js';
 import { stocksHTML, stockModal, livePrice, liveH, PX } from './stocks.js';
 import { deliveryHTML, warehouseHTML, MODE_LABEL } from './interact.js';
 import { SCENES, startScene, endScene, sceneFor, tickScenes, sceneTitle } from './scenes.js';
@@ -1013,6 +1013,16 @@ async function onClick(e) {
 }
 
 function adUI(lid) { UI.ad = UI.ad || {}; return (UI.ad[lid] = UI.ad[lid] || {}); }
+const DRUM_ASKED = {};
+function drumTick() {
+  document.querySelectorAll('[data-drum]').forEach((el) => {
+    const ready = Number(el.dataset.ready), from = Number(el.dataset.from), left = Math.max(0, ready - Date.now()), lid = el.dataset.drum;
+    const t = el.querySelector('.drum-t'), f = el.querySelector('.drum-f');
+    if (t) t.textContent = left > 0 ? drumClock(left) + ' left' : 'Pouring into the yard…';
+    if (f) f.style.width = (Math.min(1, 1 - left / Math.max(1, ready - from)) * 100).toFixed(1) + '%';
+    const k = lid + ':' + ready; if (left <= 0 && !DRUM_ASKED[k]) { DRUM_ASKED[k] = 1; const l = E.listing(city(), lid); if (l && E.canRun(city(), meId(), l)) act('mixCheck', { lid }).then((r) => { if (r && r.left > 0) setTimeout(() => delete DRUM_ASKED[k], r.left + 500); }); }
+  });
+}
 function renderAll() { if (!me()) return; renderTop(); updatePins(); renderPanel(); measureTop(); if (UI.web) renderWeb(); }
 // ---------------------------------------------------------------- in-game browser
 function openWeb(url) { if (!UI.web) UI.web = { url: parseUrl(url).url, back: [], fwd: [], q: '' }; else if (parseUrl(url).url !== UI.web.url) { UI.web.back.push(UI.web.url); UI.web.fwd = []; UI.web.url = parseUrl(url).url; } $('web').hidden = false; renderWeb(true); }
@@ -1050,6 +1060,8 @@ function navInit() {
   window.addEventListener('auxclick', (e) => { if (e.button === 3 || e.button === 4) e.preventDefault(); }, true);
   document.addEventListener('click', () => setTimeout(navSync, 0));
   setInterval(navSync, 250);
+  // the concrete drum countdown: ticks every second and asks the server to put the batch in the yard when it is done
+  setInterval(drumTick, 1000);
 }
 function navSync() {
   if (NAV.wait || Date.now() < NAV.hold || navLocked() || !me()) return;
