@@ -1,6 +1,6 @@
 // Company dashboard: one page per company with production, supplies, orders and departments
 import * as E from '../supabase/functions/_shared/engine.js';
-import { TYPES, SIZES, GOODS, RECIPES, DEPTS, STAFF, WORKER, MARKET_KIND, CLIENT_RULES, LIFE as LC, CRAFT, AD, AD_CATS, PAPER, MAINT } from '../supabase/functions/_shared/content.js';
+import { TYPES, SIZES, GOODS, RECIPES, DEPTS, STAFF, WORKER, MARKET_KIND, CLIENT_RULES, LIFE as LC, CRAFT, AD, AD_CATS, PAPER, MAINT, SITE_CO } from '../supabase/functions/_shared/content.js';
 import { adHTML } from './web.js';
 import { carrierPicker, deliveriesBox } from './freight.js';
 import { money, cardHTML } from './life.js';
@@ -258,7 +258,10 @@ function yardBox(c, l, ro) {
     <p class="muted" style="font-size:13px;margin:2px 0 8px">${rec.mixNote ? esc(rec.mixNote) + ' ' : ''}The plant only runs when you mix. You keep the mixture right with sliders while the drum turns; if the mix fails, the batch is thrown out. Mixed this month: ${N(done)} of ${N(cap)} ${esc(unit)}.</p>
     ${ro ? '' : o.batch ? `<div class="btns"><span class="chip warn">Mixer running · ${N(o.batch.qty)} t</span><button class="btn sm gold" data-a="mixOpen" data-lid="${l.id}">Open the mixer</button></div>`
       : `<div class="btns" style="align-items:flex-end"><div class="field" style="margin:0"><label for="mix-qty-${l.id}" style="font-size:12.5px">Tonnes to mix</label><input id="mix-qty-${l.id}" type="number" inputmode="numeric" min="1" max="${max}" step="10" value="${Math.min(100, max)}" style="width:110px" ${max < 1 ? 'disabled' : ''}></div><button class="btn gold" data-a="mixStart" data-lid="${l.id}" ${max < 1 ? 'disabled' : ''}>Mix concrete</button><span class="muted" style="font-size:12.5px;align-self:center">Up to ${N(max)} ${esc(unit)} now · 1 second per ${esc(unit)} · no staff needed</span></div>${max < 1 && O.mixBlock(l) ? `<p class="down" style="font-size:13px;margin:6px 0 0;font-weight:700">${esc(O.mixBlock(l))}</p>` : ''}`}` : '';
-  return `<div class="box" id="yard-box"><h2>Warehouse<small>YARD</small></h2><div class="in"><div class="rows">${rows}</div>${mixer}
+  const host = Object.keys(SITE_CO).find((h) => SITE_CO[h].lid === l.id), asked = host ? E.QT.forPlant(c, l.id).filter((q) => q.status === 'asked').length : 0;
+  const orders = host ? (c.deals || []).filter((d) => d.stock && d.lid === l.id && E.DEAL.isLive(d)).length : 0;
+  const web = host && !ro ? `<button class="row mco" data-a="web" data-u="${host}/office" style="margin-top:8px"><div class="grow"><b>Website: ${host}</b><span>${asked ? `${asked} new quote request${asked > 1 ? 's' : ''}` : 'No new quote requests'}${orders ? ` · ${orders} order${orders > 1 ? 's' : ''} to deliver` : ''} · prices and the plant office</span></div>${asked || orders ? `<span class="chip warn">${asked + orders}</span>` : ''}<span aria-hidden="true">›</span></button>` : '';
+  return `<div class="box" id="yard-box"><h2>Warehouse<small>YARD</small></h2><div class="in"><div class="rows">${rows}</div>${mixer}${web}
     <p class="empty" style="font-size:13px">Orders stop at what the yard holds. Buy raw materials under Production &amp; supplies.</p></div></div>`;
 }
 // companies that make a collectible once a year (CRAFT): vineyard wine in the estate cellar, tuner cars in the workshop garage

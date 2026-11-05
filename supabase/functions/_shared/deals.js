@@ -90,6 +90,8 @@ export function deliver(city, p, a, ctx) {
   const d = ensure(city).find((x) => x.id === a.id && x.status === 'deliver'); if (!d) return err('Nothing to deliver.');
   const sl = ctx.listing(d.lid); if (!sl || !ctx.canRun(p.id, sl) || !same(sl.owner, d.so)) return err('You no longer run the company that sold it.');
   const bl = ctx.listing(d.blid); if (!bl || !same(bl.owner, d.bo)) { lapse(city, d, ctx, 'The buyer no longer owns the company it was for.'); return err('The buyer no longer owns that company. The deal is off and the money went back.'); }
+  // an order from a quote was never put aside: it leaves the seller's stock now (the oldest fresh lots first)
+  if (d.stock) { const have = Math.floor((sl.ops.inv[d.g] || 0) + 1e-6); if (have < d.qty) return err(`Only ${have} ${unit(d.g)} in stock. Make ${Math.ceil(d.qty - have)} more first.`); sl.ops.inv[d.g] -= d.qty; }
   // the seller drives it over themselves: no carrier, no travel time, no freight bill; the buyer's delivery fee goes to the seller with the price
   bl.ops.inv[d.g] = (bl.ops.inv[d.g] || 0) + d.qty;
   d.status = 'delivered'; d.carrier = null; d.freight = 0; d.sent = city.g;
@@ -118,11 +120,11 @@ function pay(d, sl, v, ctx) { ctx.credit(d.so, v); if (sl.ops) sl.ops.cur.goods 
 // the goods go back to the seller's company (if they still own it)
 function close(city, d, status, ctx) {
   d.status = status; d.end = city.g;
-  const sl = ctx.listing(d.lid); if (sl && sl.ops && same(sl.owner, d.so)) sl.ops.inv[d.g] = (sl.ops.inv[d.g] || 0) + d.qty;
+  const sl = ctx.listing(d.lid); if (!d.stock && sl && sl.ops && same(sl.owner, d.so)) sl.ops.inv[d.g] = (sl.ops.inv[d.g] || 0) + d.qty;
 }
 function lapse(city, d, ctx, why) {
   if (d.paid) { ctx.credit(d.bo, d.paid); const bl = ctx.listing(d.blid); if (bl && bl.ops) { bl.ops.cur.sup -= d.paid - (d.fee || 0); bl.ops.cur.fr = (bl.ops.cur.fr || 0) - (d.fee || 0); } }
   d.paid = 0; close(city, d, 'lapsed', ctx);
-  const body = `${why} The deal for ${what(d)} is off: the buyer has the money back and the goods are back with the seller.`;
+  const body = `${why} The deal for ${what(d)} is off: the buyer has the money back${d.stock ? '' : ' and the goods are back with the seller'}.`;
   [d.to, d.from].forEach((pid) => ctx.mail(pid, { from: { n: 'Sales desk', r: 'Your office', k: 'city' }, subj: `Deal off: ${what(d)}`, body, kind: 'bad' }));
 }

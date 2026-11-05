@@ -13,7 +13,8 @@ import * as CAR from './career.js';
 import * as DEAL from './deals.js';
 import * as CB from './central.js';
 import * as GZ from './gazette.js';
-export { OPS, LOG, LIFE, TAL, BR, ADS, MAIL, CAR, DEAL, GZ };
+import * as QT from './quotes.js';
+export { OPS, LOG, LIFE, TAL, BR, ADS, MAIL, CAR, DEAL, GZ, QT };
 OPS.setFreightQuote((cid, v, q, route) => LOG.freight(cid, v, q, route));
 
 const TRADE_MULT = { Boom: 1.3, Stable: 1, Recession: 0.6, Crisis: 0.4 };
@@ -80,7 +81,9 @@ export function mailAll(city, a) {
 export function contacts(city, pid) { const p = city.players[pid]; if (!p) return []; const ids = new Set(p.net || []); Object.values(city.holdings || {}).forEach((h) => { if (h.members[pid]) Object.keys(h.members).forEach((id) => ids.add(id)); }); ids.delete(pid); return [...ids].filter((id) => city.players[id] && !city.players[id].bot && !city.players[id].admin); }
 export const dctx = (city) => ({ listing: (id) => listing(city, id), canRun: (pid, l) => canRun(city, pid, l), contacts: (pid) => contacts(city, pid), name: (l) => MAIL.coName(l),
   credit: (o, v) => credit(city, o, v), debit: (o, v) => debit(city, o, v), cashOf: (o) => (o.k === 'p' ? (city.players[o.id] || { cash: 0 }).cash : (city.holdings[o.id] || { treasury: 0 }).treasury),
-  book: (l, o) => CTX.book(city, l, o), mail: (pid, x) => MAIL.send(city.players[pid], { g: city.g, m: city.m, ...x }) });
+  book: (l, o) => CTX.book(city, l, o), mail: (pid, x) => MAIL.send(city.players[pid], { g: city.g, m: city.m, ...x }), runners: (l) => runners(city, l) });
+// the humans who run a company: its owner, or the human co-owners of a holding
+export function runners(city, l) { if (!l || !l.owner) return []; if (l.owner.k === 'p') { const p = city.players[l.owner.id]; return p && !p.bot ? [p] : []; } const h = city.holdings[l.owner.id]; return h && humanCoop(city, h) ? Object.keys(h.members).map((id) => city.players[id]).filter((p) => p && !p.bot) : []; }
 // the stock market's sectors, for career XP from stock profit
 const STOCK_SECTOR = { pharma: 'health', ai: 'tech', oil: 'industry', gold: 'finance', energy: 'industry', diamonds: 'finance', military: 'industry', streaming: 'media', taxi: 'service', airline: 'service', fashion: 'media', watches: 'media' };
 // a player leading this department themselves steps down (a specialist or a co-owner takes the seat, or it closes)
@@ -517,6 +520,7 @@ function weekBoundary(city, wk, monthEnd) {
   GZ.weekStep(city, gzctx(city));
   CB.weekStep(city);
   DEAL.weekStep(city, dctx(city));
+  QT.weekStep(city, dctx(city));
   mailWeek(city);
   insightWeek(city);
   planWeek(city, wk);
@@ -1278,6 +1282,13 @@ function applyAs(city, pid, p, action, a, now) {
     case 'dealDecline': return DEAL.decline(city, p, a, dctx(city));
     case 'dealWithdraw': return DEAL.withdraw(city, p, a, dctx(city));
     case 'dealDeliver': return DEAL.deliver(city, p, a, dctx(city));
+    case 'quoteAsk': return QT.ask(city, p, a, dctx(city));
+    case 'quoteCancel': return QT.cancel(city, p, a);
+    case 'quoteOffer': return QT.offer(city, p, a, dctx(city));
+    case 'quoteRefuse': return QT.refuse(city, p, a, dctx(city));
+    case 'quoteAccept': return QT.accept(city, p, a, dctx(city));
+    case 'quoteDecline': return QT.decline(city, p, a, dctx(city));
+    case 'quoteList': return QT.setList(city, p, a, dctx(city));
     case 'cancelOffer': { const o = (city.book || []).find((x) => x.id === a.id && x.seller.k === 'p' && x.seller.id === pid); if (!o) return err('Offer not found.'); OPS.cancelOffer(city, o); return ok('Offer withdrawn. The goods are back in stock.'); }
     case 'approveAll': { let n = 0; ownedBy(city, 'p', pid).forEach((l) => { if (l.ops && l.ops.orders) l.ops.orders.filter((o) => o.status === 'new' && o.earning > 0).forEach((o) => { OPS.orderAction(city, CTX, l, 'accept', { oid: o.id }); n++; }); }); return n ? ok(`Accepted ${n} profitable orders. Remember to deliver them.`) : err('No profitable new orders.'); }
     case 'loan': { const amt = Number(a.amt) || 5; if (debt(p) + amt > loanCap(city, p)) return err(`The bank lends up to ${loanCap(city, p)} M in total right now.`); p.loans.push({ amt, rate: 'bank', m }); p.cash += amt + (hasStaff(p, 'michael') ? 0.5 : 0); return ok(`Borrowed ${amt} M.`); }
