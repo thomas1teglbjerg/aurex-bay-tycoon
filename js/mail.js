@@ -4,6 +4,7 @@ import * as E from '../supabase/functions/_shared/engine.js';
 import { TALENT } from '../supabase/functions/_shared/content.js';
 import { city, me, meId, esc, faceUrl, dateLabel, coImg, lname } from './util.js';
 import { adHTML } from './web.js';
+import { dealCard } from './deals.js';
 
 const ML = E.MAIL;
 const PERSON = Object.fromEntries(TALENT.map((t) => [t.id, t]));
@@ -76,7 +77,7 @@ function readerHTML(x) {
   const body = x.kind === 'news' ? newsHTML(x)
     : `<div class="mbody"><p>Hi ${esc(first)},</p>${String(x.body || '').split('\n').map((t) => `<p>${esc(t)}</p>`).join('')}${x.fxt ? `<p class="mfx">${esc(x.fxt.charAt(0).toUpperCase() + x.fxt.slice(1))}.</p>` : ''}<p class="msign">${x.from.k === 'city' ? 'Kind regards,' : 'Best,'}<br>${esc(sign)}</p></div>`;
   return `<article class="mread"><header>${face(x, 'lg')}<div><h3>${esc(x.subj)}</h3><span><b>${esc(x.from.n)}</b> · ${esc(x.from.r)}</span><time>${esc(when(x))}</time></div></header>
-    ${body}${x.opts ? answerHTML(x) : ''}
+    ${body}${x.opts ? answerHTML(x) : ''}${x.deal ? (() => { const d = (c.deals || []).find((y) => y.id === x.deal); return d ? `<div class="mdeal">${dealCard(d)}</div>` : ''; })() : ''}
     ${mine ? `<button class="row mco" data-a="company" data-lid="${l.id}"><span class="thumb" style="background-image:url(${coImg(l)})"></span><div class="grow"><b>Open ${esc(lname(l))}</b><span>${esc(l.district)} · company dashboard</span></div><span aria-hidden="true">›</span></button>` : ''}</article>`;
 }
 // the mailbox page (Empire › Mail). ui.company is 'mail' or 'mail:<id>', ui.mailF the folder
