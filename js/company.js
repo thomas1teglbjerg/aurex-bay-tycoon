@@ -153,6 +153,7 @@ export function companyHTML(lid, ui = {}) {
     <div class="col">
       ${ro ? '' : `<div class="box"><h2>To-do<small>${tasks.length}</small></h2><div class="in">${taskHTML}<p class="empty" style="font-size:13px">Tasks appear when a department has no staff. Hire workers to hand the work over.</p></div></div>`}
       ${cellarBox(c, l, ro)}
+      ${yardBox(c, l)}
       ${newsroomBox(c, l, ro)}
       ${o.depts.social && !ro ? '' : adBox(c, l, ro, ui)}
       ${o.depts.social ? '' : pressBox(c, l, ro)}
@@ -238,6 +239,15 @@ function pressBox(c, l, ro, inDept) {
 }
 const AD_CATS_TXT = Object.fromEntries(Object.entries(AD_CATS).map(([k, cs]) => [k, cs.map((x) => ({ car: 'cars', wine: 'wine', watch: 'watches', art: 'art' }[x])).join(' and ')]));
 
+// Warehouse: raw materials in the yard (RECIPES[type].yard) and finished stock, with months of cover
+function yardBox(c, l) {
+  const rec = RECIPES[l.type]; if (!rec.yard) return '';
+  const o = l.ops, need = O.needsPerMonth(l), rows = rec.yard.map((g) => { const stock = o.inv[g] || 0, n = need[g] || 0, cover = n ? stock / n : 99, way = E.LOG.onTheWay(c, l, g);
+    return `<div class="row"><div class="grow"><b>${esc(GOODS[g].name)}</b><span>${N(stock)} ${esc(GOODS[g].unit)} in stock${way ? ` · +${N(way)} on the way` : ''} · uses ${N(n)} ${esc(GOODS[g].unit)}/mo</span><div class="bar" style="margin-top:4px"><i style="width:${Math.min(100, cover / 3 * 100)}%;background:${cover < 1 ? 'var(--bad)' : cover < 2 ? 'var(--gold)' : 'var(--good)'}"></i></div></div><span class="chip ${cover < 1 ? 'bad' : cover < 2 ? 'warn' : 'good'}">${cover >= 99 ? 'not used' : cover.toFixed(1) + ' months'}</span></div>`; }).join('');
+  const made = Object.keys(rec.out).map((g) => `<div class="row"><div class="grow"><b>${esc(GOODS[g].name)}</b><span>finished, ready to sell</span></div><b class="num">${N(o.inv[g] || 0)} ${esc(GOODS[g].unit)}</b></div>`).join('');
+  return `<div class="box" id="yard-box"><h2>Warehouse<small>RAW MATERIALS</small></h2><div class="in"><div class="rows">${rows}${made}</div>
+    <p class="empty" style="font-size:13px">The bar is full at 3 months of stock. Order more under Production &amp; supplies.</p></div></div>`;
+}
 // companies that make a collectible once a year (CRAFT): vineyard wine in the estate cellar, tuner cars in the workshop garage
 function cellarBox(c, l, ro) {
   if (!E.makes(l)) return '';

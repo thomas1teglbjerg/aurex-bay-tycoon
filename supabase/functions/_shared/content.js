@@ -27,7 +27,7 @@ export const TYPES = {
     perks: [{ t: 'Building Contracts', d: 'Builds and renovates offices, hotels, shops and homes for corporate clients, using concrete, steel, chemicals and energy' }, { t: 'Builder Synergy', d: '+YPI to Hotels and Restaurants in the portfolio; Metal Production in the portfolio boosts it' }],
     neg: [{ t: 'Building Freeze', d: '−0.5 M YPI during a recession (+0.5 M in a boom)' }] },
   concrete: { name: 'Concrete Plant', sector: 'Industry · Building Materials', price: 10, trade: 1, ypi: 1.4, group: 'industry', tags: ['Concrete', 'Industry', 'Building Materials'],
-    perks: [{ t: 'Local Concrete', d: 'Mixes the concrete construction companies build with, and sells it on the city market' }, { t: 'Builder Synergy', d: '+YPI to Construction Companies in the portfolio' }],
+    perks: [{ t: 'Local Concrete', d: 'Mixes cement, gravel and sand into the concrete construction companies build with, and sells it on the city market' }, { t: 'Builder Synergy', d: '+YPI to Construction Companies in the portfolio' }],
     neg: [{ t: 'Kiln Upkeep', d: '0.5 M maintenance per year' }, { t: 'Building Freeze', d: '−0.3 M YPI during a recession' }] },
   car: { name: 'Car Factory', sector: 'Automotive Manufacturing', price: 21, trade: 3, ypi: 3.5, group: 'industry', tags: ['Automotive', 'Industry'],
     perks: [{ t: 'Metal Synergy', d: '+1 M Trade with Metal Production in the portfolio' }], neg: [{ t: 'Energy Dependence', d: 'No Trade income during an energy shortage or oil shock' }] },
@@ -309,6 +309,9 @@ export const GOODS = {
   textiles: { name: 'Textiles', base: 0.003, unit: 'bales', producer: 'textile' },
   chemicals: { name: 'Chemicals', base: 0.007, unit: 'drums', producer: 'chemical' },
   concrete: { name: 'Concrete', base: 0.0025, unit: 'm³', producer: 'concrete' },
+  cement: { name: 'Cement', base: 0.003, unit: 't', producer: null },
+  gravel: { name: 'Gravel', base: 0.0004, unit: 't', producer: null },
+  sand: { name: 'Sand', base: 0.0004, unit: 't', producer: null },
   food: { name: 'Food & beverages', base: 0.002, unit: 'crates', producer: null }
 };
 
@@ -327,7 +330,8 @@ export const RECIPES = {
   film: { cap: 12, unit: 'productions', in: { software: 1, energy: 1 }, out: { media: 1 } },
   chemical: { cap: 30, unit: 'reactor batches', in: { energy: 1, steel: 0.2 }, out: { chemicals: 1 } },
   construction: { cap: 20, unit: 'building projects', in: { concrete: 1.5, steel: 0.8, chemicals: 0.2, energy: 0.4 }, out: {} },
-  concrete: { cap: 40, unit: 'mixer batches', in: { energy: 0.8, chemicals: 0.1 }, out: { concrete: 1 } },
+  // yard: raw materials shown in the company's Warehouse box
+  concrete: { cap: 40, unit: 'mixer batches', in: { cement: 0.3, gravel: 0.9, sand: 0.6, energy: 0.2 }, out: { concrete: 1 }, yard: ['cement', 'gravel', 'sand'] },
   textile: { cap: 40, unit: 'loom runs', in: { energy: 0.5, chemicals: 0.1 }, out: { textiles: 1 } },
   clothing: { cap: 40, unit: 'garment drops', in: { textiles: 1, energy: 0.2 }, out: {} },
   fashion: { cap: 20, unit: 'collections', in: { textiles: 3, media: 0.3 }, out: {} },
