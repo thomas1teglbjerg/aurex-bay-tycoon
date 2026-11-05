@@ -220,10 +220,29 @@ export function loanRate(city, p) { const life = (city.life ? LIFE.tierOf(city, 
 export function standings(city) {
   return Object.values(city.players).filter((p) => !p.admin).map((p) => ({ id: p.id, name: p.name, bot: p.bot, color: p.color, avatar: p.avatar, nw: netWorth(city, p.id), inf: p.inf, score: r2(netWorth(city, p.id) + p.inf) })).sort((a, b) => b.score - a.score);
 }
-export function intelFor(city, pid) {
-  const p = city.players[pid]; if (!p) return null;
-  const src = [p].concat(p.net.map((id) => city.players[id]).filter(Boolean)).find((x) => hasStaff(x, 'jason'));
-  return src ? { from: src.id === pid ? 'you' : src.name, next: WORLD.find((w) => w.id === city.deck[0]) } : null;
+// market insight: a tycoon with a Market Research Associate gets one research note per upcoming world card, as a mail.
+// The note can be forwarded to the whole network from the mail; nobody else sees it.
+const intelKey = (city) => `${city.lastCard ? city.lastCard.m : -1}:${city.deck[0]}`;
+function insightWeek(city) {
+  const key = intelKey(city), card = WORLD.find((w) => w.id === city.deck[0]);
+  Object.values(city.players).forEach((p) => {
+    if (p.bot || !p.mail) return;
+    p.mail.filter((x) => x.intel && x.intel !== key && MAIL.isOpen(x)).forEach((x) => closeMail(city, p, x, -1, true, 'The quarter has turned: this note is history.'));
+  });
+  if (!card) return;
+  Object.values(city.players).forEach((p) => {
+    if (p.bot || p.coop || p.admin || !hasStaff(p, 'jason') || p.intel === key) return;
+    p.intel = key;
+    const tid = p.team && p.team.jason, t = tid && TAL.PERSON[tid];
+    MAIL.send(p, { g: city.g, m: city.m, intel: key, kind: 'info', from: t ? { n: t.name, r: 'Market Research', tid } : { n: 'Market Research', r: 'Your team', k: 'staff' },
+      subj: 'Research note: signals for the coming quarter', body: MAIL.insightBody(card, rand),
+      opts: [{ l: 'Forward to my network', d: p.net.length ? `Send the note to your ${p.net.length} contact${p.net.length > 1 ? 's' : ''}` : 'Your network is empty', fwd: true }, { l: 'Keep it to myself', d: 'Only you have it', safe: true }] });
+  });
+}
+function forwardIntel(city, p, x) {
+  const to = p.net.map((id) => city.players[id]).filter((q) => q && !q.bot);
+  to.forEach((q) => MAIL.send(q, { g: city.g, m: city.m, kind: 'info', from: { ...x.from, r: `${x.from.r} · via ${p.name}` }, subj: `Fwd from ${p.name}: ${x.subj}`, body: x.body }));
+  return to.length ? `Forwarded to ${to.map((q) => q.name).join(', ')}.` : 'Nobody in your network to send it to.';
 }
 
 // ---------------------------------------------------------------- income
@@ -427,6 +446,7 @@ function weekBoundary(city, wk, monthEnd) {
   ADS.weekStep(city, wk / 48, CTX);
   DEAL.weekStep(city, dctx(city));
   mailWeek(city);
+  insightWeek(city);
   planWeek(city, wk);
 }
 function stepWeek(city, wk) { runAgenda(city, wk / 48); if (wk % 4 === 0) monthBoundary(city, wk / 4); else weekBoundary(city, wk); }
@@ -617,6 +637,7 @@ export function answerMail(city, p, id, ix, auto) {
     else { const bits = companyFx(city, l, o.fx); out = bits && bits.length ? bits.join(', ') + '.' : 'Done.'; }
   }
   if (o.tfx) { const s = city.talent && city.talent[o.tfx.tid]; if (s) { if (o.tfx.sat) s.sat = Math.max(0, Math.min(100, s.sat + o.tfx.sat)); } out = out || 'Noted.'; }
+  if (o.fwd) out = forwardIntel(city, p, x);
   if (o.act) {
     const r = mailTalent(city, p, o.act[0], o.act[1]);
     if (r.ok === false && !auto) return r;

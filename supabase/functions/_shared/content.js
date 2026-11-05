@@ -85,7 +85,7 @@ export const STAFF = [
   { id: 'emily', role: 'HR Recruitment Officer', name: 'Emily Carter', cost: 2, upkeep: 0.5, passive: ['Talent Network', 'Specialists cost −0.5 M to recruit.'], hq: 'Head of HR: hiring costs −50% and morale +8 in that company.', tags: 'HR · Growth · Infrastructure' },
   { id: 'carlos', role: 'Logistics Planner', name: 'Carlos Mendoza', cost: 4, upkeep: 1, passive: ['Supply Chain', 'Runs your warehouses: auto-import, auto-supply and warehouse sourcing. +1 Influence a year, and his industrial company +1 M YPI.'], hq: 'Head of Procurement: supplies 5% cheaper for that company.', tags: 'Transport · Mobility' },
   { id: 'marco', role: 'Workshop Chief', name: 'Marco Vitale', cost: 1, upkeep: 0.3, passive: ['Quick Turnaround', 'The auto repair, dealership or car company he works in earns +1 M YPI.'], hq: 'Head of Operations: output +10% in that company.', tags: 'Operations · Automotive' },
-  { id: 'jason', role: 'Market Research Associate', name: 'Jason Miller', cost: 4, upkeep: 0.5, passive: ['Market Insight', 'You and your whole network see the next World Card.'], hq: 'Head of Sales: +50% sales automation in that company.', tags: 'Strategy · Information' }
+  { id: 'jason', role: 'Market Research Associate', name: 'Jason Miller', cost: 4, upkeep: 0.5, passive: ['Market Insight', 'Mails you a technical research note before each World Card. You decide if your network gets it too.'], hq: 'Head of Sales: +50% sales automation in that company.', tags: 'Strategy · Information' }
 ];
 
 // drift per year: [boom, stable, recession, crisis]
@@ -180,6 +180,22 @@ export const WORLD = [
   { id: 'recovery', title: 'Recovery Takes Hold', econ: 'Stable', text: 'Hiring picks up and consumers return to the shops. Analysts call the worst over.', shock: { taxi: 0.06, airline: 0.06 }, at: [610, 380] },
   { id: 'calm', title: 'A Steady Quarter', econ: 'Stable', text: 'No surprises this quarter. Markets move sideways and businesses get on with the work.', shock: {}, at: [610, 380] }
 ];
+
+// Market insight: the research note a Market Research Associate mails before each World Card.
+// It never names the card: it lists raw signals per sector and leaves the reading to the player.
+export const INSIGHT = {
+  signal: { pharma: 'Lab reagent orders', ai: 'GPU lease rates', oil: 'Crude futures curve', gold: 'Bullion vault inflows', energy: 'Power forward prices', diamonds: 'Rough-stone tender bids',
+    military: 'Defence procurement filings', streaming: 'Peak-hour bandwidth load', taxi: 'Ride-hail surge pricing', airline: 'Forward seat bookings', fashion: 'Textile mill order books', watches: 'Grey-market premiums, luxury watches' },
+  macro: {
+    Boom: ['Composite leading index +{a} pts', 'Consumer credit drawdowns +{b}%'],
+    Recession: ['Initial jobless claims +{b}%', 'Yield curve inverted {c} bp'],
+    Crisis: ['Volatility index at {d}', 'Interbank spreads +{e} bp'],
+    Stable: ['Volatility index at {f}', 'Purchasing managers index 50.{g}'],
+    none: ['Macro indicators inside their normal bands']
+  },
+  fx: { energy: 'Grid operator notice: reserve margin below {h}%', cyber: 'Exploit chatter on infrastructure forums ×{i} vs normal', regulation: 'City Hall draft budget: audit unit headcount doubled',
+    viral: 'Social mentions of Old Grid streetwear ×{i} in two weeks', tourism: 'Harbor Row berth reservations: {j}% booked', ai: 'Patent filings from Aurex City labs at a record' }
+};
 
 // Decisions land in a player's inbox. If nobody answers before the deadline, the autopilot picks by policy.
 export const DECISIONS = [

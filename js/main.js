@@ -424,7 +424,6 @@ function liveUpdate() {
     if (k === 'cash') el.textContent = p.admin ? '∞' : dollars(E.liveCash(c, p.id, t));
     else if (k === 'treasury') el.textContent = dollars(E.liveTreasury(c, id, t));
     else if (k === 'until') el.textContent = dur(msUntilMonth(Number(id)));
-    else if (k === 'card') { const ms = msUntilMonth(Number(id)); el.textContent = ms > 0 ? dur(ms) : 'any moment'; }
     else if (k === 'prog') { const l = E.listing(c, id); if (l && l.upgrade) { const total = E.upgradeMonths({ level: l.upgrade.to - 1 }), left = l.upgrade.doneM - E.gameNow(c, t) * 12; el.style.width = Math.max(2, Math.min(100, (1 - left / total) * 100)) + '%'; } }
   });
 }
@@ -572,7 +571,7 @@ function empireHTML() {
     </div></div>`;
 }
 function marketHTML() {
-  const c = city(), p = me(), intel = E.intelFor(c, p.id), q = UI.qty, nextQ = E.nextWorldM(c);
+  const c = city(), p = me(), q = UI.qty;
   const last = c.lastCard ? WORLD.find((w) => w.id === c.lastCard.id) : null;
   const stocks = STOCKS.map((s) => { const st = { p: livePrice(c, s.id) }, h = liveH(c, s.id), ch = h.length > 1 ? (h[h.length - 1] / h[h.length - 2] - 1) * 100 : 0, own = p.shares[s.id] || 0;
     return `<div class="srow"><img src="img/k-${s.id}.jpg" alt=""><div style="min-width:0"><b style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.name)}</b><span class="num muted" style="font-size:13px">${PX(st.p)} <span class="${ch >= 0 ? 'up' : 'down'}">${ch >= 0 ? '+' : ''}${ch.toFixed(1)}%</span> · own ${own}</span></div>
@@ -584,8 +583,6 @@ function marketHTML() {
   return `<div class="grid"><div class="col">
       <div class="box"><h2>World economy<small>${c.econ.toUpperCase()}</small></h2><div class="in">
         ${last ? `<div><div class="cap">Latest World Card · ${esc(dateLabel(c.lastCard.m))}</div><b style="font-family:var(--head);font-size:18px">${esc(last.title)}</b><p class="empty" style="margin-top:4px">${esc(last.text)}</p></div>` : ''}
-        <div class="stat"><small>Next World Card in</small><b class="num" data-live="card:${nextQ}">…</b></div>
-        ${intel ? `<div class="prop"><span class="cap">Market insight from ${esc(intel.from)}</span><b>Next quarter: ${esc(intel.next.title)}</b><span class="muted" style="font-size:13.5px">${esc(intel.next.text)}</span></div>` : '<p class="empty" style="font-size:13.5px">Hire Jason Miller, or add someone who has him to your network, to see the next World Card before it hits.</p>'}
         <p class="empty" style="font-size:13.5px">Booms raise Trade income 30%. Recessions cut it 40%, crises 60%. Every player in the city lives in the same economy.</p></div></div>
       <div class="box"><h2>Supplies market<small>CITY-WIDE</small></h2><div class="in">
         <p class="empty" style="font-size:13.5px">Every company in Aurex Bay buys and sells here. Prices float between the export floor and the import ceiling, driven by what players produce and need.</p>
@@ -604,10 +601,10 @@ function networkHTML() {
   const conLabel = (k) => { const a = E.listing(c, k.a), b = E.listing(c, k.b); return `${TYPES[a.type].name} (${c.players[k.from].name.split(' ')[0]}) ↔ ${TYPES[b.type].name} (${c.players[k.to].name.split(' ')[0]})`; };
   const members = p.net.map((id) => c.players[id]).filter(Boolean).map((m) => { const ls = E.ownedBy(c, 'p', m.id);
     let n = 0; ls.forEach((ol) => E.ownedBy(c, 'p', p.id).forEach((ml) => { if (E.contractValid(c, ml.id, ol.id, p.id, m.id).ok) n++; }));
-    return `<div class="row">${avatar(m)}<div class="grow"><b>${esc(m.name)}</b><span>${M(E.netWorth(c, m.id))} · ${ls.map((l) => TYPES[l.type].name).join(', ') || 'no companies yet'}</span>${n ? `<span class="up">${n} possible supply contract${n > 1 ? 's' : ''}: open one of your companies to offer</span>` : ''}${E.hasStaff(m, 'jason') ? '<span>Shares market insight with you</span>' : ''}</div><button class="btn sm" data-a="profile" data-pid="${m.id}">Profile</button><button class="btn sm" data-a="netRemove" data-pid="${m.id}">Remove</button></div>`; }).join('');
+    return `<div class="row">${avatar(m)}<div class="grow"><b>${esc(m.name)}</b><span>${M(E.netWorth(c, m.id))} · ${ls.map((l) => TYPES[l.type].name).join(', ') || 'no companies yet'}</span>${n ? `<span class="up">${n} possible supply contract${n > 1 ? 's' : ''}: open one of your companies to offer</span>` : ''}</div><button class="btn sm" data-a="profile" data-pid="${m.id}">Profile</button><button class="btn sm" data-a="netRemove" data-pid="${m.id}">Remove</button></div>`; }).join('');
   const board = st.map((r, i) => { const x = c.players[r.id], inNet = p.net.includes(r.id), pend = outReq.some((q) => q.to === r.id);
     return `<div class="row"><b class="num" style="width:24px">${i + 1}</b>${avatar(x)}<div class="grow"><b>${esc(r.id === p.id ? r.name + ' (you)' : r.name)}</b>${E.BR.brandOf(c, r.id) ? `<span class="lgline">${logoMark(E.BR.brandOf(c, r.id), 16)}${esc(E.BR.brandOf(c, r.id).name)}</span>` : ''}<span>${M(r.nw)} net worth · ${r.inf} influence · ${E.ownedBy(c, 'p', r.id).length} companies</span></div>${r.id === p.id ? '' : inNet ? '<span class="chip">In network</span>' : pend ? '<span class="chip">Requested</span>' : `<button class="btn sm navy" data-a="netRequest" data-pid="${r.id}">Add</button>`}</div>`; }).join('');
-  return `<h2 class="ph1">Network</h2><p class="lede">Play together while each of you keeps your own companies. People in your network can sign supply contracts that give both companies a synergy bonus, and share market insight.</p>
+  return `<h2 class="ph1">Network</h2><p class="lede">Play together while each of you keeps your own companies. People in your network can sign supply contracts that give both companies a synergy bonus, and forward market research to each other.</p>
     <div class="grid"><div class="col">
       ${inReq.length || inCon.length ? `<div class="box"><h2>Waiting for you<small>${inReq.length + inCon.length}</small></h2><div class="in"><div class="rows">
         ${inReq.map((r) => `<div class="row">${avatar(c.players[r.from])}<div class="grow"><b>${esc(c.players[r.from].name)}</b><span>wants to join your network</span></div><div class="btns"><button class="btn sm gold" data-a="netAccept" data-pid="${r.from}">Accept</button><button class="btn sm" data-a="netDecline" data-pid="${r.from}">Decline</button></div></div>`).join('')}

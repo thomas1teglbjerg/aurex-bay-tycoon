@@ -1,6 +1,7 @@
 // Things happen all through the week: world cards, decisions, company happenings, bot moves and orders land at their own moments
 import * as E from '../supabase/functions/_shared/engine.js';
-import { HAPPENINGS, MAIL_HAP } from '../supabase/functions/_shared/content.js';
+import { HAPPENINGS, MAIL_HAP, WORLD } from '../supabase/functions/_shared/content.js';
+const MAIL_OPEN = (x) => !!(x.opts && x.opts.length && !x.done);
 const assert = (c, m) => { if (!c) { console.error('FAIL', m); process.exit(1); } console.log('ok ', m); };
 let now = 1_700_000_000_000;
 const city = E.createCity(now, { speed: 2016 }); E.addPlayer(city, 'u', 'Thomas', now); const p = city.players.u; p.cash = 500;
@@ -30,5 +31,18 @@ assert(city.agenda.every((e) => e.at >= city.g - 1e-9), 'nothing overdue is left
     if (city.lastCard && city.lastCard.m !== lastM) { seen++; if (city.lastCard.id !== want || Math.floor(city.lastCard.m) !== Math.floor(at) || Math.floor(at / 3) !== Math.floor(city.lastCard.m / 3)) ok = false; lastM = city.lastCard.m; want = city.deck[0]; if (Math.floor(E.nextWorldM(city) / 3) !== Math.floor(lastM / 3) + 1) ok = false; }
   }
   assert(ok && seen >= 4, `the countdown and market insight match the card that lands (${seen} cards)`); }
+// market insight arrives as one research mail per upcoming card, with no headline, and can be forwarded to the network
+{ E.addPlayer(city, 'v', 'Mikkel', now); const q = city.players.v; p.net.push('v'); q.net.push('u'); p.staff.push('jason');
+  const card = WORLD.find((w) => w.id === city.deck[0]);
+  for (let i = 0; i < 2; i++) { now += weekMs; E.advance(city, now); }
+  const notes = p.mail.filter((x) => x.intel && x.intel.endsWith(':' + city.deck[0]));
+  assert(notes.length === 1, 'one research note for the next card');
+  const nx = notes[0];
+  assert(!nx.body.includes(card.title) && !nx.body.includes(card.text), 'the note never names the card');
+  assert(!(q.mail || []).some((x) => x.intel), 'the network gets nothing on its own');
+  assert(E.apply(city, 'u', 'mailAnswer', { id: nx.id, opt: 0 }, now).ok, 'forward the note');
+  assert(q.mail.some((x) => x.subj.startsWith('Fwd from') && x.body === nx.body), 'the contact gets the forwarded note');
+  const n0 = p.mail.filter((x) => x.intel).length; for (let i = 0; i < 16; i++) { now += weekMs; E.advance(city, now); }
+  assert(p.mail.filter((x) => x.intel).length > n0 && p.mail.filter((x) => x.intel && MAIL_OPEN(x)).length <= 1, 'a new note per card, old ones close'); }
 const json = JSON.stringify(city); assert(JSON.parse(json).agenda.length === city.agenda.length, 'the agenda survives a save');
 console.log('ALL OK');

@@ -1,7 +1,7 @@
 // Mail (Empire › Mail): staff, specialists, rivals and the Gazette write to a tycoon. Many mails ask for an answer;
 // a mail that waits too long is answered by the autopilot (cautious picks the safe answer, bold the other one).
 // Mails live on the player (p.mail, newest first). Read/unread is kept in the browser, not in the city.
-import { TYPES, MAIL_NAMES, GAZETTE } from './content.js';
+import { TYPES, MAIL_NAMES, GAZETTE, INSIGHT, STOCKS } from './content.js';
 
 export const MAX = 40;            // mails kept per player (open ones are kept first)
 export const WAIT = 2 / 48;       // two game weeks before the autopilot answers a staff mail
@@ -70,4 +70,18 @@ export function newsletter(city, m, liveAds) {
   const ads = (liveAds || []).slice().sort((a, b) => (a.bot ? 1 : 0) - (b.bot ? 1 : 0));
   const ad = ads.length ? ads[m % ads.length] : null;
   return { items, ad: ad ? { id: ad.id, lid: ad.lid, kind: ad.kind, cid: ad.cid, tone: ad.tone, head: ad.head, line: ad.line } : null };
+}
+
+// the research note on the next world card: raw signals, no headline. Each shocked stock shows as a z-score
+// against its 12-week mean (with some noise), one untouched sector adds a weak decoy, then macro and special flags.
+export function insightBody(card, rnd = Math.random) {
+  const n = (lo, hi, d = 0) => (lo + rnd() * (hi - lo)).toFixed(d);
+  const fill = (t) => t.replace('{a}', n(1.2, 2.6, 1)).replace('{b}', n(7, 16)).replace('{c}', n(20, 60)).replace('{d}', n(36, 48)).replace('{e}', n(90, 170)).replace('{f}', n(12, 16)).replace('{g}', n(1, 9)).replace('{h}', n(2, 4)).replace('{i}', n(4, 9)).replace('{j}', n(96, 100));
+  const z = (v) => { const x = v * 12 + (rnd() - 0.5) * 0.6; return `${x >= 0 ? '+' : '−'}${Math.abs(x).toFixed(1)}σ`; };
+  const hit = Object.entries(card.shock || {}), quiet = STOCKS.filter((s) => !(s.id in (card.shock || {})));
+  const rows = hit.map(([id, v]) => `${INSIGHT.signal[id]}: ${z(v)} vs 12-week mean`);
+  if (quiet.length) { const d = quiet[Math.floor(rnd() * quiet.length)]; rows.push(`${INSIGHT.signal[d.id]}: ${z((rnd() < 0.5 ? -1 : 1) * (0.03 + rnd() * 0.04))} vs 12-week mean`); }
+  for (let i = rows.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [rows[i], rows[j]] = [rows[j], rows[i]]; }
+  const macro = (INSIGHT.macro[card.econ] || INSIGHT.macro.none).map(fill), fx = card.fx && INSIGHT.fx[card.fx] ? [fill(INSIGHT.fx[card.fx])] : [];
+  return ['My signal read for the coming quarter. Draw your own conclusions; I only report what the data shows.', 'Sector signals:', ...rows.map((r) => `· ${r}`), 'Macro:', ...macro.map((r) => `· ${r}`), ...(fx.length ? ['Flags:', ...fx.map((r) => `· ${r}`)] : []), 'Not investment advice. Moves like these usually reach prices within the quarter.'].join('\n');
 }
