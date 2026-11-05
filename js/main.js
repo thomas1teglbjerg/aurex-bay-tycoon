@@ -43,8 +43,13 @@ function toast(msg, kind) {
   const t = document.createElement('div'); t.className = 'toast ' + (kind || ''); t.textContent = kfix(msg); $('app').appendChild(t);
   setTimeout(() => t.remove(), 3400);
 }
+// a click while the same action is still on its way to the server does nothing but say so
+const INFLIGHT = new Set();
 async function act(action, args, okMsg) {
-  const r = await B.act(action, args);
+  const key = action + ':' + JSON.stringify(args || {});
+  if (INFLIGHT.has(key)) { toast('Working on it…'); return { ok: false, msg: 'busy' }; }
+  INFLIGHT.add(key); let r;
+  try { r = await B.act(action, args); } finally { INFLIGHT.delete(key); }
   if (r && r.ok === false) { toast(r.msg, 'bad'); return r; }
   if (okMsg || (r && r.msg)) toast(okMsg || r.msg, 'good');
   if (me() && E.BR.needsParent(city(), meId())) { gate(); return r; } // e.g. left a co-owned parent company
@@ -798,7 +803,14 @@ async function onClick(e) {
     case 'viewCompany': UI.company = d.lid; $('panel').scrollTop = 0; renderPanel(); return;
     case 'gotoSupplies': { if (UI.company !== d.lid) { closeModal(); setTab('empire'); UI.company = d.lid; renderPanel(); } const el = $('supplies-box'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
     case 'gotoOrders': { if (UI.company !== d.lid) { closeModal(); setTab('empire'); UI.company = d.lid; renderPanel(); } const el = $('orders-box'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
-    case 'scene': if (!sceneFor(d.lid, d.task)) startScene(d.lid, d.task, d.from); renderAll(); return;
+    case 'scene': {
+      // one task at a time: never start a second one, and never start one that cannot finish this month
+      if (sceneFor(d.lid, d.task)) { toast('That task is already under way. Finish it first.', 'bad'); return; }
+      const busy = Object.values(SCENES).find((st) => st.phase !== 'done');
+      if (busy) { toast(`You are busy: ${sceneTitle(busy)}. Finish that first.`, 'bad'); return; }
+      const why = E.OPS.taskBlock(c, E.listing(c, d.lid), d.task); if (why) { toast(why, 'bad'); return; }
+      startScene(d.lid, d.task, d.from); renderAll(); return;
+    }
     case 'sceneClose': endScene(d.k); renderAll(); return;
     case 'interChoose': { const st = SCENES[d.k]; if (!st || st.phase !== 'decide') return; st.phase = 'busy'; const r = await B.act('task', { lid: st.lid, task: st.task, choice: d.v }); st.phase = 'done'; st.result = r && r.msg ? r.msg : (r && r.ok === false ? 'Could not do that now.' : 'Done.'); renderAll(); return; }
     case 'deliverOpen': openDelivery(d.lid, d.oid); return;
