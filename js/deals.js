@@ -17,7 +17,7 @@ const coopMate = (c, a, b) => Object.values(c.holdings || {}).some((h) => h.memb
 function carriers(d, action, cur, self) {
   return `<div class="carriers ${self ? 'c4' : ''}" role="group" aria-label="Delivery">${CARRIERS.map((cr) => { const f = D.quote(d, cr.id);
     return `<button class="carrier" data-a="${action}" data-id="${d.id}" data-v="${cr.id}" aria-pressed="${cur === cr.id}" style="--cc:${cr.color}"><span class="cn">${cicon(cr, 14)} ${esc(cr.short)}</span><span class="cq">${M(f.cost)} · ${daysTxt(f.minDays, f.maxDays)}</span></button>`; }).join('')}
-    ${self ? `<button class="carrier" data-a="${action}" data-id="${d.id}" data-v="self" aria-pressed="${cur === 'self'}" style="--cc:#8a6d1f"><span class="cn">✋ Seller delivers</span><span class="cq">${M(D.fee())} · as soon as possible</span></button>` : ''}</div>`;
+    ${self ? `<button class="carrier" data-a="${action}" data-id="${d.id}" data-v="self" aria-pressed="${cur === 'self'}" style="--cc:#8a6d1f"><span class="cn">✋ Seller delivers</span><span class="cq">${M(D.fee(d))} · as soon as possible</span></button>` : ''}</div>`;
 }
 
 // the seller's own delivery: a short drive across the city, then the goods are in the buyer's stock
@@ -39,11 +39,11 @@ export function dealCard(d, ui = DUI) {
   const c = city(), p = me(), sl = E.listing(c, d.lid), st = (ui.deal && ui.deal[d.id]) || {};
   if (d.to === p.id && d.status === 'open') {
     const cos = D.buyerCompanies(c, E.dctx(c), p.id, d.g), co = cos.find((l) => l.id === st.co) || cos[0], how = st.how || 'self';
-    const f = how === 'self' ? null : D.quote(d, how), cost = D.total(d) + (f ? f.cost : D.fee());
+    const f = how === 'self' ? null : D.quote(d, how), cost = D.total(d) + (f ? f.cost : D.fee(d));
     return `<div class="deal"><div class="deal-h"><b>${nameOf(d.from)} offers ${what(d)}</b><span>${K(d.price)} each · ${M(D.total(d))} · from ${esc(sl ? lname(sl) : '')} · answer within ${weeksLeft(d)} wk</span></div>
       ${cos.length ? `<span class="cap">Deliver to</span><div class="seg" role="group">${cos.map((l) => `<button data-a="dealCo" data-id="${d.id}" data-v="${l.id}" aria-pressed="${co && co.id === l.id}">${esc(lname(l))} · ${esc(l.district)}</button>`).join('')}</div>
       <span class="cap">How it travels</span>${carriers(d, 'dealHow', how, true)}
-      <p class="empty" style="font-size:13px">${how === 'self' ? `${nameOf(d.from)} gets a mail and delivers it in person as soon as possible for ${M(D.fee())}. Your ${M(cost)} is held until it is there, and comes back if nothing is sent within ${DEALS.deliverWeeks} weeks.` : `You pay the goods and the freight now. The seller is paid at once.`}</p>
+      <p class="empty" style="font-size:13px">${how === 'self' ? `${nameOf(d.from)} gets a mail and delivers it in person as soon as possible for ${M(D.fee(d))}. Your ${M(cost)} is held until it is there, and comes back if nothing is sent within ${DEALS.deliverWeeks} weeks.` : `You pay the goods and the freight now. The seller is paid at once.`}</p>
       <div class="btns"><button class="btn gold" data-a="dealAccept" data-id="${d.id}" data-co="${co.id}" data-how="${how}">Buy · ${M(cost)}</button><button class="btn" data-a="dealDecline" data-id="${d.id}">Decline</button></div>`
       : `<p class="empty">None of your companies uses ${esc(GOODS[d.g].name.toLowerCase())}.</p><div class="btns"><button class="btn" data-a="dealDecline" data-id="${d.id}">Decline</button></div>`}</div>`;
   }
@@ -71,13 +71,13 @@ export const dealsNeedingMe = () => { const c = city(), p = me(); return D.mine(
 export function newDealHTML(st) {
   const c = city(), p = me(), l = E.listing(c, st.lid), g = st.g, have = Math.floor((l && l.ops && l.ops.inv[g]) || 0);
   const ids = E.contacts(c, p.id), [lo, hi] = D.priceRange(g), mk = c.market[g].p, price = st.price ?? Math.round(mk * 1000 * 10) / 10;
-  const qty = Math.max(1, Math.min(have, st.qty || have)), to = ids.includes(st.to) ? st.to : ids[0];
+  const qty = Math.max(1, Math.min(have, st.qty || have)), to = ids.includes(st.to) ? st.to : ids[0], d = { g, qty, price: price / 1000 };
   return `<article class="sheet"><span class="cap">Sell to a contact</span><h2 style="margin:2px 0 4px">${esc(GOODS[g].name)} from ${esc(lname(l))}</h2>
     <p class="empty" style="font-size:13.5px">${N(have)} ${esc(GOODS[g].unit)} in stock · market ${K(mk)} · import ${K(E.OPS.importPrice(c, g))}. The goods are put aside while the offer is open.</p>
     ${ids.length ? `<span class="cap">Buyer</span><div class="seg" role="group" style="flex-wrap:wrap">${ids.map((id) => `<button data-a="dealTo" data-v="${id}" aria-pressed="${id === to}">${nameOf(id)}${coopMate(c, p.id, id) ? ' · co-owner' : ''}</button>`).join('')}</div>
     <div class="btns" style="align-items:center"><span class="cap">Units</span><div class="stepper"><button data-a="dealQty" data-v="-1" aria-label="Fewer">−</button><output class="num">${qty}</output><button data-a="dealQty" data-v="1" aria-label="More">+</button></div>${[5, 10, 50].filter((n) => n < have).map((n) => `<button class="btn sm" data-a="dealQtySet" data-v="${n}">${n}</button>`).join('')}<button class="btn sm" data-a="dealQtySet" data-v="${have}">All</button></div>
     <div class="field"><label for="dl-price">Your price per ${esc(GOODS[g].unit.replace(/s$/, ''))}, in k</label><input id="dl-price" type="number" inputmode="decimal" step="0.1" min="${lo * 1000}" max="${hi * 1000}" value="${price}"></div>
-    <p class="empty" style="font-size:13px">Allowed ${K(lo)} to ${K(hi)}. The buyer picks one of their companies and either a carrier (they pay the freight) or lets you deliver it yourself as soon as possible for ${M(D.fee())}, paid to you. Unanswered offers come back after ${DEALS.openWeeks} weeks.</p>
+    <p class="empty" style="font-size:13px">Allowed ${K(lo)} to ${K(hi)}. The buyer picks one of their companies and either a carrier (they pay the freight) or lets you deliver it yourself as soon as possible for ${M(D.fee(d))}, paid to you. Unanswered offers come back after ${DEALS.openWeeks} weeks.</p>
     <button class="btn gold" data-a="dealSend" data-lid="${l.id}" data-g="${g}" data-q="${qty}" data-to="${to}" ${have < 1 ? 'disabled' : ''}>Send offer</button>`
     : '<p class="empty">Nobody to sell to yet. Add tycoons to your network, or share a parent company with a co-owner.</p>'}</article>`;
 }
