@@ -25,6 +25,7 @@ r = A('g', 'cbRate', { target: 4 }); assert(r.ok, 'governor announces 4%');
 assert(city.news[0].title.includes('Bank of Aurex'), 'the Gazette carries the announcement');
 assert(!A('g', 'cbRate', { target: 5 }).ok, 'no second decision in the same quarter');
 month(1);
+assert((B.mail || []).some((x) => x.from.n === 'Bank of Aurex' && /cut to 7.5%/.test(x.subj) && x.body.includes('7.5%')), 'every tycoon gets a mail from the Bank of Aurex when the rate moves');
 assert(city.cb.target === 4 && city.cb.rate === 7.5, `rate moves 0.5 towards the target (now ${city.cb.rate})`);
 assert(E.loanRate(city, B) === 7.5, 'loans follow the bank rate');
 month(7);
@@ -32,6 +33,11 @@ assert(city.cb.rate === 4, 'reaches the target');
 assert(E.CB.tilt(city) > 0, 'a low rate pushes towards a boom');
 assert(city.cb.px > 1, `cheap money lifts supply prices (index ${city.cb.px})`);
 
+// credit limit changes are mailed too
+const cap0 = E.loanCap(city, B), hotel = city.listings.find((l) => !l.owner && l.type === 'hotel' && l.id !== CENTRAL_BANK);
+B.cash += 200; assert(A('b', 'buy', { lid: hotel.id }).ok, 'borrower buys a hotel');
+month(1);
+assert(E.loanCap(city, B) > cap0 && (B.mail || []).some((x) => x.from.n === 'Bank of Aurex' && x.subj === `Your credit limit is now ${E.loanCap(city, B)} M`), 'a higher credit limit arrives as a mail');
 // the bank earns a share of the interest others pay
 B.loans.push({ amt: 20, rate: 'bank', m: city.m });
 const y = E.listingYield(city, bank, bank.owner);

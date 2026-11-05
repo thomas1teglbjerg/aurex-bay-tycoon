@@ -752,7 +752,28 @@ function centralMonth(city, m) {
   const cb = CB.ensure(city), l = listing(city, CB.ID);
   const levied = city.listings.filter((x) => x.owner && CB.sectorLevy(city, x.type)).reduce((a, x) => { const y = listingYield(city, x, x.owner); return a + Math.max(0, y.ypi) / (1 - CB.sectorLevy(city, x.type) / 100) * CB.sectorLevy(city, x.type) / 100 / 12; }, 0) + (cb.gl || 0);
   cb.gl = 0;
+  const was = cb.rate;
   CB.monthStep(city, m, { rand, collected: levied, owned: () => !!l && humanOwned(city, l), activeGovernor: () => !!l && cctx(city).owners(l).some((p) => !inactive(city, p)), news: (t, x, k) => news(city, m, t, x, k) });
+  bankMail(city, m, was);
+}
+// the Bank of Aurex writes to every tycoon when the bank rate moves, and when their own credit limit changes
+const BANK_FROM = { n: 'Bank of Aurex', r: 'Business banking', k: 'bank' };
+function bankMail(city, m, was) {
+  const cb = city.cb, moved = cb.rate !== was;
+  Object.values(city.players).filter((p) => !p.bot && !p.coop).forEach((p) => {
+    const d = debt(p), mine = loanRate(city, p);
+    if (moved) {
+      const owe = d > 0 ? ` On the ${r2(d)} M you owe, that is ${r2(d * mine / 100)} M in interest a year.` : '';
+      MAIL.send(p, { g: city.g, m, kind: cb.rate < was ? 'good' : 'bad', from: { ...BANK_FROM }, subj: `Bank rate ${cb.rate < was ? 'cut' : 'raised'} to ${cb.rate}%`,
+        body: `The bank rate moved from ${was}% to ${cb.rate}%${cb.target !== cb.rate ? `, on its way to a target of ${cb.target}%` : ''}. Your business loans now cost ${mine}% a year.${owe} Manage your loans at bankofaurex.ab.` });
+    }
+    const cap = loanCap(city, p);
+    if (p.cbCap != null && cap !== p.cbCap) {
+      MAIL.send(p, { g: city.g, m, kind: cap > p.cbCap ? 'good' : 'bad', from: { ...BANK_FROM }, subj: `Your credit limit is now ${cap} M`,
+        body: `Your credit limit went ${cap > p.cbCap ? 'up' : 'down'} from ${p.cbCap} M to ${cap} M. It is half the value of your companies plus 10 M. ${d > cap ? `You owe ${r2(d)} M, more than the new limit, so you cannot borrow more until you repay or your companies grow.` : `You owe ${r2(d)} M, so you can borrow ${r2(cap - d)} M more.`} Manage your loans at bankofaurex.ab.` });
+    }
+    p.cbCap = cap;
+  });
 }
 function worldCard(city, m) {
   if (!city.deck.length) city.deck = shuffle(WORLD.map((w) => w.id));
