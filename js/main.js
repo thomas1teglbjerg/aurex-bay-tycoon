@@ -15,6 +15,7 @@ import { teamBoxHTML, talentModal, talentStep } from './team.js';
 import { lifeHTML, lifeModal, newDinner, startDinner, dinnerHTML, money, bidBase } from './life.js';
 import { logoMark, logoFull, symbolIcon } from './brand.js';
 import { initChat, openChat, unreadFrom, inboxOf } from './chat.js';
+import { dealsToDo, dealsNeedingMe, newDealHTML, DUI } from './deals.js';
 import { mailBoxHTML, mailPageHTML, mails, isRead as mailRead, markRead } from './mail.js';
 import { profilePageHTML, portraitUrl, canView } from './profile.js';
 import { authHTML, avatarHTML, passwordHTML, secureHTML, foundHTML, foundPreview, newFound } from './onboard.js';
@@ -542,6 +543,7 @@ function empireHTML() {
   const offers = c.offers.filter((o) => o.status === 'open' && o.to === p.id);
   const offerHTML = offers.map((o) => { const l = E.listing(c, o.lid), b = c.players[o.from]; return `<div class="row ${o.hostile ? 'hostile' : ''}">${avatar(b)}<div class="grow"><b>${o.hostile ? `Hostile bid: ${esc(b.name)} wants your company for ${M(o.amount)}` : `${esc(b.name)} offers ${M(o.amount)}`}</b>${o.hostile ? `<span class="down">Goes through in <span data-live="until:${o.dueM}">…</span> unless you reject it</span>` : ''}<span>for your ${esc(TYPES[l.type].name)} in ${esc(l.district)} (value ${M(E.listingValue(l))})</span></div><div class="btns"><button class="btn sm gold" data-a="offerAccept" data-id="${o.id}">Sell</button><button class="btn sm" data-a="offerDecline" data-id="${o.id}">Decline</button></div></div>`; }).join('');
   const comps = mine.map(companyRow).join('');
+  const dealHTML = dealsToDo();
   const allTasks = mine.flatMap((l) => E.OPS.tasks(c, l).map((t) => ({ ...t, l })));
   const orderValue = mine.reduce((a, l) => a + (l.ops ? l.ops.pending.reduce((x, o) => x + o.value, 0) : 0), 0);
   const specs = STAFF.map((s) => { const hired = E.hasStaff(p, s.id), a = p.assign && p.assign[s.id], al = a ? E.listing(c, a.lid) : null;
@@ -554,7 +556,8 @@ function empireHTML() {
         ${hist.length > 1 ? `<div>${spark(hist, 320, 46)}<div class="cap" style="margin-top:2px">Net worth since you arrived</div></div>` : ''}
         <p class="empty" style="font-size:13.5px">Your companies keep earning while you are away. At live speed one game year lasts one real week.</p></div></div>
       ${mailBoxHTML()}
-      ${offers.length || allTasks.length || Object.keys(SCENES).length ? `<div class="box"><h2>To do<small>${offers.length + allTasks.length}</small></h2><div class="in">
+      ${offers.length || allTasks.length || Object.keys(SCENES).length || dealHTML ? `<div class="box"><h2>To do<small>${offers.length + allTasks.length + dealsNeedingMe()}</small></h2><div class="in">
+        ${dealHTML ? `<div class="cap">Sales between tycoons</div><div class="deals">${dealHTML}</div>` : ''}
         ${Object.keys(SCENES).length ? `<div class="cap">Running now</div>${scenesHTML(() => true, true)}` : ''}
         ${allTasks.filter((t) => !(t.interactive && sceneFor(t.l.id, t.id))).length ? `<div class="cap">Company to-dos</div><div class="rows">${allTasks.filter((t) => !(t.interactive && sceneFor(t.l.id, t.id))).slice(0, 6).map((t) => `<div class="row"><span class="thumb" style="background-image:url(${coImg(t.l)})"></span><div class="grow"><b>${esc(t.label)}</b><span>${esc(lname(t.l))} · ${esc(t.l.district)}${t.value ? ` · ${M(t.value)}` : ''}</span></div>${taskButton(t.l, t)}</div>`).join('')}</div>${allTasks.length > 6 ? `<p class="empty" style="font-size:13px">${allTasks.length - 6} more inside your companies.</p>` : ''}` : ''}
         ${offerHTML ? `<div class="rows">${offerHTML}</div>` : ''}</div></div>` : ''}
@@ -660,6 +663,8 @@ function closeModal() { $('modal').hidden = true; $('modal').innerHTML = ''; UI.
 function openListing(lid) { UI.modal = { t: 'listing', id: lid }; const st = $('modal').scrollTop; modal(companyCard(E.listing(city(), lid))); $('modal').scrollTop = st; }
 function openStaff(id, keep, coop) { if (!keep || !UI.modal || UI.modal.id !== id) UI.modal = { t: 'staff', id, coop: coop || UI.talentFor || null }; const sc = $('modal').scrollTop; modal(c0().talent ? talentModal(UI.modal) : staffCard(STAFF_BY[id])); if (keep) $('modal').scrollTop = sc; }
 const c0 = () => city();
+function openDeal(st) { UI.modal = st; const sc = $('modal').scrollTop; modal(newDealHTML(st)); $('modal').scrollTop = sc; }
+const keepPrice = () => { const i = $('dl-price'); if (i && UI.modal) UI.modal.price = Number(i.value); };
 function openStock(id) { UI.modal = { t: 'stock', id }; const st = $('modal').scrollTop; modal(stockModal(id, UI.sqty)); $('modal').scrollTop = st; }
 function openWarehouse(id) { UI.modal = { t: 'wh', id }; const st = $('modal').scrollTop; modal(warehouseHTML(id, UI)); $('modal').scrollTop = st; }
 function openDelivery(lid, sel) {
@@ -678,7 +683,7 @@ function tickDinner() {
   if (Date.now() - lastDinner > 450) { lastDinner = Date.now(); const el = document.querySelector('.scene'); if (el) el.outerHTML = dinnerHTML(st); }
 }
 const GC_DINNER_MS = 20000;
-function refreshModal() { if (!UI.modal) return; if (LIFE_MODALS.includes(UI.modal.t)) openLife(UI.modal); if (UI.modal.t === 'wh') openWarehouse(UI.modal.id); if (UI.modal.t === 'deliv' && !UI.modal.truck) renderDelivery(); if (UI.modal.t === 'listing') openListing(UI.modal.id); if (UI.modal.t === 'staff') openStaff(UI.modal.id, true); if (UI.modal.t === 'stock') openStock(UI.modal.id); }
+function refreshModal() { if (!UI.modal) return; if (LIFE_MODALS.includes(UI.modal.t)) openLife(UI.modal); if (UI.modal.t === 'wh') openWarehouse(UI.modal.id); if (UI.modal.t === 'deliv' && !UI.modal.truck) renderDelivery(); if (UI.modal.t === 'listing') openListing(UI.modal.id); if (UI.modal.t === 'staff') openStaff(UI.modal.id, true); if (UI.modal.t === 'stock') openStock(UI.modal.id); if (UI.modal.t === 'dealNew') openDeal(UI.modal); }
 // ---------------------------------------------------------------- account and parent company (shown before the game)
 // Order: log in (online) → avatar name → parent company → game. Older guest players are asked once to add e-mail + password.
 function parentBox(c, p) {
@@ -860,6 +865,17 @@ async function onClick(e) {
     case 'listGoods': await act('listGoods', { lid: d.lid, g: d.g }); return;
     case 'exportGoods': await act('exportGoods', { lid: d.lid, g: d.g, carrier: d.c }); return;
     case 'cancelOffer': await act('cancelOffer', { id: d.id }); return;
+    case 'dealNew': openDeal({ t: 'dealNew', lid: d.lid, g: d.g }); return;
+    case 'dealTo': keepPrice(); UI.modal.to = d.v; openDeal(UI.modal); return;
+    case 'dealQty': { keepPrice(); const l = E.listing(c, UI.modal.lid), have = Math.floor(l.ops.inv[UI.modal.g] || 0); UI.modal.qty = Math.max(1, Math.min(have, (UI.modal.qty || have) + Number(d.v))); openDeal(UI.modal); return; }
+    case 'dealQtySet': keepPrice(); UI.modal.qty = Number(d.v); openDeal(UI.modal); return;
+    case 'dealSend': { const price = Number($('dl-price').value) / 1000; const r = await act('dealOffer', { lid: d.lid, g: d.g, qty: Number(d.q), to: d.to, price }); if (r && r.ok !== false) closeModal(); return; }
+    case 'dealCo': DUI.deal[d.id] = { ...DUI.deal[d.id], co: d.v }; renderAll(); return;
+    case 'dealHow': DUI.deal[d.id] = { ...DUI.deal[d.id], how: d.v }; renderAll(); return;
+    case 'dealAccept': await act('dealAccept', { id: d.id, blid: d.co, how: d.how }); return;
+    case 'dealDecline': await act('dealDecline', { id: d.id }); return;
+    case 'dealWithdraw': await act('dealWithdraw', { id: d.id }); return;
+    case 'dealDeliver': await act('dealDeliver', { id: d.id, carrier: d.how }); return;
     case 'assignHead': await act('assignHead', { lid: d.lid, dept: d.dept, spec: d.spec, coop: d.coop }); return;
     case 'unassignHead': await act('unassignHead', { spec: d.spec, coop: d.coop }, 'Head removed.'); return;
     case 'approveAll': await act('approveAll', {}); return;

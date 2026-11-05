@@ -1,0 +1,126 @@
+// Aurex Bay Tycoon — direct sales between tycoons.
+// A seller offers goods their company made to someone in their network (or a co-owner) at their own price.
+// The buyer picks one of their companies and a carrier, or lets the seller deliver. In that case the seller
+// gets a mail and has to send the goods themselves, and pays the freight.
+// Deals live in city.deals: { id, g, qty, price, from, lid, so, to, m, at, due, status, ... }
+//   status: open → shipped (carrier, or the seller delivered) | deliver (waiting for the seller) → shipped
+//           open → declined | withdrawn | expired;  deliver → lapsed (the seller never sent it: buyer refunded)
+import { GOODS, RECIPES, DEALS, CARRIERS } from './content.js';
+import { freight } from './logistics.js';
+
+const r4 = (v) => Math.round(v * 10000) / 10000;
+const uid = () => 'dl' + Math.random().toString(36).slice(2, 9);
+const ok = (msg) => ({ ok: true, msg }), err = (msg) => ({ ok: false, msg });
+const WEEK = 1 / 48;
+const CID = Object.fromEntries(CARRIERS.map((c) => [c.id, c]));
+const same = (a, b) => a && b && a.k === b.k && a.id === b.id;
+const unit = (g) => GOODS[g].unit;
+const one = (g) => GOODS[g].unit.replace(/s$/, '');
+const gname = (g) => GOODS[g].name.toLowerCase();
+const what = (d) => `${d.qty} ${unit(d.g)} of ${gname(d.g)}`;
+
+export const ensure = (city) => (city.deals = city.deals || []);
+export const total = (d) => r4(d.qty * d.price);
+export const isLive = (d) => d.status === 'open' || d.status === 'deliver';
+export const priceRange = (g) => [r4(GOODS[g].base * DEALS.minPrice), r4(GOODS[g].base * DEALS.maxPrice)];
+// the freight for these goods with a carrier, inside the city
+export const quote = (d, cid) => freight(cid, total(d), d.qty, 'local');
+// which of a tycoon's companies can take these goods: they use them as a supply
+export const buyerCompanies = (city, ctx, pid, g) => city.listings.filter((l) => l.ops && ctx.canRun(pid, l) && RECIPES[l.type] && g in RECIPES[l.type].in);
+export const mine = (city, pid) => ensure(city).filter((d) => isLive(d) && (d.from === pid || d.to === pid));
+
+// ---------------------------------------------------------------- seller: make an offer
+export function offer(city, p, a, ctx) {
+  const l = ctx.listing(a.lid); if (!l || !ctx.canRun(p.id, l)) return err('You do not run this company.');
+  const g = a.g; if (!GOODS[g] || !RECIPES[l.type] || !(g in RECIPES[l.type].out)) return err('This company does not make that.');
+  const qty = Math.round(Number(a.qty) || 0); if (qty < 1) return err('Offer at least 1 unit.');
+  if ((l.ops.inv[g] || 0) < qty) return err(`Only ${Math.floor(l.ops.inv[g] || 0)} ${unit(g)} in stock.`);
+  const price = r4(Number(a.price) || 0), [lo, hi] = priceRange(g);
+  if (!(price >= lo - 1e-9 && price <= hi + 1e-9)) return err(`Set a price between ${Math.round(lo * 1e5) / 100} k and ${Math.round(hi * 1e5) / 100} k per ${one(g)}.`);
+  const t = city.players[a.to]; if (!t || t.id === p.id || t.bot) return err('Pick a tycoon to sell to.');
+  if (!ctx.contacts(p.id).includes(t.id)) return err('You can only sell to people in your network or your co-owners.');
+  if (ensure(city).filter((d) => isLive(d) && d.from === p.id).length >= 12) return err('You have 12 open sales. Wait for some answers first.');
+  l.ops.inv[g] -= qty; // the goods are put aside until the deal closes
+  const d = { id: uid(), g, qty, price, from: p.id, lid: l.id, so: { ...l.owner }, to: t.id, m: city.m, at: city.g, due: city.g + DEALS.openWeeks * WEEK, status: 'open' };
+  city.deals.push(d);
+  ctx.mail(t.id, { from: { n: p.name, r: `${ctx.name(l)} · your network`, k: 'player', pid: p.id }, subj: `Offer: ${what(d)}`, body: `I have ${what(d)} from ${ctx.name(l)} for you at ${Math.round(price * 1e5) / 100} k per ${one(g)}, ${total(d)} M in all.\nPick one of your companies that uses it and how it should travel: with a carrier you pay, or I deliver it myself and pay the freight. The offer stands for ${DEALS.openWeeks} weeks.`, deal: d.id, kind: 'info' });
+  return ok(`Offer sent to ${t.name}: ${what(d)} for ${total(d)} M.`);
+}
+
+// ---------------------------------------------------------------- buyer: answer
+export function accept(city, p, a, ctx) {
+  const d = ensure(city).find((x) => x.id === a.id && x.to === p.id && x.status === 'open'); if (!d) return err('The offer is no longer open.');
+  const sl = ctx.listing(d.lid); if (!sl || !sl.ops || !same(sl.owner, d.so)) { close(city, d, 'withdrawn', ctx); return err('The seller no longer owns that company. The offer is off.'); }
+  const bl = ctx.listing(a.blid); if (!bl || !bl.ops || !ctx.canRun(p.id, bl)) return err('Pick one of your companies.');
+  if (!RECIPES[bl.type] || !(d.g in RECIPES[bl.type].in)) return err(`That company does not use ${gname(d.g)}.`);
+  if (same(bl.owner, sl.owner)) return err('Seller and buyer are the same company owner. Move the goods yourself.');
+  const how = a.how === 'self' ? 'self' : CID[a.how] ? a.how : null; if (!how) return err('Pick a carrier, or let the seller deliver.');
+  const goods = total(d), f = how === 'self' ? null : quote(d, how), cost = r4(goods + (f ? f.cost : 0));
+  if (ctx.cashOf(bl.owner) < cost - 1e-9) return err(`This costs ${cost} M${f ? ' with freight' : ''}.`);
+  const seller = city.players[d.from];
+  d.blid = bl.id; d.bo = { ...bl.owner }; d.how = how; d.by = p.id; d.acc = city.g;
+  ctx.debit(bl.owner, goods); bl.ops.cur.sup += goods;
+  if (how === 'self') { // the money waits until the seller sends the goods
+    d.paid = goods; d.status = 'deliver'; d.due = city.g + DEALS.deliverWeeks * WEEK;
+    ctx.mail(d.from, { from: { n: p.name, r: `${ctx.name(bl)} · buyer`, k: 'player', pid: p.id }, subj: `Please deliver: ${what(d)}`, body: `I take your ${what(d)} for ${goods} M and leave the delivery to you. Please send it to ${ctx.name(bl)}. You pick the carrier and pay the freight.\nYou get the money when the goods leave. If nothing is sent within ${DEALS.deliverWeeks} weeks, the deal is off and I get my money back.`, deal: d.id, kind: 'info' });
+    return ok(`Deal. ${seller ? seller.name : 'The seller'} has ${DEALS.deliverWeeks} weeks to deliver. ${goods} M is held until the goods leave.`);
+  }
+  const b = ship(city, d, sl, bl, how, ctx);
+  ctx.debit(bl.owner, b.freight); bl.ops.cur.fr = (bl.ops.cur.fr || 0) + b.freight;
+  pay(d, sl, goods, ctx);
+  ctx.mail(d.from, { from: { n: p.name, r: `${ctx.name(bl)} · buyer`, k: 'player', pid: p.id }, subj: `Sold: ${what(d)}`, body: `I take your ${what(d)}. ${CID[how].name} is picking it up at ${ctx.name(sl)} now, and ${goods} M is on your account.`, deal: d.id, kind: 'good' });
+  return ok(`Bought ${what(d)} for ${goods} M + $${Math.round(b.freight * 1000)}k freight. ${CID[how].name} delivers in about ${Math.round(b.days)} days.`);
+}
+export function decline(city, p, a, ctx) {
+  const d = ensure(city).find((x) => x.id === a.id && x.to === p.id && x.status === 'open'); if (!d) return err('The offer is no longer open.');
+  close(city, d, 'declined', ctx);
+  ctx.mail(d.from, { from: { n: p.name, r: 'Your network', k: 'player', pid: p.id }, subj: `No thanks: ${what(d)}`, body: `Thanks for the offer, but I pass this time. The ${gname(d.g)} is back in your stock.`, deal: d.id, kind: 'info' });
+  return ok('Offer declined.');
+}
+
+// ---------------------------------------------------------------- seller: withdraw, or deliver
+export function withdraw(city, p, a, ctx) {
+  const d = ensure(city).find((x) => x.id === a.id && x.from === p.id && x.status === 'open'); if (!d) return err('This offer is already answered.');
+  close(city, d, 'withdrawn', ctx); return ok('Offer withdrawn. The goods are back in stock.');
+}
+export function deliver(city, p, a, ctx) {
+  const d = ensure(city).find((x) => x.id === a.id && x.status === 'deliver'); if (!d) return err('Nothing to deliver.');
+  const sl = ctx.listing(d.lid); if (!sl || !ctx.canRun(p.id, sl) || !same(sl.owner, d.so)) return err('You no longer run the company that sold it.');
+  const bl = ctx.listing(d.blid); if (!bl || !same(bl.owner, d.bo)) { lapse(city, d, ctx, 'The buyer no longer owns the company it was for.'); return err('The buyer no longer owns that company. The deal is off and the money went back.'); }
+  const cid = CID[a.carrier] ? a.carrier : 'ridge', f = quote(d, cid);
+  if (ctx.cashOf(sl.owner) < f.cost - 1e-9) return err(`Freight costs ${f.cost} M.`);
+  const b = ship(city, d, sl, bl, cid, ctx);
+  ctx.debit(sl.owner, b.freight); sl.ops.cur.fr = (sl.ops.cur.fr || 0) + b.freight;
+  pay(d, sl, d.paid, ctx); d.paid = 0; d.dby = p.id;
+  ctx.mail(d.to, { from: { n: p.name, r: `${ctx.name(sl)} · seller`, k: 'player', pid: p.id }, subj: `On its way: ${what(d)}`, body: `Your ${what(d)} left ${ctx.name(sl)} with ${CID[cid].name}. It should reach ${ctx.name(bl)} in about ${Math.round(b.days)} days. The freight is on me.`, deal: d.id, kind: 'good' });
+  return ok(`Sent with ${CID[cid].name}: ${total(d)} M is yours, you paid $${Math.round(b.freight * 1000)}k freight. Arrives in about ${Math.round(b.days)} days.`);
+}
+
+// ---------------------------------------------------------------- every week: offers and deliveries that waited too long
+export function weekStep(city, ctx) {
+  if (!city.deals || !city.deals.length) return;
+  city.deals.forEach((d) => {
+    if (d.status === 'open' && city.g >= d.due) { close(city, d, 'expired', ctx); ctx.mail(d.from, { from: { n: 'Sales desk', r: 'Your office', k: 'city' }, subj: `No answer: ${what(d)}`, body: `${(city.players[d.to] || {}).name || 'The buyer'} did not answer in ${DEALS.openWeeks} weeks. The ${gname(d.g)} is back in stock.`, kind: 'info' }); }
+    if (d.status === 'deliver' && city.g >= d.due) lapse(city, d, ctx, `${(city.players[d.from] || {}).name || 'The seller'} did not send the goods in ${DEALS.deliverWeeks} weeks.`);
+  });
+  // keep the last 60 closed deals for the record
+  const live = city.deals.filter(isLive), done = city.deals.filter((d) => !isLive(d)).slice(-60);
+  city.deals = done.concat(live);
+}
+
+function ship(city, d, sl, bl, cid, ctx) {
+  const b = ctx.book(bl, { carrier: cid, g: d.g, qty: d.qty, value: total(d), route: 'local', from: { k: 'l', id: sl.id } });
+  d.status = 'shipped'; d.carrier = cid; d.freight = b.freight; d.sid = b.sh.id; d.sent = city.g; return b;
+}
+function pay(d, sl, v, ctx) { ctx.credit(d.so, v); if (sl.ops) sl.ops.cur.goods += v; }
+// the goods go back to the seller's company (if they still own it)
+function close(city, d, status, ctx) {
+  d.status = status; d.end = city.g;
+  const sl = ctx.listing(d.lid); if (sl && sl.ops && same(sl.owner, d.so)) sl.ops.inv[d.g] = (sl.ops.inv[d.g] || 0) + d.qty;
+}
+function lapse(city, d, ctx, why) {
+  if (d.paid) { ctx.credit(d.bo, d.paid); const bl = ctx.listing(d.blid); if (bl && bl.ops) bl.ops.cur.sup -= d.paid; }
+  d.paid = 0; close(city, d, 'lapsed', ctx);
+  const body = `${why} The deal for ${what(d)} is off: the buyer has the money back and the goods are back with the seller.`;
+  [d.to, d.from].forEach((pid) => ctx.mail(pid, { from: { n: 'Sales desk', r: 'Your office', k: 'city' }, subj: `Deal off: ${what(d)}`, body, kind: 'bad' }));
+}
