@@ -7,8 +7,7 @@ import { S, city, me, meId, now, $, esc, kfix, lname, coImg, faceUrl, M, K, P, N
 import { companyHTML, companyRow } from './company.js';
 import { stocksHTML, stockModal, livePrice, liveH, PX } from './stocks.js';
 import { deliveryHTML, warehouseHTML, MODE_LABEL } from './interact.js';
-import { taskButton } from './company.js';
-import { SCENES, startScene, endScene, scenesHTML, sceneFor, tickScenes, sceneTitle } from './scenes.js';
+import { SCENES, startScene, endScene, sceneFor, tickScenes, sceneTitle } from './scenes.js';
 import { WAREHOUSE_SITES, HOMES, TAKEOVER as GC_T } from '../supabase/functions/_shared/content.js';
 import { webHTML, parseUrl, HOME_URL } from './web.js';
 import { teamBoxHTML, talentModal, talentStep } from './team.js';
@@ -407,7 +406,7 @@ function renderTop() {
   const net = c.netReqs.filter((x) => x.status === 'open' && x.to === p.id).length + c.contracts.filter((x) => x.status === 'pending' && x.to === p.id).length;
   const coop = Object.values(c.holdings).filter((h) => h.invites.some((i) => i.pid === p.id)).length + E.myHoldings(c, p.id).reduce((a, h) => a + h.proposals.filter((x) => x.status === 'open' && !(p.id in x.votes)).length, 0);
   const lifeN = c.life && p.life ? c.life.trades.filter((t) => t.status === 'open' && t.to === p.id).length + (p.life.offer && p.life.offer.until >= c.m ? 1 : 0) : 0;
-  [['empire', inbox], ['network', net], ['coop', coop], ['life', lifeN]].forEach(([k, n]) => { const d = $('dot-' + k); d.hidden = !n; d.textContent = n; });
+  [['empire', inbox], ['network', net + coop], ['life', lifeN]].forEach(([k, n]) => { const d = $('dot-' + k); d.hidden = !n; d.textContent = n; });
 }
 // numbers that move every frame
 let lastTicker = 0;
@@ -507,6 +506,7 @@ function openProfile(pid) {
   $('panel').scrollTop = 0; renderAll();
 }
 function setTab(t) {
+  if (t === 'coop') t = 'network'; // Coop and Network are one tab now
   UI.company = null;
   UI.tab = t;
   document.querySelectorAll('#tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
@@ -519,7 +519,7 @@ function renderPanel() {
   if (UI.tab === 'map' || !me()) return;
   const el = $('panel'), st = el.scrollTop, active = document.activeElement && el.contains(document.activeElement) && document.activeElement.tagName === 'INPUT';
   if (active) return; // never wipe a field someone is typing in
-  const html = UI.tab === 'empire' && String(UI.company || '').startsWith('mail') ? mailPageHTML(UI) : UI.tab === 'network' && String(UI.company || '').startsWith('profile:') ? profilePageHTML(UI) : (UI.tab === 'empire' || UI.tab === 'coop') && UI.company ? companyHTML(UI.company, UI) : { empire: empireHTML, market: marketHTML, stocks: () => stocksHTML(UI), network: networkHTML, coop: coopHTML, life: () => lifeHTML(UI) }[UI.tab]();
+  const html = UI.tab === 'empire' && String(UI.company || '').startsWith('mail') ? mailPageHTML(UI) : UI.tab === 'network' && String(UI.company || '').startsWith('profile:') ? profilePageHTML(UI) : (UI.tab === 'empire' || UI.tab === 'network') && UI.company ? companyHTML(UI.company, UI) : { empire: empireHTML, market: marketHTML, stocks: () => stocksHTML(UI), network: () => coopHTML() + networkHTML(), life: () => lifeHTML(UI) }[UI.tab]();
   el.innerHTML = `<div class="panel-in">${html}</div>`;
   applyCollapsed(el);
   el.scrollTop = st; liveUpdate();
@@ -545,26 +545,23 @@ function empireHTML() {
   const offerHTML = offers.map((o) => { const l = E.listing(c, o.lid), b = c.players[o.from]; return `<div class="row ${o.hostile ? 'hostile' : ''}">${avatar(b)}<div class="grow"><b>${o.hostile ? `Hostile bid: ${esc(b.name)} wants your company for ${M(o.amount)}` : `${esc(b.name)} offers ${M(o.amount)}`}</b>${o.hostile ? `<span class="down">Goes through in <span data-live="until:${o.dueM}">…</span> unless you reject it</span>` : ''}<span>for your ${esc(TYPES[l.type].name)} in ${esc(l.district)} (value ${M(E.listingValue(l))})</span></div><div class="btns"><button class="btn sm gold" data-a="offerAccept" data-id="${o.id}">Sell</button><button class="btn sm" data-a="offerDecline" data-id="${o.id}">Decline</button></div></div>`; }).join('');
   const comps = mine.map(companyRow).join('');
   const dealHTML = dealsToDo();
-  const allTasks = mine.flatMap((l) => E.OPS.tasks(c, l).map((t) => ({ ...t, l })));
   const orderValue = mine.reduce((a, l) => a + (l.ops ? l.ops.pending.reduce((x, o) => x + o.value, 0) : 0), 0);
   const specs = STAFF.map((s) => { const hired = E.hasStaff(p, s.id), a = p.assign && p.assign[s.id], al = a ? E.listing(c, a.lid) : null;
     return `<button class="row" style="width:100%;text-align:left" data-a="staff" data-id="${s.id}"><span class="thumb" style="background-image:url(${faceUrl(s.id)});background-position:center 20%"></span><div class="grow"><b>${esc(s.name)}</b><span>${esc(s.role)} · leads ${esc(E.OPS.DEPT[deptOfSpec(s.id)].name)}</span>${hired ? `<span class="${al ? 'up' : 'down'}">${al ? `Heads ${esc(E.OPS.deptFor(al, a.dept).name)} at ${esc(TYPES[al.type].name)}, ${esc(al.district)}` : 'Hired, not assigned: open a company and make them head of a department'}</span>` : ''}</div>${hired ? '<span class="chip good">Hired</span>' : `<span class="chip num">${M(E.staffCost(p, s.id))}</span>`}</button>`; }).join('');
   return `<div class="grid"><div class="col">
-      ${parentBox(c, p)}
       <div class="box"><h2>${esc(p.name)}'s empire<small>LIVE</small></h2><div class="in">
         <div><div class="cap">Cash, counting in real time</div><div class="hero-cash num" data-live="cash">$0</div></div>
         <div class="stats"><div class="stat"><small>Profit / yr (est.)</small><b class="num ${E.annualEstimate(c, 'p', p.id) >= 0 ? 'up' : 'down'}">${M(E.annualEstimate(c, 'p', p.id), true)}</b></div><div class="stat"><small>Wages, budgets, interest</small><b class="num down">${M(-r.costs)}</b></div><div class="stat"><small>Net worth</small><b class="num">${M(E.netWorth(c, p.id))}</b></div><div class="stat"><small>Influence</small><b class="num">${p.inf}</b></div></div>
         ${hist.length > 1 ? `<div>${spark(hist, 320, 46)}<div class="cap" style="margin-top:2px">Net worth since you arrived</div></div>` : ''}
         <p class="empty" style="font-size:13.5px">Your companies keep earning while you are away. At live speed one game year lasts one real week.</p></div></div>
       ${mailBoxHTML()}
-      ${offers.length || allTasks.length || Object.keys(SCENES).length || dealHTML ? `<div class="box"><h2>To do<small>${offers.length + allTasks.length + dealsNeedingMe()}</small></h2><div class="in">
-        ${dealHTML ? `<div class="cap">Sales between tycoons</div><div class="deals">${dealHTML}</div>` : ''}
-        ${Object.keys(SCENES).length ? `<div class="cap">Running now</div>${scenesHTML(() => true, true)}` : ''}
-        ${allTasks.filter((t) => !(t.interactive && sceneFor(t.l.id, t.id))).length ? `<div class="cap">Company to-dos</div><div class="rows">${allTasks.filter((t) => !(t.interactive && sceneFor(t.l.id, t.id))).slice(0, 6).map((t) => `<div class="row"><span class="thumb" style="background-image:url(${coImg(t.l)})"></span><div class="grow"><b>${esc(t.label)}</b><span>${esc(lname(t.l))} · ${esc(t.l.district)}${t.value ? ` · ${M(t.value)}` : ''}</span></div>${taskButton(t.l, t)}</div>`).join('')}</div>${allTasks.length > 6 ? `<p class="empty" style="font-size:13px">${allTasks.length - 6} more inside your companies.</p>` : ''}` : ''}
-        ${offerHTML ? `<div class="rows">${offerHTML}</div>` : ''}</div></div>` : ''}
+      ${offerHTML || dealHTML ? `<div class="box"><h2>Offers and deals<small>${offers.length + dealsNeedingMe()}</small></h2><div class="in">
+        ${offerHTML ? `<div class="rows">${offerHTML}</div>` : ''}
+        ${dealHTML ? `<div class="cap">Sales between tycoons</div><div class="deals">${dealHTML}</div>` : ''}</div></div>` : ''}
       <div class="box"><h2>Autopilot</h2><div class="in"><p class="empty">When you don't answer a mail in time, your managers answer for you.</p>
         <div class="seg" role="group">${[['cautious', 'Cautious'], ['balanced', 'Balanced'], ['bold', 'Bold']].map(([k, l]) => `<button data-a="policy" data-v="${k}" aria-pressed="${p.policy === k}">${l}</button>`).join('')}</div></div></div>
       <div class="box"><h2>Your companies<small>${mine.length}</small></h2><div class="in">${mine.length ? `<div class="rows">${comps}</div><p class="empty" style="font-size:13px">Open a company to run its departments, supplies and orders.</p>` : '<p class="empty">You own no companies yet. Tap a gold pin on the map to buy your first one.</p>'}<button class="btn" data-a="tab" data-v="map">Find companies on the map</button></div></div>
+      ${parentBox(c, p)}
       <div class="box"><h2>Warehouses<small>${E.LOG.ownedWarehouses(c, p.id).length} OWNED</small></h2><div class="in">${E.LOG.ownedWarehouses(c, p.id).length ? `<div class="rows">${E.LOG.ownedWarehouses(c, p.id).map((w) => { const site = E.LOG.SITE[w.id]; return `<button class="row" style="width:100%;text-align:left" data-a="wh" data-wid="${w.id}"><span class="thumb wthumb wh-${site.mode}">${WH_ICON[site.mode]}</span><div class="grow"><b>${esc(site.name)}</b><span>${N(E.LOG.stored(w))} / ${N(E.LOG.capacityOf(w))} units stored · ${N(E.LOG.inbound(c, w))} on the way${w.auto.supply ? ' · supplies your companies' : ''}</span></div></button>`; }).join('')}</div>` : '<p class="empty">Warehouses let you import cheaper, keep a buffer and truck supplies to your companies. Tap a warehouse on the map. The airport has the biggest one.</p>'}</div></div>
     </div><div class="col">
       ${teamBoxHTML()}
@@ -605,7 +602,7 @@ function networkHTML() {
     return `<div class="row">${avatar(m)}<div class="grow"><b>${esc(m.name)}</b><span>${M(E.netWorth(c, m.id))} · ${ls.map((l) => TYPES[l.type].name).join(', ') || 'no companies yet'}</span>${n ? `<span class="up">${n} possible supply contract${n > 1 ? 's' : ''}: open one of your companies to offer</span>` : ''}</div><button class="btn sm" data-a="profile" data-pid="${m.id}">Profile</button><button class="btn sm" data-a="netRemove" data-pid="${m.id}">Remove</button></div>`; }).join('');
   const board = st.map((r, i) => { const x = c.players[r.id], inNet = p.net.includes(r.id), pend = outReq.some((q) => q.to === r.id);
     return `<div class="row"><b class="num" style="width:24px">${i + 1}</b>${avatar(x)}<div class="grow"><b>${esc(r.id === p.id ? r.name + ' (you)' : r.name)}</b>${E.BR.brandOf(c, r.id) ? `<span class="lgline">${logoMark(E.BR.brandOf(c, r.id), 16)}${esc(E.BR.brandOf(c, r.id).name)}</span>` : ''}<span>${M(r.nw)} net worth · ${r.inf} influence · ${E.ownedBy(c, 'p', r.id).length} companies</span></div>${r.id === p.id ? '' : inNet ? '<span class="chip">In network</span>' : pend ? '<span class="chip">Requested</span>' : `<button class="btn sm navy" data-a="netRequest" data-pid="${r.id}">Add</button>`}</div>`; }).join('');
-  return `<h2 class="ph1">Network</h2><p class="lede">Play together while each of you keeps your own companies. People in your network can sign supply contracts that give both companies a synergy bonus, and forward market research to each other.</p>
+  return `<h2 class="ph1" style="margin-top:28px">Your network</h2><p class="lede">Play together while each of you keeps your own companies. People in your network can sign supply contracts that give both companies a synergy bonus, and forward market research to each other.</p>
     <div class="grid"><div class="col">
       ${inReq.length || inCon.length ? `<div class="box"><h2>Waiting for you<small>${inReq.length + inCon.length}</small></h2><div class="in"><div class="rows">
         ${inReq.map((r) => `<div class="row">${avatar(c.players[r.from])}<div class="grow"><b>${esc(c.players[r.from].name)}</b><span>wants to join your network</span></div><div class="btns"><button class="btn sm gold" data-a="netAccept" data-pid="${r.from}">Accept</button><button class="btn sm" data-a="netDecline" data-pid="${r.from}">Decline</button></div></div>`).join('')}
@@ -645,7 +642,7 @@ function coopHTML() {
         <button class="btn danger" data-a="hleave" data-hid="${h.id}">${Object.keys(h.members).length === 1 ? 'Dissolve' : 'Sell my stake'}</button></div>
     </div></div>`;
   };
-  return `<h2 class="ph1">Coop parent companies</h2><p class="lede">Pool money with other players in a shared parent company. Every owner holds a stake in proportion to what they put in. Purchases, sales, upgrades and dividends are decided by vote: more than half of the stakes decides at once, otherwise the majority of votes cast after one game month. Sale money goes to the treasury. Owners don't need to be online at the same time: open votes close after one game month.</p>
+  return `<h2 class="ph1">Network</h2><p class="lede"><b>Coop parent companies.</b> Pool money with other players in a shared parent company. Every owner holds a stake in proportion to what they put in. Purchases, sales, upgrades and dividends are decided by vote: more than half of the stakes decides at once, otherwise the majority of votes cast after one game month. Sale money goes to the treasury. Owners don't need to be online at the same time: open votes close after one game month.</p>
     ${invites.length ? `<div class="box"><h2>Invitations<small>${invites.length}</small></h2><div class="in"><div class="rows">${invites.map((h) => `<div class="row"><div class="grow"><b>${esc(h.name)}</b><span>Value ${M(E.holdingNav(c, h))} · ${Object.keys(h.members).length} owners</span></div><button class="btn sm coop" data-a="hjoin" data-hid="${h.id}">Invest ${M(UI.coopAmt)}</button></div>`).join('')}</div></div></div>` : ''}
     <div class="grid"><div class="col">${mineH.map((h) => card(h) + (!h.bot && c.talent ? teamBoxHTML(E.TAL.coopEmp(c, h)) : '')).join('') || '<div class="box"><div class="in"><p class="empty">You are not part of a coop yet. Found one to buy companies that are too expensive alone.</p></div></div>'}</div>
     <div class="col">
@@ -692,8 +689,16 @@ function parentBox(c, p) {
   return `<div class="box parentbox" style="--brand:${E.BR.colorHex(b.color)}"><div class="in">
     <div class="pb-logo">${logoFull(b, { size: 44 })}</div>
     <p class="pb-sub">${h ? `Co-owned parent company · your stake ${Math.round(E.holdingStake(c, h, p.id) * 100)}%${owners.length ? ' · with ' + esc(owners.join(', ')) : ''} · buy-in ${M(h.buyIn || E.BR.MIN_STAKE)}` : `Parent company of ${esc(p.name)} · 100% yours`}</p>
-    <div class="btns">${!h || h.founder === p.id ? '<button class="btn sm" data-a="editLogo">Edit logo</button>' : ''}${h ? '<button class="btn sm coop" data-a="tab" data-v="coop">Co-owners and buy-in</button>' : ''}
-      ${acc ? (acc.anon ? '<button class="btn sm gold" data-a="secure">Save your city</button>' : `<span class="pb-acc">${esc(acc.email)}</span><button class="linkbtn" data-a="signOut">Log out</button>`) : ''}</div></div></div>`;
+    <div class="btns">${!h || h.founder === p.id ? '<button class="btn sm" data-a="editLogo">Edit logo</button>' : ''}${h ? '<button class="btn sm coop" data-a="tab" data-v="network">Co-owners and buy-in</button>' : ''}
+      ${acc ? (acc.anon ? '<button class="btn sm gold" data-a="secure">Save your city</button>' : `<span class="pb-acc">${esc(acc.email)}</span><button class="linkbtn" data-a="signOut">Log out</button>`) : ''}</div>
+    ${coOwnedHTML(c, p, h)}</div></div>`;
+}
+// companies owned together with other players: the parent company's own first, then any other coop you are in
+function coOwnedHTML(c, p, parent) {
+  const hs = E.myHoldings(c, p.id).sort((a, b) => (b === parent) - (a === parent)), many = hs.length > 1 || (hs.length && hs[0] !== parent);
+  const groups = hs.map((h) => ({ h, ls: E.ownedBy(c, 'h', h.id) })), n = groups.reduce((a, g) => a + g.ls.length, 0);
+  if (!hs.length) return '';
+  return `<div class="cap" style="margin-top:12px">Co-owned companies · ${n}</div>${groups.map(({ h, ls }) => `${many ? `<div class="cap pb-co">${esc(h.name)}</div>` : ''}${ls.length ? `<div class="rows">${ls.map(companyRow).join('')}</div>` : '<p class="empty" style="font-size:13px">No companies yet. Propose a purchase under Network.</p>'}`).join('')}`;
 }
 function obState() { if (!UI.ob) UI.ob = { view: 'signup', first: '', last: '', email: '' }; return UI.ob; }
 function renderOb() {

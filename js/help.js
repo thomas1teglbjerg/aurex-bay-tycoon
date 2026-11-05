@@ -277,8 +277,7 @@ const TABS = {
   empire: h('Tab', 'Your empire: cash, mail, to-dos, companies, warehouses and your team of specialists.'),
   market: h('Tab', 'The economy, the supplies market, your offers and the Bank of Aurex.'),
   stocks: h('Tab', 'The Aurex Bay Stock Exchange: buy and sell shares.'),
-  network: h('Tab', 'Other players: your network, supply contracts and the city ranking.'),
-  coop: h('Tab', 'Companies you own together with other players.'),
+  network: h('Tab', 'Companies you own together with other players at the top; your network, supply contracts and the city ranking below.'),
   life: h('Tab', 'Your personal side: wallet, homes, collections, auctions and prestige.')
 };
 

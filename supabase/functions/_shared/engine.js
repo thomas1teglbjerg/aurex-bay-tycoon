@@ -1226,7 +1226,7 @@ function applyAs(city, pid, p, action, a, now) {
       return ok(`${h.name} is founded. Invite co-owners and propose your first acquisition.`);
     }
     case 'holdingInvite': { const h = city.holdings[a.hid]; const t = city.players[a.pid]; if (!h || !h.members[pid]) return err('Not your coop.'); if (!t) return err('Unknown player.'); if (h.members[t.id]) return err('Already an owner.'); if (h.invites.some((i) => i.pid === t.id)) return err('Already invited.');
-      h.invites.push({ pid: t.id, by: pid, m }); if (!t.bot) feed(t, m, `${p.name} invites you to co-own ${h.name}`, 'Open the Coop tab to invest.', 'info'); return ok(`${t.name} is invited. Bots answer next game month.`); }
+      h.invites.push({ pid: t.id, by: pid, m }); if (!t.bot) feed(t, m, `${p.name} invites you to co-own ${h.name}`, 'Open the Network tab to invest.', 'info'); return ok(`${t.name} is invited. Bots answer next game month.`); }
     case 'holdingJoin': { const h = city.holdings[a.hid]; const amt = Math.round(Number(a.amt) || 0); if (!h) return err('Unknown coop.'); if (!h.members[pid] && !h.open && !h.invites.some((i) => i.pid === pid)) return err('You need an invitation.');
       if (!h.members[pid] && h.buyIn && amt < h.buyIn) return err(`The buy-in for ${h.name} is ${h.buyIn} M.`); if (amt < 1 || p.cash < amt) return err('Not enough cash.');
       h.invites = h.invites.filter((i) => i.pid !== pid); joinHolding(city, h, p, amt, m); return ok(`You invested ${amt} M in ${h.name}.`); }
@@ -1241,7 +1241,7 @@ function applyAs(city, pid, p, action, a, now) {
         const h = makeHolding(city, pid, n.name, amt, m); h.parent = true; h.brand = { color: b.color, font: b.font, sym: b.sym }; h.buyIn = buyIn; h.open = a.open !== false; h.color = BR.colorHex(b.color);
         p.co = { hid: h.id, m };
         news(city, m, `${p.name} founds ${h.name}`, `A co-owned parent company. New owners buy in from ${buyIn} M.`, 'info', { who: pid });
-        return ok(`${h.name} is founded. Invite co-owners from the Coop tab.`);
+        return ok(`${h.name} is founded. Invite co-owners from the Network tab.`);
       }
       p.co = { name: n.name, color: b.color, font: b.font, sym: b.sym, hid: null, m };
       news(city, m, `${p.name} founds ${n.name}`, 'A new parent company opens an office at Harbor Row.', 'info', { who: pid });

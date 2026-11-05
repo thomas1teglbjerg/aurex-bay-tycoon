@@ -27,14 +27,13 @@ export function shipRow(s, g) {
     <span>${cr ? esc(cr.short) : 'Own truck'}${s.freight ? ` · freight ${M(s.freight)}` : ''}${s.to.k === 'export' ? ` · pays ${M(s.pay)}` : ''}</span><div class="bar"><i style="width:${(k * 100).toFixed(0)}%;background:${cr ? cr.color : '#5b6b82'}"></i></div></div>
     <div class="right">${shipStatus(s, g)}<span>${late ? 'was due' : 'ETA'} ${late ? `${Math.round((g - eta) * 365)} d ago` : dur(msFor(eta - g))}</span></div></div>`;
 }
-// Empire: everything on the way, and what arrived lately
+// Company page: no tracking here, only a link to each carrier's own tracking page.
+// Carriers moving this company's cargo come first and show how many shipments they carry.
 export function deliveriesBox(lid) {
-  const c = city(), p = me(), g = E.gameNow(c, Date.now()), mine = L.myShipments(c, p.id).filter((s) => (s.to.k === 'l' && s.to.id === lid) || (s.from.k === 'l' && s.from.id === lid)).sort((a, b) => (a.etaG ?? a.arriveG) - (b.etaG ?? b.arriveG));
-  const late = mine.filter((s) => g > (s.etaG ?? s.arriveG)).length, recent = (p.deliv || []).filter((d) => d.lid === lid).slice(0, 6);
-  return `<div class="box" id="deliveries-box"><h2>Deliveries<small>${mine.length} ON THE WAY${late ? ` · ${late} LATE` : ''}</small></h2><div class="in">
-    ${mine.length ? `<div class="rows">${mine.slice(0, 8).map((s) => shipRow(s, g)).join('')}</div>${mine.length > 8 ? `<p class="empty">+${mine.length - 8} more</p>` : ''}` : '<p class="empty">Nothing on the way to or from this company. Supplies you order and goods you export travel with the carrier you pick.</p>'}
-    ${recent.length ? `<div class="cap">Recently delivered</div><div class="rows">${recent.map((d) => { const cr = d.carrier ? L.CARRIER[d.carrier] : null; return `<div class="row"><div class="grow"><b>${N(d.got)} ${esc(GOODS[d.g].name.toLowerCase())} → ${esc(d.to)}</b><span>${esc(shortDate(d.m))}${cr ? ` · ${esc(cr.short)}` : ''}</span></div><div class="chips">${d.late ? `<span class="chip warn">${d.late} d late</span>` : '<span class="chip good">On time</span>'}${d.dmg ? `<span class="chip bad">${Math.round(d.dmg * 100)}% damaged</span>` : ''}</div></div>`; }).join('')}</div>` : ''}
-    <div class="btns">${CARRIERS.map((cr) => `<button class="btn sm" data-a="web" data-u="${cr.host}/track" style="border-color:${cr.color}">${cicon(cr, 14)} Track with ${esc(cr.short)}</button>`).join('')}</div></div></div>`;
+  const c = city(), p = me(), mine = L.myShipments(c, p.id).filter((s) => (s.to.k === 'l' && s.to.id === lid) || (s.from.k === 'l' && s.from.id === lid));
+  const n = (cr) => mine.filter((s) => s.carrier === cr.id).length, used = CARRIERS.filter((cr) => n(cr));
+  return `<div class="box" id="deliveries-box"><h2>Deliveries<small>${mine.length ? `${mine.length} ON THE WAY` : 'NOTHING ON THE WAY'}</small></h2><div class="in">
+    <div class="btns">${(used.length ? used : CARRIERS).map((cr) => `<button class="btn sm" data-a="web" data-u="${cr.host}/track" style="border-color:${cr.color}">${cicon(cr, 14)} Tracking: ${esc(cr.short)}${n(cr) ? ` (${n(cr)})` : ''}</button>`).join('')}</div></div></div>`;
 }
 
 // ---------------------------------------------------------------- carrier websites
