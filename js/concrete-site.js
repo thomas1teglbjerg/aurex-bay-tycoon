@@ -1,7 +1,7 @@
 // Bayside Concrete's website (baysideconcrete.ab): prices, quote requests from other tycoons and the plant office.
 // Rules live in _shared/quotes.js (QT). Form state survives re-renders in UI.web.qf (request) and UI.web.qo[id] (answers).
 import * as E from '../supabase/functions/_shared/engine.js';
-import { GOODS, QUOTES, RECIPES, CONFIG as GC } from '../supabase/functions/_shared/content.js';
+import { GOODS, QUOTES, RECIPES, ROADS, CONFIG as GC } from '../supabase/functions/_shared/content.js';
 import { city, me, esc, M, K, N, lname, coImg, dur, now } from './util.js';
 import { dealCard } from './deals.js';
 
@@ -87,7 +87,7 @@ function quoteForm(c, l, st) {
 }
 
 // ---------------------------------------------------------------- the buyer's quotes
-const qHead = (c, q, buyer) => { const bl = E.listing(c, q.blid); return `<div class="bc-qh"><b>${what(q)}${buyer ? '' : ` for ${nameOf(q.to)}`}</b><span>${buyer ? '' : `To ${esc(bl ? `${lname(bl)} in ${bl.district}` : 'their company')} · `}at least ${N(q.min)} t · by ${esc(weekLabel(q.when))}</span>${q.note ? `<em>“${esc(q.note)}”</em>` : ''}</div>`; };
+const qHead = (c, q, buyer) => { const bl = E.listing(c, q.blid); return `<div class="bc-qh"><b>${what(q)}${buyer ? '' : ` for ${q.npc ? esc(ROADS.name) : nameOf(q.to)}`}</b><span>${buyer ? '' : `To ${esc(q.npc ? `road works in ${q.place}` : bl ? `${lname(bl)} in ${bl.district}` : 'their company')} · `}at least ${N(q.min)} t · by ${esc(weekLabel(q.when))}</span>${q.note ? `<em>“${esc(q.note)}”</em>` : ''}</div>`; };
 function quoteRow(c, q, buyer) {
   const o = q.offer, d = q.deal && (c.deals || []).find((x) => x.id === q.deal), head = qHead(c, q, buyer);
   if (q.status === 'asked') return `<div class="bc-q">${head}<div class="bc-qs"><span class="bc-chip">Waiting for a quote</span>${buyer ? `<button class="bc-btn sm ghost" data-a="quoteCancel" data-id="${q.id}">Withdraw</button>` : ''}</div></div>`;
@@ -111,7 +111,10 @@ function office(c, l, st) {
   const g = 'concrete', list = QT.forPlant(c, l.id), asked = list.filter((q) => q.status === 'asked'), quoted = list.filter((q) => q.status === 'quoted');
   const orders = (c.deals || []).filter((d) => d.stock && d.lid === l.id && E.DEAL.isLive(d)).sort((a, b) => a.due - b.due), stock = Math.floor(l.ops.inv[g] || 0), gNow = E.gameNow(c, now());
   const qo = (st.qo = st.qo || {}), lp = QT.listPrice(c, l, g);
-  const form = (q) => { const f = (qo[q.id] = qo[q.id] || {}), qty = Math.max(q.min, Math.min(q.qty, Math.round(Number(f.qty) || q.qty))), price = Number(f.price) || Math.round(QT.guide(c, l, g, qty) * 1e5) / 100;
+  const roads = (q) => { const f = QT.fee(g, q.qty, q.price), tot = q.qty * q.price + f;
+    return `<div class="bc-q hot">${qHead(c, q, false)}<div class="bc-offer"><div class="bc-l"><span>Regular client · fixed price (mixing cost + ${Math.round((ROADS.markup - 1) * 100)}%)</span><b>${N(q.qty)} t at ${K(q.price)}</b></div><div class="bc-l"><span>Delivery</span><b>${M(f)}</b></div><div class="bc-l tot"><span>Paid on delivery</span><b>${M(tot)}</b></div></div>
+      <div class="bc-btns"><button class="bc-btn" data-a="quoteOffer" data-id="${q.id}">Take the order</button><button class="bc-btn ghost" data-a="quoteRefuse" data-id="${q.id}">Turn down</button><span class="bc-small">${wkTxt(Math.max(0, Math.ceil((q.at + QUOTES.answerWeeks / 48 - c.g) * 48)))} to answer</span></div></div>`; };
+  const form = (q) => { if (q.npc) return roads(q); const f = (qo[q.id] = qo[q.id] || {}), qty = Math.max(q.min, Math.min(q.qty, Math.round(Number(f.qty) || q.qty))), price = Number(f.price) || Math.round(QT.guide(c, l, g, qty) * 1e5) / 100;
     const wkAsk = Math.max(1, Math.min(QUOTES.maxWeeks, Math.round((q.when - gNow) * 48))), wk = Math.max(1, Math.min(QUOTES.maxWeeks, Math.round(Number(f.wk) || wkAsk))), fee = QT.fee(g, qty, price / 1000);
     return `<div class="bc-q hot">${qHead(c, q, false)}
       <div class="bc-oform"><label>Amount<span><input type="number" data-qo="${q.id}:qty" min="${q.min}" max="${q.qty}" step="10" value="${qty}"> t</span></label><label>Price per t<span><input type="number" data-qo="${q.id}:price" step="0.1" value="${price}"> k</span></label>

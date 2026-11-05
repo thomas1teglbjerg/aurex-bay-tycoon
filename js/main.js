@@ -885,7 +885,7 @@ async function onClick(e) {
     case 'dealAccept': await act('dealAccept', { id: d.id, blid: d.co, how: d.how }); return;
     case 'qfSet': UI.web.qf = { ...(UI.web.qf || {}), [d.k]: d.v }; renderWeb(); return;
     case 'quoteAsk': { const f = UI.web.qf || {}, r = await act('quoteAsk', { site: 'baysideconcrete.ab', blid: d.co, qty: Number(f.qty) || 100, min: Number(f.min) || Number(f.qty) || 100, weeks: Number(f.wk) || 2, note: f.note || '' }); if (r && r.ok) { UI.web.qf = { co: d.co }; navWeb('baysideconcrete.ab/orders'); } return; }
-    case 'quoteOffer': { const q = (city().quotes || []).find((x) => x.id === d.id), f = (UI.web.qo || {})[d.id] || {}; if (!q) return;
+    case 'quoteOffer': { const q = (city().quotes || []).find((x) => x.id === d.id), f = (UI.web.qo || {})[d.id] || {}; if (!q) return; if (q.npc) { await act('quoteOffer', { id: d.id }); return; }
       const site = E.QT.plant(city(), E.dctx(city()), 'baysideconcrete.ab'), qty = Math.max(q.min, Math.min(q.qty, Math.round(Number(f.qty) || q.qty)));
       const price = f.price ? Number(f.price) / 1000 : E.QT.guide(city(), site, q.g, qty), weeks = Number(f.wk) || Math.max(1, Math.min(12, Math.round((q.when - E.gameNow(city(), now())) * 48)));
       const r = await act('quoteOffer', { id: d.id, qty, price, weeks }); if (r && r.ok && UI.web.qo) delete UI.web.qo[d.id]; return; }

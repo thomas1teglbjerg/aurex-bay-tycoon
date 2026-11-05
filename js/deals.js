@@ -1,7 +1,7 @@
 // Direct sales between tycoons: offer goods from a company to a contact, answer an offer, deliver it yourself.
 // Rules live in _shared/deals.js. UI state: UI.deal[id] = { co, how } (the buyer's picks), UI.modal for a new offer.
 import * as E from '../supabase/functions/_shared/engine.js';
-import { GOODS, CARRIERS, DEALS } from '../supabase/functions/_shared/content.js';
+import { GOODS, CARRIERS, DEALS, ROADS } from '../supabase/functions/_shared/content.js';
 import { city, me, esc, M, K, N, lname } from './util.js';
 import { cicon } from './freight.js';
 
@@ -10,6 +10,7 @@ export const DUI = { deal: {}, run: {} }; // the buyer's and seller's picks per 
 const daysTxt = (a, b) => (a === b ? `${a}d` : `${a}–${b}d`);
 const what = (d) => `${N(d.qty)} ${esc(GOODS[d.g].unit)} of ${esc(GOODS[d.g].name.toLowerCase())}`;
 const nameOf = (pid) => esc((city().players[pid] || {}).name || 'A tycoon');
+const toOf = (d) => (d.npc ? esc(ROADS.name) : nameOf(d.to));
 const weeksLeft = (d) => Math.max(0, Math.ceil((d.due - city().g) * 48));
 const coopMate = (c, a, b) => Object.values(c.holdings || {}).some((h) => h.members[a] && h.members[b]);
 
@@ -31,7 +32,7 @@ export function deliveryRun(d) {
   const c = city(), sl = E.listing(c, d.lid), bl = E.listing(c, d.blid), t = Math.min(1, (Date.now() - DUI.run[d.id]) / (RUN_S * 1000));
   const lines = RUN_LINES(d, sl, bl), shown = Math.max(1, Math.min(lines.length, Math.ceil(t * lines.length))), cols = ['#8a6d1f', '#2f6fb0'];
   const bubs = lines.slice(Math.max(0, shown - 2), shown).map(([n, x], j) => { const i = Math.max(0, shown - 2) + j; return `<div class="bub ${i % 2 ? 'r' : ''}"><span class="av" style="background:${cols[i % 2]};--avc:${cols[i % 2]}">${esc(n[0])}</span><div><b>${n}</b><p>${x}</p></div></div>`; }).join('');
-  return `<div class="iscene run" data-dealrun="${d.id}" style="--tint:#8a6d1f"><div class="is-head"><span class="is-ic">🚚</span><div class="grow"><b>Delivering ${what(d)}</b><span>To ${nameOf(d.to)} · ${bl ? esc(lname(bl)) : ''}</span></div><span class="chip">${t >= 1 ? 'Arriving' : `${Math.ceil(RUN_S * (1 - t))} s`}</span></div>
+  return `<div class="iscene run" data-dealrun="${d.id}" style="--tint:#8a6d1f"><div class="is-head"><span class="is-ic">🚚</span><div class="grow"><b>Delivering ${what(d)}</b><span>To ${toOf(d)} · ${bl ? esc(lname(bl)) : d.place ? `road works in ${esc(d.place)}` : ''}</span></div><span class="chip">${t >= 1 ? 'Arriving' : `${Math.ceil(RUN_S * (1 - t))} s`}</span></div>
     <div class="bar is-bar"><i style="width:${(t * 100).toFixed(1)}%"></i></div><div class="bubs" aria-live="polite">${bubs}</div></div>`;
 }
 // one deal, from where you stand: buyer or seller
@@ -50,7 +51,7 @@ export function dealCard(d, ui = DUI) {
   if (d.from === p.id && d.status === 'deliver') {
     const bl = E.listing(c, d.blid);
     if (DUI.run[d.id]) return deliveryRun(d);
-    return `<div class="deal urgent"><div class="deal-h"><b>Deliver ${what(d)} to ${nameOf(d.to)}</b><span>To ${esc(bl ? lname(bl) : '')}${bl ? ` in ${esc(bl.district)}` : ''} · ${M(d.paid)} is yours when it is there (incl. ${M(d.fee || 0)} delivery) · ${weeksLeft(d)} wk left</span></div>
+    return `<div class="deal urgent"><div class="deal-h"><b>Deliver ${what(d)} to ${toOf(d)}</b><span>To ${bl ? `${esc(lname(bl))} in ${esc(bl.district)}` : d.place ? `the road works in ${esc(d.place)}` : ''} · ${M(d.paid)} is yours when it is there (incl. ${M(d.fee || 0)} delivery) · ${weeksLeft(d)} wk left</span></div>
       ${d.stock ? (() => { const have = Math.floor((sl && sl.ops && sl.ops.inv[d.g]) || 0); return have >= d.qty ? `<div class="btns"><button class="btn gold" data-a="dealDeliver" data-id="${d.id}">Deliver it yourself · takes ${RUN_S} seconds</button><span class="muted" style="font-size:12.5px;align-self:center">${N(have)} ${esc(GOODS[d.g].unit)} in stock</span></div>`
         : `<p class="down" style="font-size:13px;font-weight:700;margin:4px 0">Only ${N(have)} ${esc(GOODS[d.g].unit)} in stock. Make ${N(d.qty - have)} more first${sl ? `: <a href="#" data-a="company" data-lid="${sl.id}">open ${esc(lname(sl))} ›</a>` : '.'}</p>`; })()
       : `<div class="btns"><button class="btn gold" data-a="dealDeliver" data-id="${d.id}">Deliver it yourself · takes ${RUN_S} seconds</button></div>`}</div>`;
@@ -58,7 +59,7 @@ export function dealCard(d, ui = DUI) {
   if (d.to === p.id && d.status === 'deliver') return `<div class="deal"><div class="deal-h"><b>Waiting for ${nameOf(d.from)} to deliver ${what(d)}</b><span>${M(d.paid)} held · ${d.stock ? `${esc(sl ? lname(sl) : 'The seller')} mixes and delivers it` : `${nameOf(d.from)} delivers it in person as soon as they can`} · money back if nothing is sent within ${weeksLeft(d)} wk</span></div></div>`;
   if (d.from === p.id && d.status === 'open') return `<div class="deal"><div class="deal-h"><b>Offer to ${nameOf(d.to)}: ${what(d)}</b><span>${K(d.price)} each · ${M(D.total(d))} · waiting for an answer, ${weeksLeft(d)} wk left</span></div><div class="btns"><button class="btn sm" data-a="dealWithdraw" data-id="${d.id}">Withdraw</button></div></div>`;
   const label = { delivered: 'Delivered by the seller', shipped: `Sent with ${(E.LOG.CARRIER[d.carrier] || {}).name || 'a carrier'}`, declined: 'Declined', withdrawn: 'Withdrawn', expired: 'No answer in time', lapsed: 'Not delivered in time: refunded' }[d.status] || d.status;
-  return `<div class="deal done"><div class="deal-h"><b>${d.from === p.id ? `To ${nameOf(d.to)}` : `From ${nameOf(d.from)}`}: ${what(d)}</b><span>${label} · ${M(D.total(d))}</span></div></div>`;
+  return `<div class="deal done"><div class="deal-h"><b>${d.from === p.id ? `To ${toOf(d)}` : `From ${nameOf(d.from)}`}: ${what(d)}</b><span>${label} · ${M(D.total(d))}</span></div></div>`;
 }
 
 // Empire › To do: everything you have to answer or deliver, and your own open offers

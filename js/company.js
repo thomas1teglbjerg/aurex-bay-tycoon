@@ -1,6 +1,6 @@
 // Company dashboard: one page per company with production, supplies, orders and departments
 import * as E from '../supabase/functions/_shared/engine.js';
-import { TYPES, SIZES, GOODS, RECIPES, DEPTS, STAFF, WORKER, MARKET_KIND, CLIENT_RULES, LIFE as LC, CRAFT, AD, AD_CATS, PAPER, MAINT, SITE_CO } from '../supabase/functions/_shared/content.js';
+import { TYPES, SIZES, GOODS, RECIPES, DEPTS, STAFF, WORKER, MARKET_KIND, CLIENT_RULES, LIFE as LC, CRAFT, AD, AD_CATS, PAPER, MAINT, SITE_CO, ROADS } from '../supabase/functions/_shared/content.js';
 import { adHTML } from './web.js';
 import { carrierPicker, deliveriesBox } from './freight.js';
 import { money, cardHTML } from './life.js';
@@ -157,6 +157,7 @@ export function companyHTML(lid, ui = {}) {
       ${newsroomBox(c, l, ro)}
       ${o.depts.social && !ro ? '' : adBox(c, l, ro, ui)}
       ${o.depts.social ? '' : pressBox(c, l, ro)}
+      ${RECIPES[l.type].manual ? roadsClientBox(c, l, ro) : `
       <div class="box" id="orders-box"><h2>${hotel ? 'Bookings' : 'Customer orders'}<small>${ords.length} OPEN</small></h2><div class="in">
         ${!ro && ready && !hotel ? `<button class="btn navy" data-a="deliverOpen" data-lid="${l.id}">Open delivery map · ${ready} ready</button>` : ''}
         ${ords.length ? `<div class="orders">${ords.map((od) => orderCard(c, l, od, ro)).join('')}</div>` : `<p class="empty">${hotel ? (O.automation(l, 'sales') >= 1 ? 'Reservations confirms every booking. Guests check in by themselves.' : 'No open bookings. Travel agents and tour operators book every month.') : O.automation(l, 'sales') >= 1 ? 'Your sales team answers and ships every order.' : 'No open orders. New orders arrive every month from your clients.'}</p>`}
@@ -165,6 +166,7 @@ export function companyHTML(lid, ui = {}) {
       </div></div>
       <div class="box"><h2>Clients<small>${kind === 'b2b' ? 'B2B' : 'B2C'}</small></h2><div class="in"><div class="rows">${clients.map((cl) => { const [ml, mc] = MOOD(cl.mood); return `<div class="row"><span class="av" style="background:${DEPT_TINT.sales};--avc:${DEPT_TINT.sales}">${esc(cl.name[0])}</span><div class="grow"><b>${esc(cl.name)}</b><span>${esc(cl.district)} · ${cl.weight >= 1.5 ? 'large' : cl.weight >= 0.8 ? 'medium' : 'small'} account · ${cl.orders} orders · ${M(cl.revenue)} bought</span><div class="bar" style="margin-top:4px"><i style="width:${cl.mood}%;background:${cl.mood < 35 ? 'var(--bad)' : cl.mood < 50 ? 'var(--gold)' : 'var(--good)'}"></i></div></div><span class="chip ${mc}">${ml}</span></div>`; }).join('')}</div>
         ${ro ? '' : scenesHTML((st) => st.lid === l.id && st.from === 'clients')}${!ro && O.automation(l, 'sales') < 1 && !sceneFor(l.id, 'findCustomers') ? `<button class="btn${o.cd.findCustomers === c.m ? ' done' : ''}" data-a="scene" data-from="clients" data-lid="${l.id}" data-task="findCustomers">${hotel ? 'Find new booking partners' : 'Find new clients'} · takes 20 seconds</button>` : ''}</div></div>
+      `}
       <div class="box" id="supplies-box"><h2>${hotel ? 'Guest supplies' : 'Production & supplies'}<small>${Math.round(o.eff * 100)}% SUPPLIED</small></h2><div class="in">
         ${ro ? '' : (() => { const cid0 = (ui.carrier && ui.carrier[l.id]) || O.setting(l, 'procurement', 'carrier'), g0 = Object.keys(rec.in)[0]; return `<div class="set"><span class="cap">Ship with</span>${carrierPicker('carrier', `data-lid="${l.id}"`, cid0, g0 ? (cid) => O.quote(c, l, g0, (ui.buyQty && ui.buyQty[g0]) || Math.max(10, Math.ceil((need[g0] || 0) / 10) * 10), 'cheapest', cid) : null)}<span class="muted" style="font-size:12.5px">Prices shown for ${g0 ? esc(GOODS[g0].name.toLowerCase()) : 'your cargo'}. Freight and delivery time apply to every order${o.depts.procurement ? '. Procurement restocks with the carrier set in its settings' : ''}.</span></div>`; })()}
         <div class="sups">${inputs}</div>
@@ -246,6 +248,14 @@ function lotsLine(l, g) {
   return `<div class="chips" style="margin-top:5px;flex-wrap:wrap">${lots.slice(0, 6).map((x) => { const ms = left(x); return `<span class="chip ${ms < 6 * 3600000 ? 'bad' : ms < 24 * 3600000 ? 'warn' : ''}" title="Hardens ${esc(new Date(x.at + GOODS[g].fresh).toLocaleString())}">${N(x.q)} ${esc(GOODS[g].unit)} · ${hrs(ms)} left</span>`; }).join('')}${lots.length > 6 ? `<span class="chip">+${lots.length - 6} more</span>` : ''}</div>
     <span style="font-size:12.5px" class="muted">Ship it within ${Math.round(GOODS[g].fresh / 3600000)} hours of mixing, or it hardens and is thrown out. The oldest batch goes first.</span>`;
 }
+// a hand-run plant has no regular clients and no order book: it sells on its website, where City Road Maintenance asks now and then
+function roadsClientBox(c, l, ro) {
+  const host = Object.keys(SITE_CO).find((h) => SITE_CO[h].lid === l.id), q = (c.quotes || []).find((x) => x.npc && x.lid === l.id && x.status === 'asked');
+  const d = (c.deals || []).find((x) => x.npc && x.lid === l.id && E.DEAL.isLive(x)), done = (c.deals || []).filter((x) => x.npc && x.lid === l.id && x.status === 'delivered');
+  return `<div class="box"><h2>Clients<small>WEBSITE</small></h2><div class="in"><div class="rows"><div class="row"><span class="av" style="background:${DEPT_TINT.sales};--avc:${DEPT_TINT.sales}">C</span><div class="grow"><b>${esc(ROADS.name)}</b><span>Regular client · orders now and then for road works at the mixing cost + ${Math.round((ROADS.markup - 1) * 100)}% (now ${K(E.QT.roadsPrice(c, l))} per t) · ${done.length} delivered · ${M(done.reduce((a, x) => a + D_TOTAL(x), 0))} paid</span></div>${q ? '<span class="chip warn">New request</span>' : d ? '<span class="chip">Order open</span>' : ''}</div></div>
+    <p class="empty" style="font-size:13px">The plant has no other regular clients. Builders ask for quotes on ${host ? esc(host) : 'its website'}, and you answer them in the plant office.</p>${host && !ro ? `<button class="btn" data-a="web" data-u="${host}/office">Open the plant office</button>` : ''}</div></div>`;
+}
+const D_TOTAL = (d) => d.qty * d.price + (d.fee || 0);
 // the drum after the slider game: a countdown (ticked by drumTick in main.js) until the batch goes into the yard
 export function drumHTML(l, b) {
   const total = b.ready - b.drum, left = O.drumLeft(b, Date.now()), f = total > 0 ? 1 - left / total : 1;
