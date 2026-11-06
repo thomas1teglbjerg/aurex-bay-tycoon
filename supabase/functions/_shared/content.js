@@ -29,7 +29,7 @@ export const TYPES = {
   concrete: { name: 'Concrete Plant', sector: 'Industry · Building Materials', price: 10, trade: 1, ypi: 1.4, group: 'industry', tags: ['Concrete', 'Industry', 'Building Materials'],
     perks: [{ t: 'Local Concrete', d: 'Mixes cement, gravel and sand into concrete when you start a batch, and sells it to construction companies and the city market' }, { t: 'Builder Synergy', d: '+YPI to Construction Companies in the portfolio' }],
     neg: [{ t: 'Kiln Upkeep', d: '0.5 M maintenance per year' }, { t: 'Building Freeze', d: '−0.3 M YPI during a recession' }] },
-  power: { name: 'Power Plant', sector: 'Utilities · Power Generation', price: 24, trade: 0.8, ypi: 1.2, group: 'industry', tags: ['Energy', 'Utilities', 'Industry'],
+  power: { name: 'Power Plant', sector: 'Utilities · Power Generation', price: 14.4, trade: 0.8, ypi: 0.72, group: 'industry', tags: ['Energy', 'Utilities', 'Industry'],
     perks: [{ t: 'Own Power', d: 'Turns imported natural gas into electricity and sells it to the city market, where every company buys its energy' }, { t: 'Grid Premium', d: 'Power sells dearer in an energy shortage or oil shock (+0.5 M YPI meanwhile)' }, { t: 'Grid Synergy', d: '+YPI to Metal Production and Data Centers in the portfolio' }],
     neg: [{ t: 'Low Passive Yield', d: 'Earns mainly by selling power, less YPI than other industry' }, { t: 'Turbine Overhaul', d: '1 M maintenance per year' }, { t: 'Gas Bill', d: 'Natural gas is import only and gets dearer in an energy shortage or oil shock' }] },
   car: { name: 'Car Factory', sector: 'Automotive Manufacturing', price: 21, trade: 3, ypi: 3.5, group: 'industry', tags: ['Automotive', 'Industry'],
