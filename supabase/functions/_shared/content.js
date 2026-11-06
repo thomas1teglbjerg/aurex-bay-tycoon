@@ -792,8 +792,51 @@ export const CARRIERS = [
 // The house ad: one advertisement run by the administrator / system (never by players). It shows in the
 // Gazette box on the Market tab and stays fixed on The Aurex Gazette website. Change it here.
 export const HOUSE_AD = { img: 'img/x-bergwald-s7.jpg', pos: '50% 60%', from: 'Bergwald', head: 'Bergwald cars is coming to Aurex Bay', line: 'See you soon' };
-// pictures the administrator can pick for the house ad (paths under img/)
-export const HOUSE_PICS = [['x-bergwald-s7', 'Bergwald S7'], ['x-bergwald-x7', 'Bergwald X7'], ['x-bergwald-gt', 'Bergwald GT'], ['x-bergwald-crown', 'Bergwald Crown Hills'], ['x-tuner-gtrs', 'Valtor GT-RS'], ['x-c4', 'Vellano V9'], ['c-gazette', 'The Aurex Gazette'], ['c-bankofaurex', 'Bank of Aurex'], ['c-harbortrust', 'Harbor Trust'], ['h1-watch', 'Watches'], ['h1-wine', 'Wine'], ['h1-art', 'Art'], ['h1-ext', 'Villa'], ['map', 'Aurex Bay']];
+// [file under img/, name, group]: every car and company picture plus a few others (the select groups them)
+export const HOUSE_PICS = [
+  ['x-bergwald-s7', 'Bergwald S7', 'Cars'],
+  ['x-bergwald-x7', 'Bergwald X7', 'Cars'],
+  ['x-bergwald-gt', 'Bergwald GT', 'Cars'],
+  ['x-bergwald-crown', 'Bergwald Crown Hills', 'Cars'],
+  ['x-valtor-z37', 'Valtor Z37', 'Cars'],
+  ['x-valtor-r500', 'Valtor R-500', 'Cars'],
+  ['x-valtor-gtr', 'Valtor GT-R', 'Cars'],
+  ['x-tuner-gtrs', 'Valtor GT-RS', 'Cars'],
+  ['x-tuner-takemi', 'Takemi VTEC', 'Cars'],
+  ['x-tuner-trailhawk', 'Rivermore Trailhawk', 'Cars'],
+  ['x-c4', 'Vellano V9', 'Cars'],
+  ['c-autorepair', 'Auto Repair', 'Companies'],
+  ['c-bank', 'Community Bank', 'Companies'],
+  ['c-bankofaurex', 'Bank of Aurex', 'Companies'],
+  ['c-car', 'Car Factory', 'Companies'],
+  ['c-dealer', 'Car Dealership', 'Companies'],
+  ['c-chemical', 'Chemical Plant', 'Companies'],
+  ['c-chip', 'Chip Factory', 'Companies'],
+  ['c-clothing', 'Clothing Store', 'Companies'],
+  ['c-concrete', 'Bayside Concrete', 'Companies'],
+  ['c-construction', 'Structura Construction', 'Companies'],
+  ['c-data', 'Data & Software', 'Companies'],
+  ['c-fashion', 'Fashion House', 'Companies'],
+  ['c-film', 'Film Production', 'Companies'],
+  ['c-finance', 'Finance & Banking', 'Companies'],
+  ['c-harbortrust', 'Harbor Trust', 'Companies'],
+  ['c-hotel', 'Hotel & Resort', 'Companies'],
+  ['c-hotel-sunset', 'Sunset hotel', 'Companies'],
+  ['c-metal', 'Metal Production', 'Companies'],
+  ['c-music', 'Music Studio', 'Companies'],
+  ['c-pharma', 'Pharma Industry', 'Companies'],
+  ['c-power', 'Aurex Energy', 'Companies'],
+  ['c-powerplant', 'Aurex City PowerPlant', 'Companies'],
+  ['c-restaurant', 'Restaurant & Café', 'Companies'],
+  ['c-gazette', 'The Aurex Gazette', 'Companies'],
+  ['c-textile', 'Textile Mill', 'Companies'],
+  ['c-vineyard', 'Vineyard', 'Companies'],
+  ['h1-watch', 'Watches', 'Other'],
+  ['h1-wine', 'Wine', 'Other'],
+  ['h1-art', 'Art', 'Other'],
+  ['h1-ext', 'Villa', 'Other'],
+  ['map', 'Aurex Bay', 'Other']
+];
 
 // The Aurex Gazette as a company (gazette.js): its owner runs the city's ad desk, prints press releases and picks the front page
 export const PAPER = {

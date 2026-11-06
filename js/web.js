@@ -201,7 +201,7 @@ function houseForm() {
   const c = city(), h = E.GZ.houseAd(c) || {}, cur = (String(h.img || '').match(/img\/(.+)\.jpg/) || [])[1];
   return `<div class="gz-mast"><span>Administrator</span><h1>House ad</h1><span>One ad set by the system, never by players</span></div>
     <div class="gz-cols"><article class="gz-lead"><form data-form="house" class="gz-form">
-      <label>Picture<select name="pic">${HOUSE_PICS.map(([k, n]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
+      <label>Picture<select name="pic">${[...new Set(HOUSE_PICS.map((x) => x[2]))].map((g) => `<optgroup label="${esc(g)}">${HOUSE_PICS.filter((x) => x[2] === g).map(([k, n]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${esc(n)}</option>`).join('')}</optgroup>`).join('')}</select></label>
       <label>From<input name="from" maxlength="40" value="${esc(h.from || '')}" placeholder="Bergwald"></label>
       <label>Headline<input name="head" maxlength="70" value="${esc(h.head || '')}" required></label>
       <label>Line<input name="line" maxlength="90" value="${esc(h.line || '')}"></label>
