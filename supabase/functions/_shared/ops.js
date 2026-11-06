@@ -230,7 +230,13 @@ export function ensureMarket(city) {
 }
 // cb.px: the national bank's price index (cheap money lifts supply prices, dear money lowers them)
 const pxOf = (city) => (city.cb && city.cb.px) || 1;
-export function importPrice(city, g) { let p = GOODS[g].base * pxOf(city) * (GOODS[g].producer ? 1.5 : 1.1); if (g === 'energy' && city.fx && city.fx.id === 'energy') p *= 1.8; return r4(p); }
+export function importPrice(city, g) {
+  const d = GOODS[g], shock = city.fx && city.fx.id === 'energy';
+  let p = d.base * pxOf(city) * (d.imp || (d.producer ? 1.5 : 1.1));
+  if (g === 'energy' && shock) p *= 1.8;
+  if (g === 'fuel' && shock) p *= 1.4;
+  return r4(p);
+}
 export function exportPrice(city, g) { return r4(GOODS[g].base * pxOf(city) * 0.7); }
 export function offersFor(city, g) { return city.book.filter((o) => o.g === g && o.qty > 0.001).sort((a, b) => a.price - b.price); }
 export function listedQty(city, g) { return city.book.filter((o) => o.g === g).reduce((a, o) => a + o.qty, 0); }
