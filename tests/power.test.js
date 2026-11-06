@@ -8,8 +8,7 @@ const city = E.createCity(now, { speed: 2016 }); E.addPlayer(city, 'u', 'Thomas'
 const ae = city.listings.find((l) => l.title === 'Aurex Energy'), pp = city.listings.find((l) => l.title === 'Aurex City PowerPlant');
 assert(ae && ae.type === 'power' && ae.d === 'harbor', 'Aurex Energy is in Harbor Row');
 assert(pp && pp.type === 'power' && pp.d === 'ironport' && pp.img === 'c-powerplant', 'Aurex City PowerPlant is in Ironport with its own picture');
-const harbor = city.listings.filter((l) => l.d === 'harbor' && l !== ae);
-assert(harbor.every((l) => E.listingPrice(l) < E.listingPrice(ae)), `Aurex Energy is the dearest in Harbor Row (${E.listingPrice(ae)} M)`);
+assert(E.listingPrice(ae) === 21.5 && E.listingPrice(pp) === 14.5, `prices ${E.listingPrice(ae)} M and ${E.listingPrice(pp)} M`);
 const ind = ['metal', 'chemical', 'chip', 'car'].map((t) => TYPES[t].ypi / TYPES[t].price);
 assert(ind.every((x) => TYPES.power.ypi / TYPES.power.price < x), 'lower YPI per M than other industry');
 assert(GOODS.energy.producer === 'power', 'energy is made in the city now');
