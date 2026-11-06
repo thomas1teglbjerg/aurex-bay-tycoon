@@ -8,7 +8,9 @@ const LIMG = Object.fromEntries(LISTINGS.filter((l) => l.img).map((l) => [l.id, 
 // Bump FACE_V when portraits in img/s-*.jpg change: /img is cached as immutable for a week.
 const FACE_V = 4;
 export const faceUrl = (id) => `img/s-${id}.jpg?v=${FACE_V}`;
-export const coImg = (l) => `img/${LIMG[l.id] || 'c-' + l.type}.jpg`;
+// Bump CO_V when a company picture in img/c-*.jpg is replaced under the same name.
+const CO_V = 2;
+export const coImg = (l) => `img/${LIMG[l.id] || 'c-' + l.type}.jpg?v=${CO_V}`;
 
 export const S = { B: null };
 let madeSeen = null; // wines bottled by vineyards join the collectible catalogue when a new city state arrives
