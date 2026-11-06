@@ -309,6 +309,7 @@ export function listingYield(city, l, owner) {
   if (l.type === 'hotel' && econ === 'Recession') { ypi -= s; notes.push(`Recession −${r2(s)}`); }
   if (l.type === 'construction' && econ === 'Boom') { ypi += 0.5 * s; notes.push(`Building boom +${r2(0.5 * s)}`); }
   if (l.type === 'construction' && econ === 'Recession') { ypi -= 0.5 * s; notes.push(`Building freeze −${r2(0.5 * s)}`); }
+  if (l.type === 'power' && city.fx && city.fx.id === 'energy') { ypi += 0.5 * s; notes.push(`Grid premium +${r2(0.5 * s)}`); }
   if (l.type === 'concrete' && econ === 'Recession') { ypi -= 0.3 * s; notes.push(`Building freeze −${r2(0.3 * s)}`); }
   if (l.type === 'chemical' && econ === 'Crisis') { ypi -= s; notes.push(`Spill risk −${r2(s)}`); }
   if (l.type === 'metal' && econ === 'Crisis') { ypi -= 3 * s; notes.push(`Crisis −${r2(3 * s)}`); }
