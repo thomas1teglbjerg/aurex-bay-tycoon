@@ -9,7 +9,7 @@ const LIMG = Object.fromEntries(LISTINGS.filter((l) => l.img).map((l) => [l.id, 
 const FACE_V = 4;
 export const faceUrl = (id) => `img/s-${id}.jpg?v=${FACE_V}`;
 // Bump CO_V when a company picture in img/c-*.jpg is replaced under the same name.
-const CO_V = 2;
+const CO_V = 3;
 export const coImg = (l) => `img/${LIMG[l.id] || 'c-' + l.type}.jpg?v=${CO_V}`;
 
 export const S = { B: null };
