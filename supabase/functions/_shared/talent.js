@@ -91,6 +91,19 @@ function release(city, tid, ctx, why) {
   city.tOffers = (city.tOffers || []).filter((o) => o.tid !== tid || o.status !== 'open');
   if (p && why && !p.bot) tell(city, ctx, p, t, 'bad', 'Goodbye', BYE[why] || why, null, `${t.name} has left`, why);
 }
+// a specialist moves to another employer on the same contract (a holding hands its team to its divisions);
+// they keep leading their company only if it belongs to the new employer (keep = true)
+export function hand(city, tid, to, keep, ctx) {
+  const t = PERSON[tid], s = st(city, tid), from = who(city, s.owner); if (!from || !to || (to.team[t.kind] && to.team[t.kind] !== tid)) return false;
+  const a = from.assign && from.assign[t.kind];
+  if (a && !keep) ctx.unassign(city, from, t.kind);
+  if (from.team[t.kind] === tid) delete from.team[t.kind]; from.staff = from.staff.filter((k) => k !== t.kind); if (from.assign) delete from.assign[t.kind];
+  s.owner = to.id; to.team = to.team || {}; to.team[t.kind] = tid; if (!to.staff.includes(t.kind)) to.staff.push(t.kind);
+  if (a && keep) { to.assign = to.assign || {}; to.assign[t.kind] = a; }
+  return true;
+}
+export const TALENT_IDS = (city, owner) => TALENT.filter((t) => city.talent[t.id] && city.talent[t.id].owner === owner).map((t) => t.id);
+export const releaseOne = (city, tid, ctx, why) => release(city, tid, ctx, why);
 // every specialist of an employer becomes a free agent (a coop that is dissolved)
 export function releaseAll(city, emp, ctx) { ensure(city); TALENT.forEach((t) => { if (st(city, t.id).owner === emp.id) release(city, t.id, ctx, null); }); }
 function transfer(city, tid, buyer, fee, salary, years, ctx) {

@@ -243,7 +243,8 @@ export function holdingNav(city, h) { return h.div ? HD.nav(city, h, hx(city)) :
 const whValue = (city, pid) => (city.warehouses || []).filter((w) => w.owner === pid).reduce((a, w) => a + LOG.SITE[w.id].price * (0.7 + 0.25 * (w.level - 1)) + Object.entries(w.stock).reduce((x, [g, q]) => x + q * (city.market ? city.market[g].p : 0), 0), 0);
 // what holding.js needs from the engine
 export const hx = (city) => ({ ownedBy: (k, id) => ownedBy(city, k, id), listingValue, listingPrice, listing: (id) => listing(city, id), stockValue: (p) => stockValue(city, p), whValue: (pid) => whValue(city, pid), debt,
-  annualEstimate: (pid) => annualEstimate(city, 'p', pid), handOver: (l, o) => handOver(city, l, o), netWorth: (pid) => netWorth(city, pid), rate: () => CB.rate(city), uid, assignOwner: (l, o) => assignOwner(city, l, o, city.m), release: (l) => releaseListing(city, l),
+  annualEstimate: (pid) => annualEstimate(city, 'p', pid), handOver: (l, o) => handOver(city, l, o),
+  team: (h) => (city.talent ? TAL.TALENT_IDS(city, h.id) : []), handSpec: (tid, p, keep) => TAL.hand(city, tid, p, keep, TCTX), dropSpec: (tid, why) => TAL.releaseOne(city, tid, TCTX, why), person: (tid) => TAL.PERSON[tid], netWorth: (pid) => netWorth(city, pid), rate: () => CB.rate(city), uid, assignOwner: (l, o) => assignOwner(city, l, o, city.m), release: (l) => releaseListing(city, l),
   feed: (p, t, x, k) => feed(p, city.m, t, x, k), mail: (p, x) => MAIL.send(p, { g: city.g, m: city.m, ...x }) });
 export const annualReport = (city, kind, id) => HD.report(city, kind, id, city.m, hx(city));
 // Admin (test): close the books now for every holding and solo tycoon
@@ -1173,7 +1174,7 @@ function applyAs(city, pid, p, action, a, now) {
     if (a.oid && !a.tid) { const o = (city.tOffers || []).find((x) => x.id === a.oid); if (o) a.tid = o.tid; }
     if (!a.tid && a.id) a.tid = a.id;
     // a.coop: the co-owner acts for their coop, paid from the coop treasury
-    let emp = p; if (a.coop) { const h = city.holdings[a.coop]; if (!h || !h.members[pid] || !humanCoop(city, h)) return err('Not your coop.'); emp = TAL.coopEmp(city, h); }
+    let emp = p; if (a.coop) { const h = city.holdings[a.coop]; if (!h || !h.members[pid] || !humanCoop(city, h)) return err('Not your coop.'); if (h.div && action === 'hire') return err(`${h.name} has divisions: each CEO hires specialists for their own division.`); emp = TAL.coopEmp(city, h); }
     const r = TAL.act(city, emp, action, a, { ...TCTX, inactive: (x) => inactive(city, x) }); if (r) return r;
   }
   if (action === 'hostileBid') return hostileBid(city, p, a);

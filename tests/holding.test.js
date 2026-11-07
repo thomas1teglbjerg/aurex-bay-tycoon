@@ -114,6 +114,15 @@ if (jc.owner && jc.owner.k === 'h') {
 const outside = city.listings.find((x) => x.owner && x.owner.k === 'p' && city.players[x.owner.id].bot);
 if (outside) assert(!A('t', 'holdingPropose', { hid: h.id, kind: 'move', lid: outside.id, to: 't' }).ok, 'companies outside the holding cannot be moved');
 
+// the holding keeps no team of its own: its specialists move to the divisions on the same contract
+if (city.talent) {
+  const T2 = E.TAL, tid = Object.keys(city.talent).find((id) => !city.talent[id].owner && !T2.PERSON[id].starter && !(T.team || {})[T2.PERSON[id].kind]);
+  const emp = T2.coopEmp(city, h); const st0 = city.talent[tid]; Object.assign(st0, { owner: h.id, salary: 1, until: city.m + 24 }); emp.team[T2.PERSON[tid].kind] = tid; emp.staff.push(T2.PERSON[tid].kind);
+  assert(!A('t', 'hire', { tid: Object.keys(city.talent).find((id) => !city.talent[id].owner), coop: h.id }).ok, 'a holding with divisions cannot hire for itself');
+  E.advance(city, now + 10);
+  assert(st0.owner === HD.ceo(city, h) && st0.salary === 1 && !h.team[T2.PERSON[tid].kind] && city.players[st0.owner].team[T2.PERSON[tid].kind] === tid, 'its specialist moves to the joint division CEO on the same salary');
+}
+
 // leaving is a vote of the owners; the stake is settled against the division
 r = A('k', 'holdingLeave', { hid: h.id }); assert(r.ok && h.proposals.some((x) => x.kind === 'exit'), 'leaving is a vote of the owners: ' + r.msg);
 const xp = h.proposals.find((x) => x.kind === 'exit'); if (xp.status === 'open') A('t', 'holdingVote', { hid: h.id, prid: xp.id, yes: true });
