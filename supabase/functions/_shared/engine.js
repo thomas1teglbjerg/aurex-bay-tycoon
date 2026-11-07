@@ -40,6 +40,14 @@ function dropHead(city, l, dept, spec) {
   cands.forEach((x) => { const a = x && x.assign && x.assign[spec]; if (a && a.lid === l.id && a.dept === dept) unassign(city, x, spec); });
 }
 const debit = (city, owner, v) => credit(city, owner, -v);
+// a company changes hands inside a holding: it keeps its staff and stock; heads from the old side step down
+function handOver(city, l, owner) {
+  if (l.ops) Object.entries(l.ops.depts || {}).forEach(([dept, d]) => {
+    if (d.head === 'self') { const pl = city.players[String(d.who || '').slice(2)]; if (pl) CAR.leave(city, pl, l.id, dept); else { d.head = null; d.who = null; } }
+    else if (d.head) dropHead(city, l, dept, d.head);
+  });
+  l.owner = owner;
+}
 const CTX = { listingYield: (...a) => listingYield(...a), credit, debit, notify: (city, l, t, x, k) => notifyOwner(city, l, t, x, k), news: (city, m, t, x, k) => news(city, m, t, x, k),
   onTheWay: (city, l, g) => (city.shipments ? LOG.onTheWay(city, l, g) : 0),
   carrierMode: (cid) => (LOG.CARRIER[cid] || LOG.CARRIER.ridge).mode,
@@ -235,7 +243,7 @@ export function holdingNav(city, h) { return h.div ? HD.nav(city, h, hx(city)) :
 const whValue = (city, pid) => (city.warehouses || []).filter((w) => w.owner === pid).reduce((a, w) => a + LOG.SITE[w.id].price * (0.7 + 0.25 * (w.level - 1)) + Object.entries(w.stock).reduce((x, [g, q]) => x + q * (city.market ? city.market[g].p : 0), 0), 0);
 // what holding.js needs from the engine
 export const hx = (city) => ({ ownedBy: (k, id) => ownedBy(city, k, id), listingValue, listingPrice, listing: (id) => listing(city, id), stockValue: (p) => stockValue(city, p), whValue: (pid) => whValue(city, pid), debt,
-  annualEstimate: (pid) => annualEstimate(city, 'p', pid), netWorth: (pid) => netWorth(city, pid), rate: () => CB.rate(city), uid, assignOwner: (l, o) => assignOwner(city, l, o, city.m), release: (l) => releaseListing(city, l),
+  annualEstimate: (pid) => annualEstimate(city, 'p', pid), handOver: (l, o) => handOver(city, l, o), netWorth: (pid) => netWorth(city, pid), rate: () => CB.rate(city), uid, assignOwner: (l, o) => assignOwner(city, l, o, city.m), release: (l) => releaseListing(city, l),
   feed: (p, t, x, k) => feed(p, city.m, t, x, k), mail: (p, x) => MAIL.send(p, { g: city.g, m: city.m, ...x }) });
 export const annualReport = (city, kind, id) => HD.report(city, kind, id, city.m, hx(city));
 // Admin (test): close the books now for every holding and solo tycoon
