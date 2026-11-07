@@ -46,6 +46,7 @@ Deno.serve(async (req) => {
   if (action === 'adminMove' && !isAdmin) return json({ result: { ok: false, msg: 'Only an admin can move companies on the map.' } });
   if (action === 'adminHouseAd' && !isAdmin) return json({ result: { ok: false, msg: 'Only an admin can change the house ad.' } });
   if (action === 'adminMailAll' && !isAdmin) return json({ result: { ok: false, msg: 'Only an admin can write to every player.' } });
+  if (action === 'adminYearEnd' && !isAdmin) return json({ result: { ok: false, msg: 'Only an admin can close the books.' } });
   // The administrator (unlimited money) and the test player: only admin accounts may create them or act as them.
   const asId = Engine.AS_IDS.includes(String(body.as)) ? String(body.as) : null;
   const asAdmin = asId === Engine.ADMIN_ID;
@@ -113,6 +114,11 @@ Deno.serve(async (req) => {
       result = Engine.mailAll(city, args);
       if (!(result as { ok: boolean }).ok) return out({ result, city });
       console.log(JSON.stringify({ city: cityId, admin: user?.email, mailAll: args.subj, to: (result as { n: number }).n }));
+      changed = true;
+    } else if (action === 'adminYearEnd') {
+      // test: close the books now for every holding and solo tycoon (annual reports + annual meetings)
+      result = Engine.closeBooks(city);
+      console.log(JSON.stringify({ city: cityId, admin: user?.email, closeBooks: city.m }));
       changed = true;
     } else if (action !== 'sync' && action !== 'tick') {
       if (asId) Engine.ensureAs(city, asId, now);
