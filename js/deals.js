@@ -73,7 +73,7 @@ export const dealsNeedingMe = () => { const c = city(), p = me(); return D.mine(
 // the modal: offer goods from this company to a contact
 export function newDealHTML(st) {
   const c = city(), p = me(), l = E.listing(c, st.lid), g = st.g, have = Math.floor((l && l.ops && l.ops.inv[g]) || 0);
-  const ids = E.contacts(c, p.id), [lo, hi] = D.priceRange(g), mk = c.market[g].p, price = st.price ?? Math.round(mk * 1000 * 10) / 10;
+  const ids = E.dealContacts(c, p.id), [lo, hi] = D.priceRange(g), mk = c.market[g].p, price = st.price ?? Math.round(mk * 1000 * 10) / 10;
   const qty = Math.max(1, Math.min(have, st.qty || have)), to = ids.includes(st.to) ? st.to : ids[0], d = { g, qty, price: price / 1000 };
   return `<article class="sheet"><span class="cap">Sell to a contact</span><h2 style="margin:2px 0 4px">${esc(GOODS[g].name)} from ${esc(lname(l))}</h2>
     <p class="empty" style="font-size:13.5px">${N(have)} ${esc(GOODS[g].unit)} in stock · market ${K(mk)} · import ${K(E.OPS.importPrice(c, g))}. The goods are put aside while the offer is open.</p>

@@ -167,7 +167,7 @@ function resolveLot(city, lot, m, ctx) {
   if (lot.high && city.players[lot.hb]) bids.push({ pid: lot.hb, amt: lot.high, human: false });
   // a late bidder may still turn up when the hammer falls
   const late = lot.high ? (rand() < 0.25 ? 1 : 0) : Math.floor(rand() * 3.2) + (c.rarity === 'Legendary' ? 1 : 0);
-  bots.filter((b) => b.id !== lot.hb).sort(() => rand() - 0.5).slice(0, late).forEach((b) => bids.push({ pid: b.id, amt: r4(val * (0.8 + rand() * 0.4)), human: false }));
+  bots.filter((b) => b.id !== lot.hb && !(ctx.botFriend && Object.keys(lot.bids).some((pid) => ctx.botFriend(city, b.id, pid)))).sort(() => rand() - 0.5).slice(0, late).forEach((b) => bids.push({ pid: b.id, amt: r4(val * (0.8 + rand() * 0.4)), human: false }));
   bids.sort((a, b) => b.amt - a.amt);
   let winner = null, price = 0;
   for (let i = 0; i < bids.length; i++) {
@@ -191,6 +191,7 @@ function resolveLot(city, lot, m, ctx) {
     return;
   }
   const buyer = city.players[winner.pid];
+  if (ctx.auctionDone) ctx.auctionDone(city, c.name, buyer.id, Object.keys(lot.bids).filter((pid) => city.players[pid] && !city.players[pid].bot && pid !== lot.seller), [...new Set(bids.filter((x) => !x.human).map((x) => x.pid))]);
   buyer.life.wallet -= price * (1 + LIFE.auctionPremium); tx(buyer.life, m, `Aurex & Co. · ${c.name}`, -price * (1 + LIFE.auctionPremium));
   let it;
   if (lot.lid) {
@@ -241,7 +242,10 @@ export function weekStep(city, wk, ctx) {
     const bots = Object.values(city.players).filter((p) => p.bot && p.id !== lot.seller); if (!bots.length) return;
     const cur = lot.high || lot.est * LIFE.reserve * 0.95, cap = val * (1.05 + rand() * 0.25), next = r4(cur * (1.04 + rand() * 0.08));
     if (next > cap) return;
-    const b = pick(bots); lot.high = next; lot.hb = b.id; lot.out = lot.out || {};
+    // rivals (bots.js) pick who raises: friends of a bidding player stay out, rivals go after your lots
+    const who = ctx.auctionBidder ? ctx.auctionBidder(city, lot, bots, val) : { b: pick(bots), cap };
+    if (!who || next > who.cap) return;
+    const b = who.b; lot.high = next; lot.hb = b.id; lot.out = lot.out || {};
     Object.entries(lot.bids).forEach(([pid, amt]) => {
       const p = city.players[pid]; if (!p || p.bot || amt >= next || lot.out[pid]) return;
       lot.out[pid] = true; ctx.feed(p, m, `Outbid on ${c.name}`, `${b.name} bids ${r2(next)} M. Raise your bid before the hammer falls.`, 'bad');
