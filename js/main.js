@@ -18,7 +18,7 @@ import { openMixer } from './mixer.js';
 import { dealsToDo, dealsNeedingMe, newDealHTML, deliveryRun, DUI, RUN_S } from './deals.js';
 import { mailBoxHTML, mailPageHTML, mails, isRead as mailRead, markRead } from './mail.js';
 import { profilePageHTML, portraitUrl, canView } from './profile.js';
-import { holdingCardHTML, reportPageHTML } from './holding.js';
+import { holdingCardHTML, reportPageHTML, groupsHTML } from './holding.js';
 import { authHTML, avatarHTML, passwordHTML, secureHTML, foundHTML, foundPreview, newFound } from './onboard.js';
 
 const ECON_COL = { Boom: '#23905a', Stable: '#2f6fb0', Recession: '#d08a1e', Crisis: '#c0392b' };
@@ -565,7 +565,7 @@ function empireHTML() {
         ${dealHTML ? `<div class="cap">Sales between tycoons</div><div class="deals">${dealHTML}</div>` : ''}</div></div>` : ''}
       <div class="box"><h2>Autopilot</h2><div class="in"><p class="empty">When you don't answer a mail in time, your managers answer for you.</p>
         <div class="seg" role="group">${[['cautious', 'Cautious'], ['balanced', 'Balanced'], ['bold', 'Bold']].map(([k, l]) => `<button data-a="policy" data-v="${k}" aria-pressed="${p.policy === k}">${l}</button>`).join('')}</div></div></div>
-      <div class="box"><h2>Your companies<small>${mine.length}</small></h2><div class="in">${mine.length ? `<div class="rows">${comps}</div><p class="empty" style="font-size:13px">Open a company to run its departments, supplies and orders.</p>` : '<p class="empty">You own no companies yet. Tap a gold pin on the map to buy your first one.</p>'}<button class="btn" data-a="tab" data-v="map">Find companies on the map</button></div></div>
+      ${E.HD.divOf(c, p) ? '' : `<div class="box"><h2>Your companies<small>${mine.length}</small></h2><div class="in">${mine.length ? `<div class="rows">${comps}</div><p class="empty" style="font-size:13px">Open a company to run its departments, supplies and orders.</p>` : '<p class="empty">You own no companies yet. Tap a gold pin on the map to buy your first one.</p>'}<button class="btn" data-a="tab" data-v="map">Find companies on the map</button></div></div>`}
       ${parentBox(c, p)}
       <div class="box"><h2>Warehouses<small>${E.LOG.ownedWarehouses(c, p.id).length} OWNED</small></h2><div class="in">${E.LOG.ownedWarehouses(c, p.id).length ? `<div class="rows">${E.LOG.ownedWarehouses(c, p.id).map((w) => { const site = E.LOG.SITE[w.id]; return `<button class="row" style="width:100%;text-align:left" data-a="wh" data-wid="${w.id}"><span class="thumb wthumb wh-${site.mode}">${WH_ICON[site.mode]}</span><div class="grow"><b>${esc(site.name)}</b><span>${N(E.LOG.stored(w))} / ${N(E.LOG.capacityOf(w))} units stored · ${N(E.LOG.inbound(c, w))} on the way${w.auto.supply ? ' · supplies your companies' : ''}</span></div></button>`; }).join('')}</div>` : '<p class="empty">Warehouses let you import cheaper, keep a buffer and truck supplies to your companies. Tap a warehouse on the map. The airport has the biggest one.</p>'}</div></div>
     </div><div class="col">
@@ -693,7 +693,7 @@ function parentBox(c, p) {
     <p class="pb-sub">${h && h.div ? `Holding · you are CEO of your division · your stake ${Math.round(E.holdingStake(c, h, p.id) * 100)}% (${M(E.holdingNav(c, h) * E.holdingStake(c, h, p.id))})${owners.length ? ' · with ' + esc(owners.join(', ')) : ''}` : h ? `Co-owned parent company · your stake ${Math.round(E.holdingStake(c, h, p.id) * 100)}%${owners.length ? ' · with ' + esc(owners.join(', ')) : ''} · buy-in ${M(h.buyIn || E.BR.MIN_STAKE)}` : `Parent company of ${esc(p.name)} · 100% yours`}</p>
     <div class="btns">${!h || h.founder === p.id ? '<button class="btn sm" data-a="editLogo">Edit logo</button>' : ''}${h ? `<button class="btn sm coop" data-a="tab" data-v="network">${h.div ? 'Holding and co-owners' : 'Co-owners and buy-in'}</button>` : ''}${h && h.div ? `<button class="btn sm" data-a="report" data-v="h:${h.id}${h.reports && h.reports.length ? ':0' : ':ytd'}">Annual report</button>` : !h ? `<button class="btn sm" data-a="report" data-v="p:${p.id}${p.reports && p.reports.length ? ':0' : ':ytd'}">Annual report</button>` : ''}
       ${acc ? (acc.anon ? '<button class="btn sm gold" data-a="secure">Save your city</button>' : `<span class="pb-acc">${esc(acc.email)}</span><button class="linkbtn" data-a="signOut">Log out</button>`) : ''}</div>
-    ${coOwnedHTML(c, p, h)}</div></div>`;
+    ${h && h.div ? groupsHTML(c, p, h) : coOwnedHTML(c, p, h)}</div></div>`;
 }
 // companies owned together with other players: the parent company's own first, then any other coop you are in
 function coOwnedHTML(c, p, parent) {
@@ -983,6 +983,7 @@ async function onClick(e) {
       if (d.k === 'ceo') x.pid = g('hceo');
       if (d.k === 'equalize') x.mode = d.v;
       if (d.k === 'autoEq') x.on = d.v === '1';
+      if (d.k === 'move') { x.lid = g('hmv'); x.to = g('hmvto'); }
       await act('holdingPropose', x); return;
     }
     case 'reset': await B.reset(); closeModal(); gate(); return;

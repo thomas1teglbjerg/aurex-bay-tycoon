@@ -13,7 +13,9 @@ import { HOLDING as H, SALARIES, TYPES } from './content.js';
 const r2 = (v) => Math.round(v * 100) / 100;
 const r4 = (v) => Math.round(v * 10000) / 10000;
 const sum = (xs) => xs.reduce((a, b) => a + b, 0);
-export const KINDS = ['dividend', 'salary', 'bidrag', 'ceo', 'autoEq', 'equalize', 'exit', 'divBuy', 'divSell'];
+export const KINDS = ['dividend', 'salary', 'bidrag', 'ceo', 'autoEq', 'equalize', 'exit', 'divBuy', 'divSell', 'move'];
+// which part of the holding a company sits in: 'h' = the joint division, a player id = that CEO's division, null = outside
+export function sideOf(city, h, l) { if (!l || !l.owner) return null; if (l.owner.k === 'h') return l.owner.id === h.id ? 'h' : null; const p = city.players[l.owner.id]; return p && divOf(city, p) === h ? p.id : null; }
 const UNANIMOUS = ['equalize', 'autoEq'];
 
 export const isDiv = (h) => !!(h && h.div);
@@ -207,6 +209,11 @@ export function check(city, h, p, a, X) {
     case 'exit': { if (Object.keys(h.members).length < 2) return no('You are the only owner.'); return { ok: true, pr: { pid: p.id } }; }
     case 'divBuy': { const l = X.listing(a.lid); if (!l || l.owner) return no('That company is not for sale.'); if (divOf(city, p) !== h) return no('Only a CEO buys for their division.'); return { ok: true, pr: { lid: l.id, pid: p.id } }; }
     case 'divSell': { const l = X.listing(a.lid); if (!l || !l.owner || l.owner.k !== 'p' || l.owner.id !== p.id) return no('Not your company.'); return { ok: true, pr: { lid: l.id, pid: p.id } }; }
+    case 'move': {
+      const l = X.listing(a.lid), from = sideOf(city, h, l); if (!from) return no('That company is not part of the holding.');
+      const to = a.to === 'h' ? 'h' : (city.players[a.to] && divOf(city, city.players[a.to]) === h ? a.to : null); if (!to) return no('Pick a division.');
+      if (to === from) return no('It is already there.'); return { ok: true, pr: { lid: l.id, from, to } };
+    }
   }
   return no('Unknown proposal.');
 }
@@ -232,6 +239,12 @@ export function exec(city, h, pr, X) {
     case 'equalize': { const tg = eqTargets(city, h, pr.mode, X); Object.assign(h.members, tg); return pr.mode === 'nw' ? 'Stakes moved so every owner has the same net worth.' : 'Every owner now holds the same stake.'; }
     case 'exit': return exit(city, h, pr.pid, X);
     case 'divBuy': { const l = X.listing(pr.lid), p = city.players[pr.pid]; const px = l ? X.listingPrice(l) : 0; if (!l || l.owner || !p || p.cash < px) return 'Could not complete: the company is gone or the division is short.'; p.cash -= px; X.assignOwner(l, { k: 'p', id: p.id }); return `${p.name}'s division bought ${l.title || TYPES[l.type].name} for ${px} M.`; }
+    case 'move': {
+      const l = X.listing(pr.lid); if (sideOf(city, h, l) !== pr.from) return 'The company has moved or left the holding since.';
+      const to = pr.to === 'h' ? 'h' : (city.players[pr.to] && divOf(city, city.players[pr.to]) === h ? pr.to : null); if (!to) return 'That division is gone.';
+      X.handOver(l, to === 'h' ? { k: 'h', id: h.id } : { k: 'p', id: to });
+      return `${l.title || TYPES[l.type].name} in ${l.district} moved to ${to === 'h' ? 'the joint division' : `${city.players[to].name}'s division`}. It keeps its staff and stock.`;
+    }
     case 'divSell': { const l = X.listing(pr.lid), p = city.players[pr.pid]; if (!l || !l.owner || l.owner.k !== 'p' || l.owner.id !== pr.pid) return 'The company is no longer theirs.'; const v = r2(X.listingValue(l) * 0.8); p.cash += v; X.release(l); return `Sold ${l.title || TYPES[l.type].name} for ${v} M.`; }
   }
   return null;
@@ -247,6 +260,7 @@ export function label(city, pr, X) {
     case 'equalize': return pr.mode === 'nw' ? 'Equalise net worth between the owners (moves stakes)' : 'Give every owner the same stake';
     case 'exit': return `${n(pr.pid)} leaves with their division`;
     case 'divBuy': return `${n(pr.pid)}'s division buys ${ln}${l ? ` (${X.listingPrice(l)} M)` : ''}`;
+    case 'move': return `Move ${ln} from ${pr.from === 'h' ? 'the joint division' : `${n(pr.from)}'s division`} to ${pr.to === 'h' ? 'the joint division' : `${n(pr.to)}'s division`}`;
     case 'divSell': return `${n(pr.pid)}'s division sells ${ln}${l && l.owner ? ` (${r2(X.listingValue(l) * 0.8)} M)` : ''}`;
   }
   return pr.kind;

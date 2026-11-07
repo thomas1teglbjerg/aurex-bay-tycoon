@@ -2,12 +2,27 @@
 // and the annual report page (Empire › Annual report, UI.company = 'report:h:<id>' or 'report:p:<id>', ':<n>' = an older year).
 import * as E from '../supabase/functions/_shared/engine.js';
 import { HOLDING, SALARIES, TYPES } from '../supabase/functions/_shared/content.js';
-import { city, me, esc, M, dateLabel, shortDate } from './util.js';
+import { city, me, esc, M, dateLabel, shortDate, coImg, lname } from './util.js';
+import { companyRow } from './company.js';
 import { logoMark } from './brand.js';
 
 const HD = E.HD;
 const pct = (v) => `${Math.round(v * 100)}%`;
 const name = (c, id) => (c.players[id] || {}).name || '?';
+// every company in the holding, grouped: your division first, then the joint division, then the other divisions
+function groups(c, p, h) {
+  const ds = HD.divs(c, h), ceo = HD.ceo(c, h);
+  const g = [];
+  const mine = ds.find((x) => x.id === p.id); if (mine) g.push({ key: p.id, title: 'Your division', ls: E.ownedBy(c, 'p', p.id) });
+  g.push({ key: 'h', title: `Joint division · run by ${ceo === p.id ? 'you' : name(c, ceo)}`, ls: E.ownedBy(c, 'h', h.id) });
+  ds.filter((x) => x.id !== p.id).forEach((x) => g.push({ key: x.id, title: `${x.name}'s division`, ls: E.ownedBy(c, 'p', x.id) }));
+  return g;
+}
+const viewRow = (c, l) => `<button class="row" style="width:100%;text-align:left" data-a="viewCompany" data-lid="${l.id}"><span class="thumb" style="background-image:url(${coImg(l)})"></span><div class="grow"><b>${esc(lname(l))}</b><span>${esc(l.district)} · Level ${l.level}${l.upgrade ? ' → ' + l.upgrade.to : ''}</span></div><b class="num up">${M(E.listingYield(c, l, l.owner).total, true)}</b></button>`;
+const rowFor = (c, p, l) => (E.canRun(c, p.id, l) ? companyRow(l) : viewRow(c, l));
+export function groupsHTML(c, p, h) {
+  return groups(c, p, h).map((g) => `<div class="cap pb-co" style="margin-top:10px">${esc(g.title)} · ${g.ls.length}</div>${g.ls.length ? `<div class="rows">${g.ls.map((l) => rowFor(c, p, l)).join('')}</div>` : '<p class="empty" style="font-size:13px">No companies.</p>'}`).join('');
+}
 
 function voteRows(c, p, h, only) {
   const tot = E.holdingShares(h);
@@ -19,6 +34,13 @@ function voteRows(c, p, h, only) {
   }).join('');
 }
 
+function moveField(c, p, h) {
+  const gs = groups(c, p, h), all = gs.flatMap((g) => g.ls.map((l) => ({ l, g })));
+  if (!all.length) return '';
+  const dest = gs.map((g) => [g.key, g.key === 'h' ? 'Joint division' : g.key === p.id ? 'Your division' : g.title]);
+  return `<div class="field"><label for="hmv-${h.id}">Move a company to another division</label><div class="btns" style="flex-wrap:nowrap"><select id="hmv-${h.id}">${all.map(({ l, g }) => `<option value="${l.id}">${esc(lname(l))} · ${esc(g.key === 'h' ? 'joint' : g.key === p.id ? 'yours' : name(c, g.key))}</option>`).join('')}</select><select id="hmvto-${h.id}">${dest.map(([v, t]) => `<option value="${esc(v)}">${esc(t)}</option>`).join('')}</select><button class="btn" data-a="hProp" data-k="move" data-hid="${h.id}">Propose</button></div>
+    <span class="muted" style="font-size:12px">A vote of the owners. The company keeps its staff and stock; heads from the old division step down. The holding's value does not change.</span></div>`;
+}
 // the holding card on the Network tab (holdings with divisions)
 export function holdingCardHTML(c, p, h, ui) {
   const X = E.hx(c), nav = E.holdingNav(c, h), stake = E.holdingStake(c, h, p.id), ds = HD.divs(c, h), mine = HD.divOf(c, p) === h;
@@ -42,7 +64,9 @@ export function holdingCardHTML(c, p, h, ui) {
     </tbody></table></div></div>
     <div><div class="cap" style="margin-bottom:5px">Owners</div><div class="stake">${owners.map((id) => `<i style="width:${h.members[id] / tot * 100}%;background:${id === p.id ? 'var(--good)' : (c.players[id] || {}).color}" title="${esc(name(c, id))}"></i>`).join('')}</div>
       <div class="chips" style="margin-top:6px">${owners.map((id) => `<span class="chip">${esc(id === p.id ? 'You' : name(c, id))} ${pct(h.members[id] / tot)} · ${M(h.members[id] / tot * nav)}</span>`).join('')}${h.invites.map((i) => `<span class="chip muted">${esc(name(c, i.pid))} invited</span>`).join('')}</div></div>
-    ${own.length ? `<div><div class="cap" style="margin-bottom:4px">Joint division companies</div><div class="rows">${own.map((l) => `<button class="row" style="width:100%;text-align:left" data-a="open" data-lid="${l.id}"><div class="grow"><b>${esc(l.title || TYPES[l.type].name)}</b><span>${esc(l.district)} · Level ${l.level}${l.upgrade ? ' → ' + l.upgrade.to : ''}</span></div><b class="num up">${M(E.listingYield(c, l, l.owner).total, true)}</b></button>`).join('')}</div>
+    <div><div class="cap" style="margin-bottom:0">Companies in the holding</div>${groupsHTML(c, p, h)}</div>
+    ${moveField(c, p, h)}
+    ${own.length ? `<div>
       <div class="field" style="margin-top:8px"><label for="sell-${h.id}">Propose a sale</label><div class="btns" style="flex-wrap:nowrap"><select id="sell-${h.id}">${own.map((l) => `<option value="${l.id}">${esc(TYPES[l.type].name)} · ${esc(l.district)} · ${M(E.listingValue(l) * 0.8)}</option>`).join('')}</select><button class="btn danger" data-a="hsell" data-hid="${h.id}">Propose sale</button></div></div>` : ''}
     ${voteRows(c, p, h) ? `<div class="cap">Open votes</div>${voteRows(c, p, h)}` : ''}
 

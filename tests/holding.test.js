@@ -100,6 +100,20 @@ month(); month();
 assert(dv.status === 'passed' && T.life.wallet > wt && K.life.wallet > wk, 'owners who did not vote go with the board: dividend paid into private accounts');
 assert(E.annualReport(city, 'h', h.id).m0 === rep.m, 'a new financial year started');
 
+// moving a company between the joint division and the divisions keeps its staff and stock
+const jc = city.listings.filter((x) => !x.owner && !TYPES[x.type].starter).sort((a, b) => E.listingPrice(a) - E.listingPrice(b))[0]; h.treasury += E.listingPrice(jc) + 1; A('t', 'buy', { lid: jc.id, as: h.id });
+h.proposals.filter((x) => x.status === 'open' && x.kind === 'buy').forEach((x) => E.apply(city, 'k', 'holdingVote', { hid: h.id, prid: x.id, yes: true }, now));
+if (jc.owner && jc.owner.k === 'h') {
+  const ops0 = jc.ops; r = A('t', 'holdingPropose', { hid: h.id, kind: 'move', lid: jc.id, to: 'k' });
+  const mp = h.proposals.find((x) => x.kind === 'move'); if (mp && mp.status === 'open') A('k', 'holdingVote', { hid: h.id, prid: mp.id, yes: true });
+  assert(jc.owner.k === 'p' && jc.owner.id === 'k' && jc.ops === ops0 && E.canRun(city, 'k', jc), 'a joint company moves to a division by vote and keeps its ops: ' + r.msg);
+  assert(!A('t', 'holdingPropose', { hid: h.id, kind: 'move', lid: jc.id, to: 'k' }).ok, 'not to where it already is');
+  r = A('k', 'holdingPropose', { hid: h.id, kind: 'move', lid: jc.id, to: 'h' }); const mp2 = h.proposals.filter((x) => x.kind === 'move').pop(); if (mp2.status === 'open') A('t', 'holdingVote', { hid: h.id, prid: mp2.id, yes: true });
+  assert(jc.owner.k === 'h', 'and back to the joint division');
+} else console.log('skip: joint purchase pending');
+const outside = city.listings.find((x) => x.owner && x.owner.k === 'p' && city.players[x.owner.id].bot);
+if (outside) assert(!A('t', 'holdingPropose', { hid: h.id, kind: 'move', lid: outside.id, to: 't' }).ok, 'companies outside the holding cannot be moved');
+
 // leaving is a vote of the owners; the stake is settled against the division
 r = A('k', 'holdingLeave', { hid: h.id }); assert(r.ok && h.proposals.some((x) => x.kind === 'exit'), 'leaving is a vote of the owners: ' + r.msg);
 const xp = h.proposals.find((x) => x.kind === 'exit'); if (xp.status === 'open') A('t', 'holdingVote', { hid: h.id, prid: xp.id, yes: true });
