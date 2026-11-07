@@ -35,7 +35,8 @@ function bestYear(p) {
 export function profilePageHTML(UI, ownPid) {
   const c = city(), viewer = me(), pid = ownPid || (String(UI.company).startsWith('profile:') ? String(UI.company).slice(8) : meId()), p = c.players[pid];
   const back = ownPid ? '' : '<button class="btn sm" data-a="back">← Back</button>';
-  if (!p || p.bot) return `${back}<p class="empty">This tycoon has no profile.</p>`;
+  if (p && p.bot) return botProfileHTML(c, viewer, p, back);
+  if (!p) return `${back}<p class="empty">This tycoon has no profile.</p>`;
   if (!canView(c, viewer, pid)) return `${back}<p class="empty">Only players in ${esc(p.name)}'s network can see this profile. Send a network request from the Network tab.</p>`;
   const own = pid === viewer.id, k = p.career || { xp: {}, bx: {}, spec: {}, seats: [], st: {}, log: [] };
   const brand = E.BR.brandOf(c, pid), pic = portraitUrl(c, p), t = C.title(p), tl = C.tycoon(p), allowed = C.seatsAllowed(p);
@@ -128,3 +129,57 @@ export function selfHeadHTML(l, d, dd) {
   return `<div class="btns"><button class="btn sm navy" data-a="meHead" data-lid="${l.id}" data-dept="${d.id}" ${free ? '' : 'disabled'} title="${free ? '' : 'All your seats are taken. Step down somewhere else, or reach a higher Tycoon level.'}">Lead it yourself · level ${lv}${dd.head ? ' (replaces the head)' : ''}</button>${free ? '' : `<span class="muted" style="font-size:12.5px">You lead ${k.seats.length} of ${C.seatsAllowed(p)}</span>`}</div>`;
 }
 export { TYPES, coImg };
+
+// ---------------------------------------------------------------- rival tycoons (bots.js): who they are and where you stand with them
+// Anyone can open a rival's card. Portraits come later: for now the card shows their initials on their colour.
+const REL_LINE = {
+  Enemy: 'They want to hurt you: price wars, Gazette stories, and bids for your weakest companies (only with your yes).',
+  Rival: 'They go after the same companies, specialists, clients and auction lots as you. Beat them and you earn Influence.',
+  Cool: 'They keep their distance. A good deal or a supply contract warms them up.',
+  Neutral: 'No history yet. What you do next decides where this goes.',
+  Friendly: 'They answer your requests kindly and may offer you goods under the market price.',
+  Friend: 'They send tips, sell to you cheaply, stay out of your auctions and warn you about attacks.',
+  Ally: 'They tell you what is coming each quarter and stop other tycoons who bid for your companies.'
+};
+const MOOD = (v) => (v < 25 ? 'Desperate' : v < 45 ? 'Worried' : v < 65 ? 'Steady' : v < 80 ? 'Confident' : 'On a high');
+export function botProfileHTML(c, viewer, b, back) {
+  const k = E.BOT.card(c, b.id, viewer.id), per = k.per || { title: 'Tycoon', tag: '', bio: '', types: [], traits: [] };
+  const lv = k.lv.name, tone = k.v <= -40 ? 'bad' : k.v >= 40 ? 'good' : 'mid', pos = Math.round((k.v + 100) / 2);
+  const mine = E.ownedBy(c, 'p', b.id), dream = k.dream, dreamOwner = dream && dream.owner ? (dream.owner.k === 'p' ? (dream.owner.id === viewer.id ? 'You own it' : dream.owner.id === b.id ? 'They own it' : `Owned by ${c.players[dream.owner.id] ? c.players[dream.owner.id].name : 'someone'}`) : 'Owned by a coop') : 'For sale';
+  const sectors = [...new Set(per.types.map((t) => TYPES[t] ? TYPES[t].name : t))];
+  const mem = k.mem.map((x) => `<div class="pf-mem ${x.w < 0 ? 'neg' : x.w > 0 ? 'pos' : ''}"><span>${esc(dateLabel(x.m))}</span><b>${esc(x.t)}</b><em>${x.w > 0 ? '+' : ''}${x.w}</em></div>`).join('');
+  const notes = [k.war ? `<p class="pf-alert">Price war: their ${esc(lname(E.listing(c, k.war.blid)))} is cutting prices against your ${esc(lname(E.listing(c, k.war.lid)))}.</p>` : '', k.alliance && k.alliance.vs === viewer.id ? `<p class="pf-alert">Member of ${esc(k.alliance.name)}, an alliance against you.</p>` : '', k.eye ? `<p class="pf-note">Has an eye on ${esc(lname(k.eye))} in ${esc(k.eye.district)}.</p>` : ''].join('');
+  const card = `<article class="pf-card bot">
+    <div class="pf-hero noimg" style="--kc:${esc(b.color)}"><span class="pf-ini">${esc(ini(b.name))}</span><div class="pf-ovr rel ${tone}"><div>${k.v > 0 ? '+' : ''}${k.v}<small>${esc(lv.toUpperCase())}</small></div></div></div>
+    <div class="pf-body">
+      <div><div class="pf-k">${esc(per.title)}${per.tag ? ` · ${esc(per.tag)}` : ''}</div><h2>${esc(b.name)}</h2><div class="pf-sub">${k.alliance ? `${esc(k.alliance.name)} · ` : ''}${mine.length} compan${mine.length === 1 ? 'y' : 'ies'} · ${M(E.netWorth(c, b.id))}</div></div>
+      <p class="pf-bio">${esc(per.bio)}</p>
+      <div class="pf-band">You and ${esc(b.name.split(' ')[0])}</div>
+      <div class="pf-rel"><i><u class="${tone}" style="left:${pos}%"></u></i><div><span>Enemy</span><span>Neutral</span><span>Ally</span></div></div>
+      <p class="pf-none"><b>${esc(lv)}${k.rival && lv !== 'Rival' && lv !== 'Enemy' ? ' · still a rival' : ''}.</b> ${esc(REL_LINE[lv] || '')}</p>
+      ${notes}
+      <div class="pf-band">Character</div><div class="pf-chips">${(per.traits || []).map((t) => `<span>${esc(t)}</span>`).join('')}</div>
+      <div class="pf-band">Hunts in</div><p class="pf-none">${esc(sectors.join(', ') || '—')}</p>
+      ${dream ? `<div class="pf-seat"><div><b>Dream company: ${esc(lname(dream))}</b><span>${esc(dream.district)} · ${esc(dreamOwner)}</span></div></div>` : ''}
+      <div class="btns"><button class="btn sm gold" data-a="chat" data-id="${esc(b.id)}">Chat</button>${(viewer.net || []).includes(b.id) ? '<span class="pf-tag">In your network</span>' : `<button class="btn sm navy" data-a="netRequest" data-pid="${esc(b.id)}">Add to network</button>`}</div>
+    </div></article>`;
+  const tiles = [
+    ['Net worth', M(E.netWorth(c, b.id))],
+    ['Companies', N(mine.length)],
+    ['Mood', MOOD(k.mood)],
+    ['You beat them', N(k.w)],
+    ['They beat you', N(k.l)],
+    ['Cash', M(b.cash)],
+    ['Influence', N(b.inf || 0)],
+    ['Last move', k.react ? esc(k.react.t.replace(b.name + ' ', '')) : '—']
+  ].map(([a, x]) => `<div><span>${a}</span><b>${x}</b></div>`).join('');
+  const cos = mine.map((l) => `<button class="pf-home" data-a="open" data-lid="${l.id}"><span class="pf-hth" style="background-image:url(${coImg(l)});background-size:cover;background-position:center"></span><div><b>${esc(lname(l))}</b><span>${esc(l.district)} · Level ${l.level}</span></div><em>${M(E.listingValue(l))}</em></button>`).join('');
+  return `<div class="prof">${back}
+    <div class="pf-grid">${card}
+    <div class="pf-panel">
+      <div class="pf-tiles">${tiles}</div>
+      <div class="pf-row"><div class="pf-box"><h3>What ${esc(b.name.split(' ')[0])} remembers about you</h3>${mem || '<p class="pf-note">Nothing yet. Every auction, deal, purchase and answer is noticed.</p>'}<p class="pf-note">They keep the three biggest things. The relation slowly drifts back towards neutral.</p></div>
+        <div class="pf-box"><h3>Said to you lately</h3>${k.said ? `<blockquote class="pf-quote">“${esc(k.said.t)}”<span>${esc(dateLabel(k.said.m))}</span></blockquote>` : '<p class="pf-note">Nothing yet.</p>'}<p class="pf-note">Rivals write when they win or lose against you. Their mails are in Empire › Mail, under Tycoons.</p></div></div>
+      <div class="pf-box"><h3>Companies<small>${mine.length ? M(mine.reduce((a, l) => a + E.listingValue(l), 0)) : ''}</small></h3>${cos || '<p class="pf-note">No companies right now.</p>'}</div>
+    </div></div></div>`;
+}
