@@ -40,8 +40,9 @@ export function offer(city, p, a, ctx) {
   if ((l.ops.inv[g] || 0) < qty) return err(`Only ${Math.floor(l.ops.inv[g] || 0)} ${unit(g)} in stock.`);
   const price = r4(Number(a.price) || 0), [lo, hi] = priceRange(g);
   if (!(price >= lo - 1e-9 && price <= hi + 1e-9)) return err(`Set a price between ${Math.round(lo * 1e5) / 100} k and ${Math.round(hi * 1e5) / 100} k per ${one(g)}.`);
-  const t = city.players[a.to]; if (!t || t.id === p.id || t.bot) return err('Pick a tycoon to sell to.');
-  if (!ctx.contacts(p.id).includes(t.id)) return err('You can only sell to people in your network or your co-owners.');
+  const t = city.players[a.to]; if (!t || t.id === p.id || t.admin || (t.bot && p.bot)) return err('Pick a tycoon to sell to.');
+  // rival tycoons (bots) in your network buy too: they answer within a week
+  if (!ctx.contacts(p.id).includes(t.id) && !(t.bot && (p.net || []).includes(t.id))) return err('You can only sell to people in your network or your co-owners.');
   if (ensure(city).filter((d) => isLive(d) && d.from === p.id).length >= 12) return err('You have 12 open sales. Wait for some answers first.');
   l.ops.inv[g] -= qty; // the goods are put aside until the deal closes
   const d = { id: uid(), g, qty, price, from: p.id, lid: l.id, so: { ...l.owner }, to: t.id, m: city.m, at: city.g, due: city.g + DEALS.openWeeks * WEEK, status: 'open' };

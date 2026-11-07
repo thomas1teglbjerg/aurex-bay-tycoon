@@ -1,6 +1,6 @@
 // The Bank of Aurex as national bank: who may buy it, the bank rate, levies, the economy and the ministry
 import * as E from '../supabase/functions/_shared/engine.js';
-import { CENTRAL as C, CENTRAL_BANK } from '../supabase/functions/_shared/content.js';
+import { CENTRAL as C, CENTRAL_BANK, TYPES } from '../supabase/functions/_shared/content.js';
 const assert = (c, m) => { if (!c) { console.error('FAIL', m); process.exit(1); } console.log('ok ', m); };
 let now = 1_700_000_000_000;
 const city = E.createCity(now, { speed: 2016 });
@@ -34,7 +34,7 @@ assert(E.CB.tilt(city) > 0, 'a low rate pushes towards a boom');
 assert(city.cb.px > 1, `cheap money lifts supply prices (index ${city.cb.px})`);
 
 // credit limit changes are mailed too
-const cap0 = E.loanCap(city, B), hotel = city.listings.find((l) => !l.owner && l.type === 'hotel' && l.id !== CENTRAL_BANK);
+const cap0 = E.loanCap(city, B), hotel = city.listings.find((l) => !l.owner && l.type === 'hotel' && l.id !== CENTRAL_BANK) || city.listings.find((l) => !l.owner && !TYPES[l.type].starter && l.id !== CENTRAL_BANK && l.type !== 'newspaper'); // bots may have bought every hotel by now
 B.cash += 200; assert(A('b', 'buy', { lid: hotel.id }).ok, 'borrower buys a hotel');
 month(1);
 assert(E.loanCap(city, B) > cap0 && (B.mail || []).some((x) => x.from.n === 'Bank of Aurex' && x.subj === `Your credit limit is now ${E.loanCap(city, B)} M`), 'a higher credit limit arrives as a mail');

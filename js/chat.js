@@ -14,6 +14,11 @@ export const unreadFrom = () => CH.unread;
 export const inboxOf = (id) => (chatMe() === id ? 0 : CH.inbox[id] || 0);
 const chatMe = () => !H ? null : H.B.chatMe || H.B.self || H.B.me; // who you write as: yourself, the administrator or the test player
 const ADMIN_NAME = 'Administrator';
+// rival tycoons (bots) answer in the browser with fixed replies (E.BOT.reply); the talk is kept in this browser only
+const isBot = (id) => { const c = city(); return !!(c && c.players[id] && c.players[id].bot); };
+const BKEY = (id) => `botchat:${chatMe()}:${id}`;
+function botLoad(id) { try { return JSON.parse(localStorage.getItem(BKEY(id)) || '[]'); } catch { return []; } }
+function botSave(id, msgs) { try { localStorage.setItem(BKEY(id), JSON.stringify(msgs.slice(-60))); } catch { /* private mode */ } }
 
 // ---------------------------------------------------------------- context menu
 let items = [];
@@ -107,7 +112,7 @@ function headHTML() {
   const c = city(), id = CH.peer, adm = id === E.ADMIN_ID, p = c && (c.players[id] || (adm ? { name: ADMIN_NAME } : null)); if (!p) return '';
   const b = c.players[id] ? E.BR.brandOf(c, id) : null, col = b ? E.BR.colorHex(b.color) : adm ? '#33383f' : '#55657d';
   const shared = E.AS_IDS.includes(id), on = (H.B.online || []).find((o) => o.id === id);
-  const state = shared ? 'answers when an admin is on' : !on ? 'offline' : Date.now() - on.lastAct < 10 * 60 * 1000 ? 'active now' : 'online, inactive';
+  const state = isBot(id) ? 'rival tycoon · answers right away' : shared ? 'answers when an admin is on' : !on ? 'offline' : Date.now() - on.lastAct < 10 * 60 * 1000 ? 'active now' : 'online, inactive';
   const mine = chatMe() === E.ADMIN_ID ? ' · you write as the administrator' : chatMe() === E.TEST_ID ? ' · you write as the test player' : '';
   return `<span class="who-c${on || shared ? '' : ' idle'}${adm ? ' adm' : ''}" style="--c:${col}" aria-hidden="true">${b || adm ? symbolIcon(b ? b.sym : 'key', 22, 'rgba(255,255,255,0.32)') : ''}<b>${adm ? 'A' : esc(H.initials(p).toUpperCase())}</b></span>
     <div><b>${esc(p.name)}</b><small>${b && !adm ? esc(b.name) + ' · ' : ''}${state}${mine}</small></div>
@@ -154,6 +159,11 @@ export async function openChat(peer) {
     if (!peer) { CH.peer = null; CH.msgs = []; box.hidden = false; renderChat(true); return; }
   }
   if (!known(peer) || chatMe() !== me) return;
+  if (isBot(peer)) { // a rival tycoon: no server, fixed answers
+    if (!CH.peers.includes(peer)) CH.peers.unshift(peer);
+    CH.peer = peer; CH.msgs = botLoad(peer); box.hidden = false; clearInterval(CH.poll); renderChat(true);
+    box.querySelector('input').focus({ preventScroll: true }); return;
+  }
   if (!CH.peers.includes(peer)) CH.peers.unshift(peer);
   if (CH.peer !== peer) { CH.peer = peer; CH.msgs = []; }
   box.hidden = false; renderChat(true);
@@ -166,7 +176,7 @@ export async function openChat(peer) {
 function closeChat() { $('chat').hidden = true; CH.peer = null; CH.msgs = []; CH.peers = []; clearInterval(CH.poll); }
 const toFront = (id) => { CH.peers = [id].concat(CH.peers.filter((x) => x !== id)); };
 async function refresh() {
-  const peer = CH.peer; if (!peer || $('chat').hidden) return;
+  const peer = CH.peer; if (!peer || $('chat').hidden || isBot(peer)) return;
   const list = await H.B.chatLoad(peer); if (CH.peer !== peer) return;
   if (list.length !== CH.msgs.length || (list.length && list[list.length - 1].id !== CH.msgs[CH.msgs.length - 1].id)) { CH.msgs = list; renderChat(); }
   markRead();
@@ -177,6 +187,12 @@ function markRead() {
 }
 async function send(form) {
   const inp = form.querySelector('input'), text = inp.value.trim(), peer = CH.peer; if (!text || !peer) return;
+  if (isBot(peer)) {
+    const me = chatMe(), add = (from, body) => { const list = botLoad(peer); list.push({ id: 'b' + Date.now() + Math.random().toString(36).slice(2, 5), from, body, at: Date.now() }); botSave(peer, list); if (CH.peer === peer) { CH.msgs = list; renderChat(true); } };
+    add(me, text.slice(0, 500)); inp.value = ''; toFront(peer);
+    setTimeout(() => { const c = city(); if (c && c.players[peer]) add(peer, E.BOT.reply(c, peer, me, text)); }, 700 + Math.random() * 900);
+    return;
+  }
   const btn = form.querySelector('button'); btn.disabled = true;
   const r = await H.B.chatSend(peer, text); btn.disabled = false;
   if (!r || r.ok === false) { H.toast((r && r.msg) || 'The message was not sent.', 'bad'); return; }

@@ -211,6 +211,8 @@ export function botStep(city, p, m, ctx) {
 }
 
 // ---------------------------------------------------------------- transfer offers
+// a rival tycoon (bots.js) bids for a player's specialist
+export const bid = (city, p, tid, fee, salary, years, ctx) => offer(city, p, tid, fee, salary, years, ctx);
 function offer(city, p, tid, fee, salary, years, ctx) {
   const t = PERSON[tid], s = st(city, tid), owner = who(city, s.owner);
   if (!owner) return err('This specialist is a free agent. Sign them directly.');
@@ -220,7 +222,7 @@ function offer(city, p, tid, fee, salary, years, ctx) {
   if (p.cash < fee) return err(`You need ${fee} M in cash for the fee.`);
   if (owner.bot) {
     const v = value(city, tid);
-    if (fee >= v * (0.9 + rand() * 0.25)) return transfer(city, tid, p, fee, salary, years, ctx);
+    if (fee >= v * (0.9 + rand() * 0.25)) { const r = transfer(city, tid, p, fee, salary, years, ctx); if (r.ok && !p.bot && !p.coop && ctx.onPoach) ctx.onPoach(city, owner, p, tid, t.name); return r; }
     return err(`${owner.name} turns it down. They value ${t.name} at about ${r2(v)} M.`);
   }
   if (city.tOffers.some((o) => o.tid === tid && o.from === p.id && o.status === 'open')) return err('You already have an offer on the table.');

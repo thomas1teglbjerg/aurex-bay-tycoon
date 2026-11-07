@@ -24,8 +24,8 @@ export const mails = (p = me()) => (p && p.mail) || [];
 export const unread = (p = me()) => mails(p).filter((x) => !isRead(x)).length;
 export const toAnswer = (p = me()) => mails(p).filter(ML.isOpen).length;
 
-const FOLDERS = [['all', 'Inbox'], ['open', 'To answer'], ['staff', 'Staff'], ['spec', 'Specialists'], ['news', 'Gazette']];
-const inFolder = (x, f) => f === 'open' ? ML.isOpen(x) : f === 'staff' ? !x.from.tid && x.kind !== 'news' && !x.from.k : f === 'spec' ? !!x.from.tid : f === 'news' ? x.kind === 'news' : true;
+const FOLDERS = [['all', 'Inbox'], ['open', 'To answer'], ['staff', 'Staff'], ['spec', 'Specialists'], ['bots', 'Tycoons'], ['news', 'Gazette']];
+const inFolder = (x, f) => f === 'open' ? ML.isOpen(x) : f === 'staff' ? !x.from.tid && x.kind !== 'news' && !x.from.k : f === 'spec' ? !!x.from.tid : f === 'bots' ? x.from.k === 'bot' : f === 'news' ? x.kind === 'news' : true;
 
 const COLS = ['#2f6fb0', '#23905a', '#8e44ad', '#c0392b', '#b7950b', '#16a085', '#d35400', '#5d6d7e'];
 const hue = (s) => { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return COLS[h % COLS.length]; };
@@ -36,6 +36,7 @@ function face(x, cls = '') {
   if (x.kind === 'news' || f.k === 'press') return `<span class="mface gz ${cls}">G</span>`;
   if (f.k === 'city') return `<span class="mface city ${cls}">✦</span>`;
   if (f.k === 'bank') return `<span class="mface bank ${cls}">BA</span>`;
+  if (f.k === 'bot') return `<span class="mface ini ${cls}" style="--mc:${esc(f.c || hue(f.n))}">${esc(initials(f.n))}</span>`;
   return `<span class="mface ini ${cls}" style="--mc:${hue(f.n)}">${esc(initials(f.n))}</span>`;
 }
 const when = (x) => `${dateLabel(x.m)}${x.g != null ? ` · W${(Math.floor(x.g * 48 + 1e-6) % 4) + 1}` : ''}`;
