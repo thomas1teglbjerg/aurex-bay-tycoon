@@ -126,8 +126,10 @@ r = A('t', 'holdingLeave', { hid: h.id }); assert(r.ok && !city.holdings[h.id] &
 const c2 = E.createCity(now, { speed: 2016 });
 E.addPlayer(c2, 'a', null, now, { first: 'Anna', last: 'Berg' }); E.addPlayer(c2, 'b', null, now, { first: 'Bo', last: 'Berg' });
 const old = { id: 'hold1', name: 'Old Partners', members: { a: 10, b: 10 }, founder: 'a', treasury: 20, settledG: c2.g, accrued: 0, payout: 0.5, proposals: [], invites: [], createdM: 0, hist: [], color: '#333', parent: true, brand, buyIn: 10, open: true };
+E.addPlayer(c2, 'c', null, now, { first: 'Cai', last: 'Berg' }); c2.players.c.cash = 15; c2.players.c.co = { name: 'Cai Group', ...brand, hid: null, m: 0 }; old.members.c = 5;
 c2.holdings.hold1 = old; c2.players.a.co = { hid: 'hold1', m: 0 }; c2.players.b.co = { hid: 'hold1', m: 0 }; c2.players.a.cash = 30; c2.players.b.cash = 10;
 E.advance(c2, now + 1000);
 assert(old.div && old.payout === 0 && old.members.a > old.members.b && old.members.b > 10, `older holding migrated: stakes ${Math.round(old.members.a)} / ${Math.round(old.members.b)}`);
-assert(near(E.holdingNav(c2, old), 20 + c2.players.a.cash + c2.players.b.cash, 0.5) && c2.players.a.mail.some((x) => /one holding/.test(x.subj)), 'NAV includes both empires and the owners get a mail');
+assert(near(E.holdingNav(c2, old), 20 + c2.players.a.cash + c2.players.b.cash + c2.players.c.cash, 0.5) && c2.players.a.mail.some((x) => /one holding/.test(x.subj)), 'NAV includes both empires and the owners get a mail');
+assert(c2.players.c.co.hid === 'hold1' && HD.divs(c2, old).length === 3 && c2.players.c.mail.some((x) => /division of/.test(x.subj)), 'a co-owner with their own parent company is brought in as a division too');
 console.log('holding ok');

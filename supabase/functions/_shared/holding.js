@@ -47,20 +47,22 @@ export const price = (city, h, X) => { const t = shares(h), n = nav(city, h, X);
 export function lentBy(city, pid) { return sum(Object.values(city.holdings || {}).map((h) => (h.oloans || {})[pid] || 0)); }
 
 // ---------------------------------------------------------------- setting up
-function fields(city, h) {
+function fields(city, h, p0) {
   h.div = 1; h.ceo = h.ceo || h.founder; h.bidrag = h.bidrag ?? H.bidrag; h.iloans = h.iloans || {}; h.oloans = h.oloans || {}; h.owe = h.owe || {};
-  h.reports = h.reports || []; h.autoEq = !!h.autoEq; h.payout = 0; h.ga = h.ga ?? -1;
+  h.mig2 = h.mig2 || (p0 ? 1 : 0); h.reports = h.reports || []; h.autoEq = !!h.autoEq; h.payout = 0; h.ga = h.ga ?? -1;
 }
 // a new co-owned parent company: the founder's whole empire comes in at a share price of 1 M
 export function init(city, h, p, X) {
-  fields(city, h);
+  fields(city, h, p);
   if (p) h.members[p.id] = r4(h.treasury + Math.max(0, empire(city, p, X).value));
   h.yr = newYear(city, h, X);
 }
 // older co-owned parent companies become holdings with divisions: every owner's empire moves in at today's share price
 export function migrate(city, X) {
   Object.values(city.holdings || {}).forEach((h) => {
-    if (h.div || !h.parent || h.bot) return;
+    // once: co-owners who ran their own parent company next to their stake bring their empire in too
+    const mig2 = () => { if (h.div && !h.mig2 && !h.bot) { h.mig2 = 1; Object.keys(h.members).map((id) => city.players[id]).filter((p) => p && !p.bot && !p.admin && !(p.co && p.co.hid)).forEach((p) => merge(city, p, h, X, true)); } };
+    if (h.div || !h.parent || h.bot) { mig2(); return; }
     const t = shares(h), n0 = nav(city, h, X), px = t > 0 && n0 > 0 ? n0 / t : 1;
     const ds = divs(city, h).filter((p) => !p.admin);
     fields(city, h);
@@ -71,6 +73,7 @@ export function migrate(city, X) {
         `All divisions share one account and one set of books. Your stake is now ${Math.round(stake(h, p.id) * 100)}% of the whole holding (${r2(nav(city, h, X))} M), and your net worth follows it.`,
         `${Math.round(h.bidrag * 100)}% of each division's monthly profit goes to the central account. It pays CEO salaries, and the owners decide on dividends at the annual meeting.`,
         'The books close at New Year with an annual report. See Network › your holding.'].join('\n'), go: 'network' }));
+    mig2();
   });
 }
 function newYear(city, h, X) {
@@ -87,13 +90,14 @@ export function join(city, h, p, amt, X) {
   if (h.yr) { h.yr.v0[p.id] = empire(city, p, X).value; h.yr.sh0[p.id] = h.yr.sh0[p.id] || 0; flow(h, p.id, 'dep', amt); }
 }
 // a tycoon who already runs their own parent company brings their empire into a holding
-export function merge(city, p, h, X) {
+export function merge(city, p, h, X, auto) {
   if (!h.div) return { ok: false, msg: 'That holding does not take empires.' };
   if (divOf(city, p)) return { ok: false, msg: 'Your empire is already part of a holding.' };
-  if (!h.open && !h.invites.some((i) => i.pid === p.id)) return { ok: false, msg: `${h.name} only takes invited owners.` };
+  if (h.members[p.id] == null && !h.open && !h.invites.some((i) => i.pid === p.id)) return { ok: false, msg: `${h.name} only takes invited owners.` };
   const v = empire(city, p, X).value; if (v <= 0) return { ok: false, msg: 'Your empire owes more than it owns. Pay down your loans first.' };
   const px = price(city, h, X); h.members[p.id] = r4((h.members[p.id] || 0) + v / px); h.invites = h.invites.filter((i) => i.pid !== p.id);
   p.co = { hid: h.id, m: city.m };
+  if (auto) X.mail(p, { kind: 'info', from: { n: h.name, r: 'Board', k: 'coop' }, subj: `Your empire is now a division of ${h.name}`, body: [`You owned part of ${h.name} and ran your own parent company next to it. Your empire is now your division of ${h.name}, and you are its CEO. You run it from the Empire tab as before.`, `Your stake is now ${Math.round(stake(h, p.id) * 100)}% of the whole holding.`].join('\n'), go: 'network' });
   if (h.yr) { h.yr.v0[p.id] = v; h.yr.sh0[p.id] = h.yr.sh0[p.id] || 0; }
   divs(city, h).filter((x) => x.id !== p.id).forEach((x) => X.feed(x, `${p.name} brought their empire into ${h.name}`, `Worth ${r2(v)} M. Their stake: ${Math.round(stake(h, p.id) * 100)}%.`, 'good'));
   return { ok: true, msg: `Your empire is now a division of ${h.name}. Your stake: ${Math.round(stake(h, p.id) * 100)}%.` };
