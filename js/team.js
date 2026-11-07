@@ -15,7 +15,7 @@ function meter(label, v, bad) { const lvl = bad ? (v > 75 ? 'bad' : v > 55 ? 'wa
 const moodChip = (s) => { const m = T.mood(s); const cls = /notice|Burned|burnout|Unhappy/.test(m) ? 'bad' : /Bored/.test(m) ? 'warn' : /Thriving/.test(m) ? 'good' : ''; return `<span class="chip ${cls}">${esc(m)}</span>`; };
 
 // the coops I co-own that can hire (a human coop); the employer a specialist card acts for
-const myCoops = (c, p) => E.myHoldings(c, p.id).filter((h) => !h.bot);
+const myCoops = (c, p) => E.myHoldings(c, p.id).filter((h) => !h.bot && !h.div); // holdings with divisions hire through the divisions
 const whoName = (c, p, id) => { const o = T.who(c, id); return !o ? '?' : o.id === p.id ? 'You' : o.name; };
 const cattr = (emp) => (emp && emp.coop ? ` data-coop="${emp.id}"` : '');
 function employerFor(c, p, st) {

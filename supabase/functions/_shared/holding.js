@@ -57,12 +57,26 @@ export function init(city, h, p, X) {
   if (p) h.members[p.id] = r4(h.treasury + Math.max(0, empire(city, p, X).value));
   h.yr = newYear(city, h, X);
 }
+// a holding with divisions has no team of its own: its specialists move to the division whose company they lead,
+// otherwise to the joint division's CEO (or any division with that role open); same contract, the division pays
+export function handTeam(city, h, X) {
+  if (!h.div || h.bot || !city.talent) return;
+  X.team(h).forEach((tid) => {
+    const t = X.person(tid), a = h.assign && h.assign[t.kind], l = a ? X.listing(a.lid) : null;
+    const lead = l && l.owner && l.owner.k === 'p' && divOf(city, city.players[l.owner.id]) === h ? city.players[l.owner.id] : null;
+    const boss = city.players[ceo(city, h)];
+    const order = [lead, boss && divOf(city, boss) === h ? boss : null, ...divs(city, h)].filter(Boolean);
+    const to = order.find((p) => !(p.team && p.team[t.kind]));
+    if (to && X.handSpec(tid, to, !!lead && to === lead)) X.mail(to, { kind: 'info', from: { n: t.name, r: 'Specialist', k: 'coop' }, subj: `I now work for your division`, body: `${h.name} no longer keeps its own team, so my contract moved to your division on the same terms. Your division pays my salary from now on.${lead && to === lead ? ' I keep leading the company I ran.' : ' Put me at the head of one of your departments.'}`, go: 'empire' });
+    else X.dropSpec(tid, null);
+  });
+}
 // older co-owned parent companies become holdings with divisions: every owner's empire moves in at today's share price
 export function migrate(city, X) {
   Object.values(city.holdings || {}).forEach((h) => {
     // once: co-owners who ran their own parent company next to their stake bring their empire in too
     const mig2 = () => { if (h.div && !h.mig2 && !h.bot) { h.mig2 = 1; Object.keys(h.members).map((id) => city.players[id]).filter((p) => p && !p.bot && !p.admin && !(p.co && p.co.hid)).forEach((p) => merge(city, p, h, X, true)); } };
-    if (h.div || !h.parent || h.bot) { mig2(); return; }
+    if (h.div || !h.parent || h.bot) { mig2(); handTeam(city, h, X); return; }
     const t = shares(h), n0 = nav(city, h, X), px = t > 0 && n0 > 0 ? n0 / t : 1;
     const ds = divs(city, h).filter((p) => !p.admin);
     fields(city, h);
