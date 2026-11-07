@@ -49,20 +49,23 @@ assert(!E.apply(city, 'u4', 'coJoin', { hid: h.id }, now).ok, 'a closed parent n
 E.apply(city, 'u2', 'holdingInvite', { hid: h.id, pid: 'u4' }, now);
 assert(E.apply(city, 'u4', 'coJoin', { hid: h.id, amt: 9 }, now).ok, 'invited players can always be added with a buy-in');
 r = E.apply(city, 'u4', 'holdingLeave', { hid: h.id }, now);
-assert(r.ok && BR.needsParent(city, 'u4'), 'leaving the parent means founding or joining a new one: ' + r.msg);
+assert(r.ok && !BR.needsParent(city, 'u4'), 'leaving a holding is a vote of the owners: ' + r.msg);
+h.proposals.filter((x) => x.status === 'open' && x.kind === 'exit').forEach((x) => Object.keys(h.members).forEach((pid) => E.apply(city, pid, 'holdingVote', { hid: h.id, prid: x.id, yes: true }, now)));
+assert(BR.needsParent(city, 'u4'), 'after the vote they found or join a new parent company');
 
 // co-owners run their coop's companies themselves, paid from the treasury
 const h2 = Object.values(city.holdings).find((x) => x.name === 'Northgate Capital');
 h2.treasury += 30;
 const free = city.listings.filter((l) => !l.owner).sort((a, b) => E.listingPrice(a) - E.listingPrice(b))[0];
 r = E.apply(city, 'u2', 'buy', { lid: free.id, as: h2.id }, now);
+h2.proposals.filter((x) => x.status === 'open' && x.kind === 'buy').forEach((x) => E.apply(city, 'u3', 'holdingVote', { hid: h2.id, prid: x.id, yes: true }, now));
 if (free.owner && free.owner.k === 'h') {
-  assert(!free.ops.managed && E.canRun(city, 'u3', free) && E.canSeeCompany(city, 'u3', free), 'every co-owner can open and run the coop company');
+  assert(!free.ops.managed && E.canRun(city, 'u2', free) && !E.canRun(city, 'u3', free) && E.canSeeCompany(city, 'u2', free), 'the CEO of the joint division runs the holding\'s own company');
   assert(!E.canRun(city, 'u1', free), 'outsiders cannot run it');
   assert(Object.keys(free.ops.depts).join() === 'ops' && free.ops.depts.ops.w === 0, 'a new coop company starts empty');
-  const t0 = h2.treasury, c3 = city.players.u3.cash;
-  r = E.apply(city, 'u3', 'workers', { lid: free.id, dept: 'ops', delta: 1 }, now);
-  assert(r.ok && h2.treasury < t0 && city.players.u3.cash === c3, 'hiring is paid from the coop treasury: ' + (r.msg || 'ok'));
+  const t0 = h2.treasury, c3 = city.players.u2.cash;
+  r = E.apply(city, 'u2', 'workers', { lid: free.id, dept: 'ops', delta: 1 }, now);
+  assert(r.ok && h2.treasury < t0 && city.players.u2.cash === c3, 'hiring is paid from the coop treasury: ' + (r.msg || 'ok'));
   // selling a coop company is a vote of the owners; the money goes to the treasury
   const t1 = h2.treasury, v = E.listingValue(free) * 0.8;
   r = E.apply(city, 'u3', 'sell', { lid: free.id }, now);

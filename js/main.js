@@ -18,6 +18,7 @@ import { openMixer } from './mixer.js';
 import { dealsToDo, dealsNeedingMe, newDealHTML, deliveryRun, DUI, RUN_S } from './deals.js';
 import { mailBoxHTML, mailPageHTML, mails, isRead as mailRead, markRead } from './mail.js';
 import { profilePageHTML, portraitUrl, canView } from './profile.js';
+import { holdingCardHTML, reportPageHTML } from './holding.js';
 import { authHTML, avatarHTML, passwordHTML, secureHTML, foundHTML, foundPreview, newFound } from './onboard.js';
 
 const ECON_COL = { Boom: '#23905a', Stable: '#2f6fb0', Recession: '#d08a1e', Crisis: '#c0392b' };
@@ -522,7 +523,7 @@ function renderPanel() {
   if (UI.tab === 'map' || !me()) return;
   const el = $('panel'), st = el.scrollTop, active = document.activeElement && el.contains(document.activeElement) && document.activeElement.tagName === 'INPUT';
   if (active) return; // never wipe a field someone is typing in
-  const html = UI.tab === 'empire' && String(UI.company || '').startsWith('mail') ? mailPageHTML(UI, !!B.admin) : UI.tab === 'network' && String(UI.company || '').startsWith('profile:') ? profilePageHTML(UI) : (UI.tab === 'empire' || UI.tab === 'network') && UI.company ? companyHTML(UI.company, UI) : { empire: empireHTML, market: marketHTML, network: () => coopHTML() + networkHTML(), life: () => lifeHTML(UI) }[UI.tab]();
+  const html = UI.tab === 'empire' && String(UI.company || '').startsWith('mail') ? mailPageHTML(UI, !!B.admin) : UI.tab === 'empire' && String(UI.company || '').startsWith('report:') ? reportPageHTML(UI) : UI.tab === 'network' && String(UI.company || '').startsWith('profile:') ? profilePageHTML(UI) : (UI.tab === 'empire' || UI.tab === 'network') && UI.company ? companyHTML(UI.company, UI) : { empire: empireHTML, market: marketHTML, network: () => coopHTML() + networkHTML(), life: () => lifeHTML(UI) }[UI.tab]();
   el.innerHTML = `<div class="panel-in">${html}</div>`;
   applyCollapsed(el);
   el.scrollTop = st; liveUpdate();
@@ -615,6 +616,7 @@ function networkHTML() {
 function coopHTML() {
   const c = city(), p = me(), mineH = E.myHoldings(c, p.id), invites = Object.values(c.holdings).filter((h) => h.invites.some((i) => i.pid === p.id));
   const others = Object.values(c.holdings).filter((h) => !h.members[p.id]);
+  const canMerge = !p.bot && p.co && !p.co.hid && !E.HD.divOf(c, p);
   const card = (h) => {
     const r = E.rates(c, 'h', h.id), tot = E.holdingShares(h), nav = E.holdingNav(c, h), stake = E.holdingStake(c, h, p.id), ls = E.ownedBy(c, 'h', h.id);
     const members = Object.entries(h.members).map(([pid, sh]) => ({ p: c.players[pid], sh }));
@@ -640,15 +642,20 @@ function coopHTML() {
         <button class="btn danger" data-a="hleave" data-hid="${h.id}">${Object.keys(h.members).length === 1 ? 'Dissolve' : 'Sell my stake'}</button></div>
     </div></div>`;
   };
-  return `<h2 class="ph1">Network</h2><p class="lede"><b>Coop parent companies.</b> Pool money with other players in a shared parent company. Every owner holds a stake in proportion to what they put in. Purchases, sales, upgrades and dividends are decided by vote: more than half of the stakes decides at once, otherwise the majority of votes cast after one game month. Sale money goes to the treasury. Owners don't need to be online at the same time: open votes close after one game month.</p>
-    ${invites.length ? `<div class="box"><h2>Invitations<small>${invites.length}</small></h2><div class="in"><div class="rows">${invites.map((h) => `<div class="row"><div class="grow"><b>${esc(h.name)}</b><span>Value ${M(E.holdingNav(c, h))} · ${Object.keys(h.members).length} owners</span></div><button class="btn sm coop" data-a="hjoin" data-hid="${h.id}">Invest ${M(UI.coopAmt)}</button></div>`).join('')}</div></div></div>` : ''}
-    <div class="grid"><div class="col">${mineH.map((h) => card(h) + (!h.bot && c.talent ? teamBoxHTML(E.TAL.coopEmp(c, h)) : '')).join('') || '<div class="box"><div class="in"><p class="empty">You are not part of a coop yet. Found one to buy companies that are too expensive alone.</p></div></div>'}</div>
+  if (mineH.some((h) => h.div)) return `<h2 class="ph1">Network</h2><p class="lede"><b>Your holding.</b> Every owner's empire is a division, and each owner runs their own as CEO from the Empire tab. All divisions share one account and one set of books, so your net worth is your stake of the whole holding. Each division pays a share of its profit to the central account, which pays the CEO salaries. The books close every New Year with an annual report and an annual meeting. Votes are by stake: more than half decides; stake changes need every owner.</p>${coopBody()}`;
+  return coopBody(true);
+  function coopBody(lede) {
+  return `${lede ? `<h2 class="ph1">Network</h2><p class="lede"><b>Coop parent companies.</b> Pool money with other players in a shared parent company. Every owner holds a stake in proportion to what they put in. Purchases, sales, upgrades and dividends are decided by vote: more than half of the stakes decides at once, otherwise the majority of votes cast after one game month. Sale money goes to the treasury. Owners don't need to be online at the same time: open votes close after one game month.</p>` : ''}
+    ${invites.length ? `<div class="box"><h2>Invitations<small>${invites.length}</small></h2><div class="in"><div class="rows">${invites.map((h) => `<div class="row"><div class="grow"><b>${esc(h.name)}</b><span>Value ${M(E.holdingNav(c, h))} · ${Object.keys(h.members).length} owners</span></div>${h.div && canMerge ? `<button class="btn sm gold" data-a="coMerge" data-hid="${h.id}">Bring my empire in</button>` : ''}<button class="btn sm coop" data-a="hjoin" data-hid="${h.id}">Invest ${M(UI.coopAmt)}</button></div>`).join('')}</div></div></div>` : ''}
+    <div class="grid"><div class="col">${mineH.map((h) => (h.div ? holdingCardHTML(c, p, h, UI) : card(h)) + (!h.bot && c.talent ? teamBoxHTML(E.TAL.coopEmp(c, h)) : '')).join('') || '<div class="box"><div class="in"><p class="empty">You are not part of a coop yet. Found one to buy companies that are too expensive alone.</p></div></div>'}</div>
+    ${B.admin ? '<div class="box"><div class="in"><button class="btn sm" data-a="closeBooks">Admin: close the books now (annual reports + meetings)</button></div></div>' : ''}
     <div class="col">
       <div class="box"><h2>Found a coop</h2><div class="in"><div class="field"><label for="coop-name">Name</label><input id="coop-name" maxlength="32" placeholder="Harbor Row Capital" autocomplete="off"></div>
         <div class="btns" style="align-items:center"><span class="cap">Your capital</span><div class="stepper"><button data-a="camt" data-v="-5" aria-label="Less">−</button><output class="num">${M(UI.coopAmt)}</output><button data-a="camt" data-v="5" aria-label="More">+</button></div></div>
         <button class="btn coop" data-a="hcreate" ${p.cash < UI.coopAmt ? 'disabled' : ''}>Found coop with ${M(UI.coopAmt)}</button></div></div>
-      <div class="box"><h2>Other coops in the city<small>${others.length}</small></h2><div class="in">${others.length ? `<div class="rows">${others.map((h) => `<div class="row">${logoMark(E.BR.holdingBrand(h), 32)}<div class="grow"><b>${esc(h.name)}</b><span>${Object.keys(h.members).map((pid) => esc(c.players[pid]?.name)).join(', ')} · value ${M(E.holdingNav(c, h))}</span>${h.open ? `<span>Open for buy-in from ${M(h.buyIn || E.BR.MIN_STAKE)}</span>` : ''}</div>${h.open ? `<button class="btn sm coop" data-a="hbuy" data-hid="${h.id}">Buy in</button>` : ''}</div>`).join('')}</div>` : '<p class="empty">None yet.</p>'}</div></div>
+      <div class="box"><h2>Other coops in the city<small>${others.length}</small></h2><div class="in">${others.length ? `<div class="rows">${others.map((h) => `<div class="row">${logoMark(E.BR.holdingBrand(h), 32)}<div class="grow"><b>${esc(h.name)}</b><span>${Object.keys(h.members).map((pid) => esc(c.players[pid]?.name)).join(', ')} · value ${M(E.holdingNav(c, h))}</span>${h.open ? `<span>Open for buy-in from ${M(h.buyIn || E.BR.MIN_STAKE)}</span>` : ''}</div>${h.div && h.open && canMerge ? `<button class="btn sm gold" data-a="coMerge" data-hid="${h.id}" title="Your whole empire becomes a division of ${esc(h.name)} and you its CEO">Bring my empire in</button>` : h.open && !h.div ? `<button class="btn sm coop" data-a="hbuy" data-hid="${h.id}">Buy in</button>` : ''}</div>`).join('')}</div>` : '<p class="empty">None yet.</p>'}</div></div>
     </div></div>`;
+  }
 }
 
 // ---------------------------------------------------------------- modals
@@ -686,8 +693,8 @@ function parentBox(c, p) {
   const owners = h ? Object.keys(h.members).filter((id) => id !== p.id).map((id) => c.players[id]?.name).filter(Boolean) : [];
   return `<div class="box parentbox" style="--brand:${E.BR.colorHex(b.color)}"><div class="in">
     <div class="pb-logo">${logoFull(b, { size: 44 })}</div>
-    <p class="pb-sub">${h ? `Co-owned parent company · your stake ${Math.round(E.holdingStake(c, h, p.id) * 100)}%${owners.length ? ' · with ' + esc(owners.join(', ')) : ''} · buy-in ${M(h.buyIn || E.BR.MIN_STAKE)}` : `Parent company of ${esc(p.name)} · 100% yours`}</p>
-    <div class="btns">${!h || h.founder === p.id ? '<button class="btn sm" data-a="editLogo">Edit logo</button>' : ''}${h ? '<button class="btn sm coop" data-a="tab" data-v="network">Co-owners and buy-in</button>' : ''}
+    <p class="pb-sub">${h && h.div ? `Holding · you are CEO of your division · your stake ${Math.round(E.holdingStake(c, h, p.id) * 100)}% (${M(E.holdingNav(c, h) * E.holdingStake(c, h, p.id))})${owners.length ? ' · with ' + esc(owners.join(', ')) : ''}` : h ? `Co-owned parent company · your stake ${Math.round(E.holdingStake(c, h, p.id) * 100)}%${owners.length ? ' · with ' + esc(owners.join(', ')) : ''} · buy-in ${M(h.buyIn || E.BR.MIN_STAKE)}` : `Parent company of ${esc(p.name)} · 100% yours`}</p>
+    <div class="btns">${!h || h.founder === p.id ? '<button class="btn sm" data-a="editLogo">Edit logo</button>' : ''}${h ? `<button class="btn sm coop" data-a="tab" data-v="network">${h.div ? 'Holding and co-owners' : 'Co-owners and buy-in'}</button>` : ''}${h && h.div ? `<button class="btn sm" data-a="report" data-v="h:${h.id}${h.reports && h.reports.length ? ':0' : ':ytd'}">Annual report</button>` : !h ? `<button class="btn sm" data-a="report" data-v="p:${p.id}${p.reports && p.reports.length ? ':0' : ':ytd'}">Annual report</button>` : ''}
       ${acc ? (acc.anon ? '<button class="btn sm gold" data-a="secure">Save your city</button>' : `<span class="pb-acc">${esc(acc.email)}</span><button class="linkbtn" data-a="signOut">Log out</button>`) : ''}</div>
     ${coOwnedHTML(c, p, h)}</div></div>`;
 }
@@ -922,11 +929,11 @@ async function onClick(e) {
     case 'secure': UI.secureLater = false; showOb('secure'); return;
     case 'editLogo': editLogo(); return;
     case 'signOut': await B.signOut(); return;
-    case 'buy': await act('buy', { lid: d.lid }); return;
+    case 'buy': { const r = await act('buy', { lid: d.lid }); if (r && r.vote) await act('holdingPropose', { hid: E.HD.divOf(city(), me()).id, kind: 'divBuy', lid: d.lid }); return; }
     case 'cbRate': await act('cbRate', { target: Number(d.v) }); return;
     case 'cbLevy': await act('cbLevy', { sector: d.sector || null, sp: Number(d.sp) || 0, supply: d.supply || null, gp: Number(d.gp) || 0 }); return;
     case 'buyas': await act('buy', { lid: d.lid, as: d.hid }); return;
-    case 'sell': await act('sell', { lid: d.lid }); return;
+    case 'sell': { const r = await act('sell', { lid: d.lid }); if (r && r.vote) await act('holdingPropose', { hid: E.HD.divOf(city(), me()).id, kind: 'divSell', lid: d.lid }); return; }
     case 'upgrade': await act('upgrade', { lid: d.lid }); return;
     case 'hire': { const r = await act('hire', { tid: d.tid || d.id, salary: Number(d.v), years: Number(d.y), coop: d.coop }); return; }
     case 'fire': { const r = await act('fire', { tid: d.tid || d.id, coop: d.coop }); if (r && r.ok) closeModal(); return; }
@@ -966,6 +973,21 @@ async function onClick(e) {
     case 'hpayout': await act('holdingPropose', { hid: d.hid, kind: 'payout', pct: Number(d.v) }); return;
     case 'vote': await act('holdingVote', { hid: d.hid, prid: d.prid, yes: d.v === '1' }, 'Vote cast.'); return;
     case 'hleave': await act('holdingLeave', { hid: d.hid }); return;
+    case 'report': closeModal(); if (UI.tab !== 'empire') setTab('empire'); UI.company = d.v ? 'report:' + d.v : null; $('panel').scrollTop = 0; renderAll(); return;
+    case 'coMerge': await act('coMerge', { hid: d.hid }); return;
+    case 'closeBooks': { const r = await B.closeBooks(); toast(r && r.msg ? r.msg : 'Done.', r && r.ok === false ? 'bad' : 'good'); renderAll(); return; }
+    case 'hMoney': { const v = Number(($('hamt-' + d.hid) || {}).value) || 0; (UI.hAmt = UI.hAmt || {})[d.hid] = v; const to = ($('hto-' + d.hid) || {}).value; await act(d.k, { hid: d.hid, amt: v, to }); return; }
+    case 'hGive': await act('holdingGive', { hid: d.hid, to: $('hgto-' + d.hid).value, pct: Number($('hgpct-' + d.hid).value) || 0 }); return;
+    case 'hProp': {
+      const g = (id) => ($(id + '-' + d.hid) || {}).value, x = { hid: d.hid, kind: d.k };
+      if (d.k === 'dividend') x.amt = Number(g('hamt')) || 0;
+      if (d.k === 'salary') { x.pid = g('hsalp'); x.amt = Number(g('hsal')); x.bonus = Number(g('hbon')); }
+      if (d.k === 'bidrag') x.pct = Number(g('hbid'));
+      if (d.k === 'ceo') x.pid = g('hceo');
+      if (d.k === 'equalize') x.mode = d.v;
+      if (d.k === 'autoEq') x.on = d.v === '1';
+      await act('holdingPropose', x); return;
+    }
     case 'reset': await B.reset(); closeModal(); gate(); return;
     // ---- life
     case 'lifeView': { const was = UI.life.room; UI.life.view = d.v; UI.life.room = null; const pn = $('panel'), sc = pn.scrollTop; renderPanel(); const hero = document.querySelector('.lhero'), top = hero ? hero.offsetHeight - 14 : 0; pn.scrollTop = top; return; }

@@ -939,3 +939,19 @@ export const CAREER = {
 };
 // personal portraits: only the first player in the city with this avatar name gets it (img/<pic>.jpg)
 export const PORTRAITS = { 'Thomas Teglbjærg': 'p-thomas-debenhams', 'Mikkel Teglbjærg': 'p-mikkel-debenhams', 'Thomas Debenhams': 'p-thomas-debenhams', 'Mikkel Debenhams': 'p-mikkel-debenhams' };
+
+// Holdings with divisions (co-owned parent companies, holding.js): every owner's empire is a division with them as CEO.
+export const HOLDING = {
+  bidrag: 0.1,          // share of a division's monthly profit that goes to the central account by default
+  bidragMax: 0.5,
+  buyPct: 0.25,         // a CEO buys alone up to this share of the holding's value; above it the owners vote
+  sellPct: 0.1,         // ... and sells alone up to this share
+  salaryNav: 0.03,      // one CEO's salary above this share of the holding's value a year needs every owner's yes
+  salaryProfit: 0.5,    // all salaries above this share of last year's profit need every owner's yes
+  bonusMax: 0.2,        // a CEO bonus is at most 20% of the division's profit for the year
+  cashOutMeeting: 0.05, // fee when an owner sells shares back during the annual meeting
+  cashOutMid: 0.1,      // ... and at any other time
+  exitFee: 0.05,        // fee on the settlement paid to an owner who leaves with their division
+  meetingMonths: 1,     // the annual meeting stays open this long after the books close
+  reports: 8, soloReports: 4
+};
