@@ -25,4 +25,15 @@ assert(l.ops.pl.left === 0, 'the month is used up after three more weeks');
 Object.keys(rec.in).forEach((g) => { l.ops.inv[g] = 0; });
 l.ops.pl = { per, left: 1 }; const a = l.ops.inv[out] || 0;
 assert(O.makeWeek(city, {}, l, per) === 0 && (l.ops.inv[out] || 0) === a, 'no supplies in stock, no output');
+// the owner can keep the sales team off the market and list supplies by hand
+Object.entries(rec.in).forEach(([g, q]) => { l.ops.inv[g] = q * O.capacity(l) * 10; });
+if (!l.ops.depts.sales) { l.ops.depts.sales = { w: O.needWorkers(l, 'sales'), set: {}, head: null }; }
+l.ops.depts.sales.w = O.needWorkers(l, 'sales');
+assert(E.apply(city, 'u', 'deptSet', { lid: l.id, dept: 'sales', k: 'list', v: 'self' }, now).ok, 'choose to put supplies on the market yourself');
+city.book.filter((o) => o.lid === l.id).forEach((o) => O.cancelOffer(city, o)); city.book = city.book.filter((o) => o.lid !== l.id);
+l.ops.pl = { per, left: 2 }; now += week; E.advance(city, now);
+assert(!city.book.some((o) => o.lid === l.id && o.auto) && (l.ops.inv[out] || 0) > 0, 'the sales team leaves new supplies in stock');
+assert(E.apply(city, 'u', 'deptSet', { lid: l.id, dept: 'sales', k: 'list', v: 'auto' }, now).ok, 'hand it back to the sales team');
+now += week; E.advance(city, now);
+assert(city.book.some((o) => o.lid === l.id && o.auto), 'the sales team lists them again');
 console.log('all weekly tests passed');

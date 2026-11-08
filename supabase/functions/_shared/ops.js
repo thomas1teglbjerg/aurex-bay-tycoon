@@ -391,6 +391,7 @@ export function makeWeek(city, ctx, l, per) {
 export function autoSell(city, ctx, l) {
   const o = l.ops, rec = RECIPES[l.type]; const a = automation(l, 'sales');
   if (!Object.keys(rec.out).length || a <= 0) return;
+  if (!o.managed && setting(l, 'sales', 'list') === 'self') return; // the owner lists supplies by hand
   city.book.filter((x) => x.lid === l.id && x.auto).forEach((x) => cancelOffer(city, x));
   const strat = B2B[o.managed ? 'market' : setting(l, 'sales', 'b2b')];
   Object.keys(rec.out).forEach((g) => {
