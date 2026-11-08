@@ -6,6 +6,7 @@ import { city, me, esc, coImg, M, K, N, dur, msUntilMonth, deptIcon, ICON, cropS
 import { DEPT_TINT } from './company.js';
 import { carrierPicker, shipRow } from './freight.js';
 import { money } from './life.js';
+import { siteHTML } from './build.js';
 
 const O = E.OPS, L = E.LOG;
 const YEAR_MS = 7 * 24 * 3600 * 1000;
@@ -43,7 +44,8 @@ export const MODE_LABEL = { air: 'Air cargo', sea: 'Sea freight', rail: 'Rail fr
 export function mapCrop(o) { return cropStyle(o, 2.6, 3); }
 export function warehouseHTML(id, ui) {
   const c = city(), p = me(), site = L.SITE[id], w = L.warehouse(c, id), mine = w.owner === p.id, owner = w.owner ? c.players[w.owner] : null;
-  const head = `<header class="whead" style="${site.img ? `background-image:url(${site.img});background-size:cover;background-position:center` : mapCrop(site)}"><div><span class="chip">${MODE_LABEL[site.mode]}</span><h2>${esc(site.name)}</h2><p>${esc(site.district)} · ${owner ? (mine ? 'Yours' : 'Owned by ' + esc(owner.name)) : `For sale · ${M(site.price)}`}</p></div></header>`;
+  const head = `<header class="whead" style="${site.img ? `background-image:url(${site.img});background-size:cover;background-position:center` : mapCrop(site)}"><div><span class="chip">${MODE_LABEL[site.mode]}</span><h2>${esc(site.name)}</h2><p>${esc(site.district)} · ${w.site ? 'Building plot · ' : ''}${owner ? (mine ? 'Yours' : 'Owned by ' + esc(owner.name)) : `For sale · ${M(L.whPrice(w))}`}</p></div></header>`;
+  if (w.site) return plotHTML(c, p, id, site, w, mine, head);
   const stats = `<div class="kpis sm"><div class="stat"><small>Storage</small><b class="num">${N(L.capacityOf(w))}</b><span class="sub">units</span></div><div class="stat"><small>Import price</small><b class="num">${site.importMult < 1 ? '−' : '+'}${Math.round(Math.abs(1 - site.importMult) * 100)}%</b><span class="sub">vs direct import</span></div>${(() => { const cr = E.LOG.CARRIERS_BY_SITE[id]; return cr ? `<div class="stat"><small>Partner carrier</small><b style="color:${cr.color}">${esc(cr.short)}</b><span class="sub">${esc(cr.partner.note.split(":")[0])}</span></div>` : `<div class="stat"><small>Partner carrier</small><b>None</b><span class="sub">All carriers at standard rates</span></div>`; })()}<div class="stat"><small>Upkeep</small><b class="num">${M(site.upkeep)}</b><span class="sub">per year</span></div></div>`;
   if (!mine) {
     const myCo = E.ownedBy(c, 'p', p.id);
@@ -78,5 +80,15 @@ export function warehouseHTML(id, ui) {
       : `<p class="empty">Without a logistics specialist you import, ship and export by hand. Hire Carlos Mendoza, Logistics Planner, to run auto-import, keep your companies supplied and let Procurement pull from your warehouses.</p><button class="btn gold" data-a="staff" data-id="carlos">Meet Carlos Mendoza</button>`}</div></div>
     ${ships.length ? `<div><span class="cap">On the way</span><div class="rows">${ships.map((s) => shipRow(s, gNow)).join('')}</div></div>` : ''}
     <div class="btns">${w.level < 4 ? `<button class="btn navy" data-a="whUpgrade" data-wid="${id}">Expand · ${M(L.upgradeCost(w))}</button>` : ''}<button class="btn danger" data-a="whSell" data-wid="${id}">Sell warehouse</button></div>
+  </article>`;
+}
+// a warehouse that is still a building site: buy the plot, then build it like a company (js/build.js)
+function plotHTML(c, p, id, site, w, mine, head) {
+  const price = L.whPrice(w), cap = Math.round(site.cap);
+  return `<article class="sheet wh">${head}<p>${esc(site.desc)}</p>
+    <p class="empty" style="font-size:13px">Not built yet. Built, it stores ${N(cap)} units at ${site.importMult < 1 ? '−' : '+'}${Math.round(Math.abs(1 - site.importMult) * 100)}% on imports and costs ${M(site.upkeep)} a year to run.</p>
+    ${siteHTML(w)}
+    ${!w.owner ? `<button class="btn gold" data-a="whBuy" data-wid="${id}" ${p.cash < price ? 'disabled' : ''}>Buy the plot · ${M(price)}</button>${p.cash < price ? `<p class="empty">You need ${M(price - p.cash)} more cash.</p>` : ''}`
+      : mine ? `<div class="btns"><button class="btn danger" data-a="whSell" data-wid="${id}">Sell the plot · ${M(price)}</button></div>` : ''}
   </article>`;
 }

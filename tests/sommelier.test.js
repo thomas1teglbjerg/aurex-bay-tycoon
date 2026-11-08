@@ -1,4 +1,5 @@
 // Sommeliers: two specialists who pay off in hotels, restaurants and vineyards
+import './standing.js';
 import * as E from '../supabase/functions/_shared/engine.js';
 import { SOMMELIER, VINTAGE, TYPES } from '../supabase/functions/_shared/content.js';
 const T = E.TAL;

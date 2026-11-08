@@ -1,4 +1,5 @@
 // Direct sales between tycoons: offer, carrier or seller delivery, expiry and refunds
+import './standing.js';
 import * as E from '../supabase/functions/_shared/engine.js';
 const assert = (c, m) => { if (!c) { console.error('FAIL', m); process.exit(1); } console.log('ok ', m); };
 let now = 1_700_000_000_000;

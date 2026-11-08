@@ -11,7 +11,10 @@
 //            st: 'open'|'build'|'task', tender: { turnkey, g } | null, bids: [{ id, lid, pid, price, weeks, g }],
 //            c: { by: lid | 'city', price, held, paid, g, due, weeks } | null, q: [scores], taskDue }
 // The engine hands in what it needs through ctx (no import of engine.js or ops.js here).
-import { BUILD, GOODS, RECIPES, TYPES, SIZES } from './content.js';
+import { BUILD, GOODS, RECIPES, TYPES, SIZES, WAREHOUSE_SITES } from './content.js';
+// Warehouses (city.warehouses, logistics.js) are built the same way. A warehouse has no type or size of its own:
+// its size follows its price and its fit-out is steel racking. w.owner is a player id, not { k, id }.
+const WSITE = Object.fromEntries(WAREHOUSE_SITES.map((w) => [w.id, w]));
 
 const r2 = (v) => Math.round(v * 100) / 100;
 const r4 = (v) => Math.round(v * 10000) / 10000;
@@ -23,6 +26,15 @@ export const PHASES = BUILD.phases;
 export const CITY = 'city';
 
 // ---------------------------------------------------------------- what a listing is
+export const isWh = (l) => !!l && !!WSITE[l.id];
+export const sizeOf = (l) => (isWh(l) ? (WSITE[l.id].price >= 20 ? 'L' : WSITE[l.id].price >= 10 ? 'M' : 'S') : l.size);
+export const whereOf = (l) => (isWh(l) ? WSITE[l.id].district : l.district);
+export const typeName = (l) => (isWh(l) ? 'Warehouse' : TYPES[l.type].name);
+export const what = (l) => `${SIZES[sizeOf(l)].label} ${typeName(l).toLowerCase()}`;
+// every place that can be a building site: companies and warehouses
+export const all = (city) => city.listings.concat(city.warehouses || []);
+// a plot's price: a share of the finished company, more as it rises
+export const plotPrice = (l, full) => Math.max(0.5, Math.round(full * (B.plotShare + B.siteShare * progress(l)) * 2) / 2);
 export const unbuilt = (l) => !!(l && l.site && l.site.kind === 'new');
 export const cond = (l) => (l && l.cond != null ? l.cond : 100);
 export const ruined = (l) => !!l && !unbuilt(l) && cond(l) < B.cond.ruin;
@@ -33,7 +45,10 @@ export const condLabel = (l) => { const c = cond(l); return c >= B.cond.worn ? '
 export const condMult = (l) => { if (idle(l)) return 0; const c = cond(l); return c >= B.cond.worn ? 1 : c >= B.cond.poor ? B.condMult.worn : B.condMult.poor; };
 // ... and to the price
 export const condPrice = (l) => { if (unbuilt(l)) return 1; const c = cond(l); return c >= B.cond.worn ? 1 : c >= B.cond.poor ? B.condMult.worn : c >= B.cond.ruin ? B.condMult.poor : B.ruinPrice; };
-export const isPlotId = (id) => B.plots.includes(id) || Number(String(id).slice(1)) >= B.firstPlot;
+// which sites start as plots: the car factories, everything from L42 on, every Medium and Large company but the
+// few kept standing (BUILD.keep), and every warehouse
+export const isPlot = (l) => (isWh(l) ? !!B.warehouses
+  : B.plots.includes(l.id) || Number(String(l.id).slice(1)) >= B.firstPlot || ((B.sizes || []).includes(l.size) && !(B.keep || []).includes(l.id)));
 export const isBuilder = (l) => !!l && l.type === 'construction' && !idle(l);
 export const kindName = (s) => (s.kind === 'new' ? 'New building' : s.kind === 'reno' ? 'Renovation' : `Upgrade to level ${s.to}`);
 
@@ -45,15 +60,16 @@ export const phaseIds = (s) => (s.kind === 'new' ? PHASES.map((_, i) => i) : B.p
 export const phase = (s, i = s.ph) => PHASES[phaseIds(s)[i]];
 export const phaseCount = (s) => phaseIds(s).length;
 // materials follow the company's price: a Medium company of BUILD.ref M uses the phase lists as written
-const sizeM = (l) => Math.round(TYPES[l.type].price * SIZES[l.size].mult * 2) / 2 / B.ref;
+const sizeM = (l) => (isWh(l) ? WSITE[l.id].price : Math.round(TYPES[l.type].price * SIZES[l.size].mult * 2) / 2) / B.ref;
 // the company's own main supply goes into the fit-out (steel for a car factory, chips for a data centre ...)
 export function fitGood(l) {
+  if (isWh(l)) return 'steel'; // racking
   const r = RECIPES[l.type]; const g = r && Object.keys(r.in).find((x) => !GOODS[x].mains && x !== 'energy');
   return g || 'chemicals';
 }
 // weeks of phase i (the builder's speed: the city crew is slower; a fast task saves a week of the next phase)
 export function phaseWeeks(l, s, i = s.ph, by) {
-  const p = phase(s, i); let w = B.weeks[l.size] * p.share * (s.kind === 'new' ? 1 : B.partWeeks);
+  const p = phase(s, i); let w = B.weeks[sizeOf(l)] * p.share * (s.kind === 'new' ? 1 : B.partWeeks);
   if ((by || (s.c && s.c.by)) === CITY) w *= B.city.slow;
   return Math.max(1, Math.round(w) - (i === s.ph ? s.cut || 0 : 0));
 }
@@ -93,12 +109,12 @@ export const fairFee = (l, s, fullPrice) => r2(fullPrice * B.labour * (s.kind ==
 export const cityPrice = (city, l, s, fullPrice, priceOf) => r2((materialsValue(city, l, s, priceOf) + fairFee(l, s, fullPrice) * (1 - progress(l, s))) * B.city.markup);
 // sites a construction company can run at once, and the ones it runs
 export const slots = (bl) => B.slots[bl.size] + Math.max(0, (bl.level || 1) - 1);
-export const contractsOf = (city, lid) => city.listings.filter((l) => l.site && l.site.c && l.site.c.by === lid);
+export const contractsOf = (city, lid) => all(city).filter((l) => l.site && l.site.c && l.site.c.by === lid);
 export const freeSlots = (city, bl) => slots(bl) - contractsOf(city, bl.id).length;
 export const stars = (bl) => { const s = bl.stars || []; return s.length ? Math.round(s.reduce((a, x) => a + x, 0) / s.length * 10) / 10 : null; };
 export const builders = (city) => city.listings.filter((l) => isBuilder(l) && l.owner);
-export const tenders = (city) => city.listings.filter((l) => l.site && l.site.st === 'open' && l.site.tender && l.owner);
-export const sitesOf = (city, ctx, pid) => city.listings.filter((l) => l.site && l.owner && ctx.canRun(pid, l));
+export const tenders = (city) => all(city).filter((l) => l.site && l.site.st === 'open' && l.site.tender && l.owner);
+export const sitesOf = (city, ctx, pid) => all(city).filter((l) => l.site && l.owner && ctx.canRun(pid, l));
 export const builderName = (city, ctx, s) => (!s.c ? '' : s.c.by === CITY ? B.city.name : (() => { const bl = ctx.listing(s.c.by); return bl ? ctx.name(bl) : 'the builder'; })());
 
 // ---------------------------------------------------------------- older cities: plots, car factories, wear
@@ -106,10 +122,15 @@ export function migrate(city, ctx) {
   city.listings.forEach((l) => {
     if (l.cond == null) l.cond = 100;
     if (!l.owner && l.freeSince == null) l.freeSince = city.m;
-    if (!isPlotId(l.id) || l.built || l.site) return;
+    if (!isPlot(l) || l.built || l.site) return;
     // a site that becomes a plot: its owner is bought out at full value first
     if (l.owner) ctx.buyOut(l);
     l.level = 1; l.upgrade = null; l.ops = null; l.site = newSite(l, 'new', 1);
+  });
+  (city.warehouses || []).forEach((w) => {
+    if (!isPlot(w) || w.built || w.site) return;
+    if (w.owner) ctx.whBuyOut(w);
+    w.level = 1; w.stock = {}; w.site = newSite(w, 'new', 1);
   });
 }
 // a plot or project changes owner or is sold: a running contract ends and the held money goes back
@@ -127,7 +148,7 @@ const crew = (ctx, l) => ({ n: 'Site office', r: `${ctx.name(l)}` });
 
 // ---------------------------------------------------------------- each game week
 export function weekStep(city, ctx) {
-  city.listings.forEach((l) => {
+  all(city).forEach((l) => {
     const s = l.site; if (!s) return;
     // bids run out
     s.bids = (s.bids || []).filter((b) => city.g - b.g < B.bidWeeks * WEEK - 1e-9 && ctx.listing(b.lid) && isBuilder(ctx.listing(b.lid)));
@@ -190,13 +211,13 @@ function finish(city, l, ctx) {
   if (c.by !== CITY) { const bl = ctx.listing(c.by); if (bl) { bl.stars = (bl.stars || []).concat(st).slice(-10); bl.built = (bl.built || 0) + 1; } }
   const kind = s.kind, by = builderName(city, ctx, s);
   delete l.site; l.cond = 100;
-  if (kind === 'new') { l.built = true; l.level = 1; l.newUntil = city.m + B.newMonths; ctx.opened(l); }
+  if (kind === 'new') { l.built = true; l.level = 1; if (!isWh(l)) l.newUntil = city.m + B.newMonths; ctx.opened(l); }
   if (kind === 'up') l.level = s.to;
   const what = kind === 'new' ? `${ctx.name(l)} is built and open for business` : kind === 'reno' ? `${ctx.name(l)} is renovated` : `${ctx.name(l)} reached level ${l.level}`;
-  const tail = `${by} handed it over${late ? ` ${late} week${late > 1 ? 's' : ''} late (${fine} M back to you as a late fine)` : ' on time'}.${kind === 'new' ? ` A new building earns +${Math.round(B.newBonus * 100)}% YPI its first year.` : ''}`;
+  const tail = `${by} handed it over${late ? ` ${late} week${late > 1 ? 's' : ''} late (${fine} M back to you as a late fine)` : ' on time'}.${kind === 'new' && !isWh(l) ? ` A new building earns +${Math.round(B.newBonus * 100)}% YPI its first year.` : ''}`;
   ctx.runners(l).forEach((p) => ctx.mail(p.id, { lid: l.id, from: crew(ctx, l), subj: what, body: tail, kind: 'good' }));
   if (c.by !== CITY) { const bl = ctx.listing(c.by); if (bl) ctx.runners(bl).forEach((p) => ctx.mail(p.id, { lid: bl.id, from: crew(ctx, l), subj: `Handed over: ${ctx.name(l)}`, body: `The job is done. ${r2(c.paid)} M paid in all${fine ? `, less a late fine of ${fine} M` : ''}. The developer's rating: ${'★'.repeat(st)}${'☆'.repeat(5 - st)}.`, kind: 'good' })); }
-  if (kind === 'new') ctx.news(`${ctx.name(l)} opens`, `${by} finished the new ${TYPES[l.type].name.toLowerCase()} in ${l.district}.`, 'good');
+  if (kind === 'new') ctx.news(`${ctx.name(l)} opens`, `${by} finished the new ${typeName(l).toLowerCase()} in ${whereOf(l)}.`, 'good');
 }
 function endContract(city, l, ctx, why) {
   const s = l.site, c = s.c; if (!c) return;
@@ -224,7 +245,7 @@ export function act(city, p, action, a, ctx) {
   const l = ctx.listing(a.lid); if (!l) return err('Unknown site.');
   const own = ctx.canRun(p.id, l);
   if (action === 'siteRenovate') {
-    if (!own) return err('You do not run this company.');
+    if (!own || isWh(l)) return err('You do not run this company.');
     if (l.site) return err('Work is already planned here.'); if (l.upgrade) return err('An upgrade is running.');
     if (cond(l) >= B.renoBelow) return err(`Nothing to renovate yet: condition ${Math.round(cond(l))}%.`);
     l.site = newSite(l, 'reno', B.reno[0] + B.reno[1] * (1 - cond(l) / 100));
@@ -238,7 +259,7 @@ export function act(city, p, action, a, ctx) {
       if (!own) return err('Only the developer asks for bids.'); if (s.c) return err('A builder is already on site.');
       s.tender = { turnkey: !!a.turnkey, g: city.g }; s.bids = [];
       const bs = builders(city).filter((x) => freeSlots(city, x) > 0);
-      bs.forEach((x) => ctx.runners(x).forEach((r) => ctx.mail(r.id, { lid: x.id, web: siteUrl(l), from: { n: p.name, r: `${ctx.name(l)} · aurexbuild.ab`, k: 'player', pid: p.id }, subj: `Call for bids: ${kindName(s).toLowerCase()} in ${l.district}`, body: `${ctx.name(l)} (${SIZES[l.size].label}) needs a builder: ${kindName(s).toLowerCase()}, ${totalWeeks(l, s)} weeks of work. ${s.tender.turnkey ? 'Turnkey: the builder brings the supplies.' : 'Labour only: the developer brings the supplies.'} Send your price on the site page.`, kind: 'info' })));
+      bs.forEach((x) => ctx.runners(x).forEach((r) => ctx.mail(r.id, { lid: x.id, web: siteUrl(l), from: { n: p.name, r: `${ctx.name(l)} · aurexbuild.ab`, k: 'player', pid: p.id }, subj: `Call for bids: ${kindName(s).toLowerCase()} in ${whereOf(l)}`, body: `${ctx.name(l)} (${SIZES[sizeOf(l)].label}${isWh(l) ? ' warehouse' : ''}) needs a builder: ${kindName(s).toLowerCase()}, ${totalWeeks(l, s)} weeks of work. ${s.tender.turnkey ? 'Turnkey: the builder brings the supplies.' : 'Labour only: the developer brings the supplies.'} Send your price on the site page.`, kind: 'info' })));
       return ok(bs.length ? `Call for bids sent to ${bs.length} construction compan${bs.length > 1 ? 'ies' : 'y'}.` : 'Call for bids posted on aurexbuild.ab. No construction company has a free crew right now: the city crew can always take it.');
     }
     case 'siteCancel': { if (!own) return err('Not your site.'); s.tender = null; s.bids = []; return ok('Call for bids withdrawn.'); }

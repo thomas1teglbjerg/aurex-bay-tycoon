@@ -227,7 +227,7 @@ export function onWorld(city, card, ctx) {
     if (how === 'buyDip' && b.cash > 8) { const ids = STOCKS.slice().sort(() => Math.random() - 0.5).slice(0, 2).map((x) => x.id); ids.forEach((id) => ctx.trade(b, id, 3 + Math.floor(Math.random() * 4))); t = `${b.name} buys the dip`; }
     if (how === 'sellStocks') { const ks = Object.keys(b.shares || {}); if (ks.length) { ks.forEach((k) => ctx.trade(b, k, -b.shares[k])); t = `${b.name} sells off the whole stock portfolio`; } }
     if (how === 'buyStocks' && b.cash > 10) { const top = Object.entries(card.shock || {}).sort((x, y) => y[1] - x[1])[0]; if (top && top[1] > 0) { ctx.trade(b, top[0], 3 + Math.floor(Math.random() * 4)); t = `${b.name} bets on ${STOCKS.find((x) => x.id === top[0]).name}`; } }
-    if (how === 'power') { const l = city.listings.find((x) => !x.owner && x.type === 'power' && ctx.price(x) <= b.cash - 2); if (l) { b.cash -= ctx.price(l); ctx.assign(l, b); t = `${b.name} buys ${co(l)} as energy runs short`; } }
+    if (how === 'power') { const l = city.listings.find((x) => !x.owner && x.type === 'power' && !ctx.reserved(x) && ctx.price(x) <= b.cash - 2); if (l) { b.cash -= ctx.price(l); ctx.assign(l, b); t = `${b.name} buys ${co(l)} as energy runs short`; } }
     if (t) { s.react = { m: city.m, t }; if (Math.random() < 0.6) ctx.news(t, `"${card.title}? I saw it coming," says ${first(b)}.`, 'info', { who: b.id }); }
   });
 }

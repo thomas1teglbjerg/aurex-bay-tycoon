@@ -635,6 +635,9 @@ export const ROADS = { id: 'roads', name: 'City Road Maintenance', role: 'Aurex 
 export const BUILD = {
   firstPlot: 42,                       // listings from L42 on start as building plots
   plots: ['L10', 'L12'],               // older sites turned into plots: the car factories
+  sizes: ['M', 'L'],                   // every Medium and Large company starts as a plot ...
+  keep: ['L7', 'L13', 'L33', 'L37', 'L39'], // ... except these, standing from day one: Harbor Row steel works (L), Bank of Aurex, The Aurex Gazette, Bayside Concrete, Aurex City PowerPlant
+  warehouses: true,                    // every warehouse starts as a plot too (built like a company, priced by the warehouse)
   plotShare: 0.25,                     // a plot costs this share of the company's price ...
   siteShare: 0.6,                      // ... plus this share for the part already built
   weeks: { S: 12, M: 34, L: 48 },      // game weeks for a new building at full supply (S 3 game months, M ≈ 5 real days, L ≈ 7)

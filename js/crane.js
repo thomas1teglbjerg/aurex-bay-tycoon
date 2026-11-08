@@ -95,7 +95,7 @@ function onKey(e) { if (CR && !CR.done && (e.code === 'Space' || e.key === ' '))
 export function closeCrane() { if (CR) cancelAnimationFrame(CR.raf); CR = null; document.removeEventListener('keydown', onKey); const el = document.getElementById('crane'); if (el) el.remove(); }
 
 export function openCrane(lid, act) {
-  const l = E.listing(city(), lid), s = l && l.site; if (!s || s.st !== 'task') return false;
+  const l = E.siteOf(city(), lid), s = l && l.site; if (!s || s.st !== 'task') return false;
   closeCrane(); css();
   const ph = E.BLD.phase(s);
   CR = { lid, act, phase: ph.id, title: ph.task, verb: ph.verb, i: 0, scores: [], tol: 0.06, done: false };

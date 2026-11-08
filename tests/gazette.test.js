@@ -1,4 +1,5 @@
 // The Aurex Gazette as a company: ad desk, press releases, the front page and the administrator's house ad
+import './standing.js';
 import * as E from '../supabase/functions/_shared/engine.js';
 import { PAPER, HOUSE_AD } from '../supabase/functions/_shared/content.js';
 const assert = (c, m) => { if (!c) { console.error('FAIL', m); process.exit(1); } console.log('ok ', m); };
