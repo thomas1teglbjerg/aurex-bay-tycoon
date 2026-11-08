@@ -27,8 +27,10 @@ const chip = (d) => `<span class="chip ${d >= 0 ? 'good' : 'bad'}">${P(d)}</span
 
 // images. Missing files simply fall through to the next layer.
 
+// Bump HOME_V when home pictures in img/h*-*.jpg are added or replaced: /img (also a 404) is cached as immutable for a week.
+export const HOME_V = 2;
 export function homeBg(hid, room) {
-  const def = L.HOME[hid], own = `url(img/${def.img}-${room === 'living' ? 'living' : room}.jpg)`;
+  const def = L.HOME[hid], own = `url(img/${def.img}-${room === 'living' ? 'living' : room}.jpg?v=${HOME_V})`;
   if (room === 'ext') { const f = cropLayer(def, 3, 1.8); return `background-image:${own}, ${f.img};background-size:cover, ${f.size};background-position:center, ${f.pos}`; }
   const generic = room === 'car' ? 'url(img/ph-car.svg)' : `url(img/h1-${room}.jpg)`;
   return `background-image:${own}, ${generic};background-size:cover;background-position:center`;
