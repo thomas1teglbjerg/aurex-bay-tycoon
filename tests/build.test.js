@@ -16,7 +16,7 @@ const free = (l) => { if (l.owner) { l.owner = null; l.ops = null; } };
 // ---- what is a plot
 const hrb = city.listings.find((l) => l.title === 'Harbor Row Builders'), cbb = city.listings.find((l) => l.title === 'Crown Bridge Builders');
 assert(hrb && hrb.id === 'L42' && hrb.type === 'construction' && hrb.size === 'S' && cbb && cbb.size === 'L', 'two new construction companies: Harbor Row Builders (S) and Crown Bridge Builders (L)');
-assert(BLD.unbuilt(hrb) && BLD.unbuilt(cbb), 'they start as building plots');
+assert(!BLD.unbuilt(hrb) && BLD.unbuilt(cbb), 'Harbor Row Builders stands from day one, Crown Bridge Builders is a plot');
 const cars = city.listings.filter((l) => l.type === 'car');
 assert(cars.length === 2 && cars.every(BLD.unbuilt), 'every car factory is a building plot');
 assert(!BLD.unbuilt(L('L1')) && !BLD.unbuilt(L('L8')), 'small older companies count as built');
@@ -25,10 +25,11 @@ assert(!BLD.unbuilt(L('L1')) && !BLD.unbuilt(L('L8')), 'small older companies co
   const standing = ml.filter((l) => !BLD.unbuilt(l)).map((l) => l.id).sort();
   assert(JSON.stringify(standing) === JSON.stringify(BUILD.keep.slice().sort()), `every Medium and Large company is a plot except ${standing.join(', ')}`);
   assert(['L13', 'L33', 'L37', 'L39'].every((id) => !BLD.unbuilt(L(id))) && L('L7').type === 'metal', 'Bank of Aurex, the Gazette, Bayside Concrete, Aurex City PowerPlant and the large steel works stand from day one');
-  assert(city.listings.filter((l) => l.size === 'S' && l.id !== 'L42' && l.type !== 'car').every((l) => !BLD.unbuilt(l)), 'small companies stand (but the new builder and the car factory)');
+  assert(city.listings.filter((l) => l.size === 'S' && l.type !== 'car').every((l) => !BLD.unbuilt(l)), 'small companies stand (but the car factory)');
   assert(city.warehouses.length === 5 && city.warehouses.every((w) => BLD.unbuilt(w) && !w.owner), 'every warehouse starts as a plot nobody owns');
   assert(ml.filter(BLD.unbuilt).every((l) => !l.owner), 'nobody owns a plot at the start, bots neither');
 }
+if (hrb.owner) { hrb.owner = null; hrb.ops = null; } hrb.site = BLD.newSite(hrb, 'new', 1); // the rest of this test builds it as a small plot
 assert(Math.abs(E.listingPrice(hrb) - E.fullPrice(hrb) * BUILD.plotShare) <= 0.5, `a plot costs a quarter of the company (${E.listingPrice(hrb)} of ${E.fullPrice(hrb)} M)`);
 assert(E.listingYield(city, hrb).total === 0, 'a plot earns nothing');
 assert(E.protection(city, hrb).safe, 'no hostile bids on a building site');
