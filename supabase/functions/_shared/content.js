@@ -440,7 +440,7 @@ export const DEPTS = [
     manual: { id: 'restock', label: 'Order supplies', note: 'Pick a carrier and order each supply by hand' },
     auto: 'Restocks every month by your sourcing rules.', without: 'You restock by hand. Run out and production stops.' },
   { id: 'sales', name: 'Sales', head: 'jason', need: 2, cost: 0.5, desc: 'Closes customer orders and sells surplus supplies.',
-    settings: [{ k: 'price', label: 'Price level', opts: [['budget', 'Budget'], ['standard', 'Standard'], ['premium', 'Premium']] }, { k: 'b2b', label: 'Supply pricing', opts: [['undercut', 'Undercut −8%'], ['market', 'Market price'], ['premium', 'Premium +8%']] }],
+    settings: [{ k: 'price', label: 'Price level', opts: [['budget', 'Budget'], ['standard', 'Standard'], ['premium', 'Premium']] }, { k: 'b2b', label: 'Supply pricing', opts: [['undercut', 'Undercut −8%'], ['market', 'Market price'], ['premium', 'Premium +8%']] }, { k: 'list', label: 'Put supplies on the market', opts: [['auto', 'Sales team, every week'], ['self', 'I do it myself']], out: true }],
     manual: { id: 'findCustomers', label: 'Make sales calls', note: '20 seconds, then pick which lead to chase' },
     auto: 'Answers, ships and archives customer orders and lists surplus supplies automatically.', without: 'You answer every order, deliver it on the map and archive cancellations yourself.' },
   { id: 'social', name: 'Marketing', head: 'sofia', need: 1, cost: 0.4, desc: 'Grows your customer base and reputation, and runs ad campaigns on the city’s websites.',
@@ -466,7 +466,7 @@ export const DEPTS = [
 ];
 // Small companies run lean: no HR, Finance, R&D or Legal. The owner looks after the few people there are.
 export const SMALL_SKIP = ['hr', 'finance', 'rnd', 'legal'];
-export const DEPT_DEFAULTS = { ops: { shifts: 1 }, procurement: { policy: 'cheapest', stock: 1, carrier: 'ridge' }, sales: { price: 'standard', b2b: 'market' }, social: { intensity: 'normal' }, hr: { wages: 'market', training: 'off' }, finance: { costs: 'normal' }, rnd: { budget: 'low' }, legal: { level: 'basic' } };
+export const DEPT_DEFAULTS = { ops: { shifts: 1 }, procurement: { policy: 'cheapest', stock: 1, carrier: 'ridge' }, sales: { price: 'standard', b2b: 'market', list: 'auto' }, social: { intensity: 'normal' }, hr: { wages: 'market', training: 'off' }, finance: { costs: 'normal' }, rnd: { budget: 'low' }, legal: { level: 'basic' } };
 export const WORKER = { salary: 0.08, hireFee: 0.02 };
 
 // ---------------------------------------------------------------- clients and orders
