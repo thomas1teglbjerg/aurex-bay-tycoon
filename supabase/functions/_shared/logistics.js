@@ -2,6 +2,7 @@
 // Goods travel in real time: imports arrive at a warehouse after the site's lead time,
 // trucks then carry them to your companies, taking longer the farther they drive.
 import { GOODS, RECIPES, WAREHOUSE_SITES, LOGISTICS, CONFIG, SIZES, CARRIERS, MAP } from './content.js';
+import { unbuilt, plotPrice } from './build.js';
 
 const r2 = (v) => Math.round(v * 100) / 100;
 const uid = (p) => p + Math.random().toString(36).slice(2, 9);
@@ -41,11 +42,15 @@ export function ensureWarehouses(city) {
   if (!city.shipments) city.shipments = [];
 }
 export const warehouse = (city, id) => (city.warehouses || []).find((w) => w.id === id);
-export const capacityOf = (w) => Math.round(SITE[w.id].cap * Math.pow(LOGISTICS.levelCap, w.level - 1));
+// a warehouse still being built (w.site, build.js) stores nothing
+export const whPrice = (w) => (unbuilt(w) ? plotPrice(w, SITE[w.id].price) : SITE[w.id].price);
+const notBuilt = { ok: false, msg: 'The warehouse is still a building site. Build it first.' };
+export const capacityOf = (w) => (unbuilt(w) ? 0 : 1) * Math.round(SITE[w.id].cap * Math.pow(LOGISTICS.levelCap, w.level - 1));
 export const stored = (w) => Object.values(w.stock).reduce((a, b) => a + b, 0);
 export const inbound = (city, w) => city.shipments.filter((s) => s.to.k === 'w' && s.to.id === w.id).reduce((a, s) => a + s.qty, 0);
 export const upgradeCost = (w) => r2(SITE[w.id].price * LOGISTICS.upgradeCostMult * w.level);
 export const ownedWarehouses = (city, pid) => (city.warehouses || []).filter((w) => w.owner === pid);
+const workingWarehouses = (city, pid) => ownedWarehouses(city, pid).filter((w) => !unbuilt(w));
 export function truckDays(site, l) { const d = Math.hypot(site.x - l.x, site.y - l.y); return Math.max(LOGISTICS.minTruckDays, Math.round(d / 100 * LOGISTICS.truckDaysPer100px * 10) / 10); }
 export function importQuote(city, w, g, qty, importPrice, cid = 'ridge') {
   const site = SITE[w.id]; let unit = importPrice * site.importMult; if (qty >= LOGISTICS.bulkDiscountQty) unit *= 1 - LOGISTICS.bulkDiscount;
@@ -71,18 +76,20 @@ export function arrivals(city, g, notify) {
 export function buy(city, p, id) {
   const w = warehouse(city, id), site = SITE[id];
   if (!w) return { ok: false, msg: 'Unknown warehouse.' }; if (w.owner) return { ok: false, msg: 'Someone already owns this warehouse.' };
-  if (p.cash < site.price) return { ok: false, msg: `The warehouse costs ${site.price} M.` };
-  p.cash -= site.price; w.owner = p.id; w.since = city.m; w.stock = {}; w.level = 1; w.auto = { supply: false, importMonths: 0 };
+  const price = whPrice(w);
+  if (p.cash < price) return { ok: false, msg: `The ${unbuilt(w) ? 'plot' : 'warehouse'} costs ${price} M.` };
+  p.cash -= price; w.owner = p.id; w.since = city.m; w.stock = {}; w.level = 1; w.auto = { supply: false, importMonths: 0 };
+  if (unbuilt(w)) return { ok: true, msg: `The plot for ${site.name} is yours. Hire a builder or the city crew on the site panel to build it.` };
   return { ok: true, msg: `${site.name} is yours. Import goods here and truck them to your companies.` };
 }
 export function sell(city, p, w) {
   if (w.owner !== p.id) return { ok: false, msg: 'Not your warehouse.' };
-  const site = SITE[w.id]; const v = r2(site.price * (0.7 + 0.25 * (w.level - 1)));
+  const site = SITE[w.id]; const v = unbuilt(w) ? whPrice(w) : r2(site.price * (0.7 + 0.25 * (w.level - 1)));
   p.cash += v; w.owner = null; w.stock = {}; w.level = 1; city.shipments = city.shipments.filter((s) => !(s.to.k === 'w' && s.to.id === w.id));
   return { ok: true, msg: `Sold for ${v} M. Stock left behind was written off.` };
 }
 export function importTo(city, p, w, g, qty, importPrice, gNow, cid = 'ridge') {
-  if (w.owner !== p.id) return { ok: false, msg: 'Not your warehouse.' };
+  if (w.owner !== p.id) return { ok: false, msg: 'Not your warehouse.' }; if (unbuilt(w)) return notBuilt;
   if (!GOODS[g]) return { ok: false, msg: 'Unknown supply.' };
   qty = Math.max(1, Math.round(qty));
   const free = capacityOf(w) - stored(w) - inbound(city, w); if (qty > free) return { ok: false, msg: `Only room for ${Math.max(0, Math.floor(free))} more units, counting shipments on the way.` };
@@ -92,7 +99,7 @@ export function importTo(city, p, w, g, qty, importPrice, gNow, cid = 'ridge') {
   return { ok: true, msg: `${qty} ${GOODS[g].unit} of ${GOODS[g].name.toLowerCase()} booked with ${CARRIER[cid].name}: ${r2(q.goods)} M + $${Math.round(q.freight * 1000)}k freight. Expected in ${b.days} days.`, cost: q.cost };
 }
 export function dispatch(city, p, w, l, g, qty, gNow) {
-  if (w.owner !== p.id) return { ok: false, msg: 'Not your warehouse.' };
+  if (w.owner !== p.id) return { ok: false, msg: 'Not your warehouse.' }; if (unbuilt(w)) return notBuilt;
   if (!l || !l.owner || l.owner.k !== 'p' || l.owner.id !== p.id) return { ok: false, msg: 'You can only supply your own companies.' };
   qty = Math.min(Math.round(qty), Math.floor(w.stock[g] || 0)); if (qty < 1) return { ok: false, msg: 'Nothing of that in stock.' };
   { const y = RECIPES[l.type].yard; if (y && y[g] != null) { const room = Math.floor(y[g] - ((l.ops && l.ops.inv[g]) || 0) - onTheWay(city, l, g)); if (room < 1) return { ok: false, msg: `The yard is full: it holds ${y[g]} ${GOODS[g].unit}.` }; qty = Math.min(qty, room); } }
@@ -102,7 +109,7 @@ export function dispatch(city, p, w, l, g, qty, gNow) {
   return { ok: true, msg: `Truck on the way: ${qty} ${GOODS[g].unit}, arrives in ${days} game days.`, days };
 }
 export function exportFrom(city, p, w, g, qty, exportPrice, gNow, cid = 'ridge') {
-  if (w.owner !== p.id) return { ok: false, msg: 'Not your warehouse.' };
+  if (w.owner !== p.id) return { ok: false, msg: 'Not your warehouse.' }; if (unbuilt(w)) return notBuilt;
   qty = Math.min(Math.round(qty), Math.floor(w.stock[g] || 0)); if (qty < 1) return { ok: false, msg: 'Nothing of that in stock.' };
   const v = r2(qty * exportPrice * SITE[w.id].exportMult), f = freight(cid, v, qty, 'export', w.id); if (p.cash < f.cost) return { ok: false, msg: `Freight costs ${f.cost} M.` };
   w.stock[g] -= qty; if (w.stock[g] < 0.5) delete w.stock[g]; p.cash -= f.cost;
@@ -110,7 +117,7 @@ export function exportFrom(city, p, w, g, qty, exportPrice, gNow, cid = 'ridge')
   return { ok: true, msg: `Export of ${qty} ${GOODS[g].unit} booked with ${CARRIER[cid].name}. You get ${v} M on delivery in about ${b.days} days (freight $${Math.round(f.cost * 1000)}k paid).` };
 }
 export function upgrade(city, p, w) {
-  if (w.owner !== p.id) return { ok: false, msg: 'Not your warehouse.' }; if (w.level >= 4) return { ok: false, msg: 'Already at full size.' };
+  if (w.owner !== p.id) return { ok: false, msg: 'Not your warehouse.' }; if (unbuilt(w)) return notBuilt; if (w.level >= 4) return { ok: false, msg: 'Already at full size.' };
   const c = upgradeCost(w); if (p.cash < c) return { ok: false, msg: `Expanding costs ${c} M.` };
   p.cash -= c; w.level++; return { ok: true, msg: `Expanded to level ${w.level}: room for ${capacityOf(w)} units.` };
 }
@@ -146,7 +153,7 @@ export function monthly(city, p, needsOf, importPrice, gNow) {
     });
   }
 }
-export function upkeep(city, pid) { return ownedWarehouses(city, pid).reduce((a, w) => a + SITE[w.id].upkeep * (1 + 0.3 * (w.level - 1)), 0); }
+export function upkeep(city, pid) { return workingWarehouses(city, pid).reduce((a, w) => a + SITE[w.id].upkeep * (1 + 0.3 * (w.level - 1)), 0); }
 // where a moving shipment is right now (for drawing it on the map)
 export function position(city, s, gNow) {
   const edge = (mode) => (mode === 'air' ? { x: MAP.w + 120, y: 40 } : mode === 'sea' ? { x: 420, y: MAP.h + 120 } : mode === 'rail' ? { x: -100, y: 300 } : { x: MAP.w + 120, y: 420 });

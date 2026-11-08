@@ -176,10 +176,10 @@ export function createCity(now, opts = {}) {
     players: {}, holdings: {}, contracts: [], netReqs: [], offers: [], news: []
   };
   STOCKS.forEach((s) => { const p = r2(s.p * (0.9 + rand() * 0.2)); city.stocks[s.id] = { p, h: [p] }; });
-  OPS.ensureMarket(city); LOG.ensureWarehouses(city);
+  OPS.ensureMarket(city); LOG.ensureWarehouses(city); BLD.migrate(city, bctx(city)); // plots from day one
   BOTS.forEach((b) => { city.players[b.id] = newPlayer(b.id, b.name, 0, { bot: true, style: b.style, color: b.color, avatar: b.avatar || null, cash: CONFIG.START_CASH + Math.round(rand() * 10) }); });
   LIFE.ensure(city); TAL.ensure(city); TAL.seedBots(city);
-  news(city, 0, 'Season ' + city.season + ' opens in Aurex Bay', 'Twenty-seven companies are for sale. The first tycoons are already moving in.', 'info');
+  news(city, 0, 'Season ' + city.season + ' opens in Aurex Bay', 'Companies and building plots are for sale. The first tycoons are already moving in.', 'info');
   // the city has a history before you arrive
   for (let wk = 1; wk <= CONFIG.HISTORY_MONTHS * 4; wk++) stepWeek(city, wk);
   city.wk = CONFIG.HISTORY_MONTHS * 4;
@@ -249,7 +249,7 @@ export function setSpeed(city, speed, now) { advance(city, now); city.clock = { 
 export const listing = (city, id) => city.listings.find((l) => l.id === id);
 export function fullPrice(l) { return Math.round(TYPES[l.type].price * SIZES[l.size].mult * 2) / 2; }
 // a plot costs a share of the company, more as the building grows; a worn building sells for less (build.js)
-export function listingPrice(l) { const f = fullPrice(l); return BLD.unbuilt(l) ? Math.max(0.5, Math.round(f * (BLD.B.plotShare + BLD.B.siteShare * BLD.progress(l)) * 2) / 2) : Math.round(f * BLD.condPrice(l) * 2) / 2; }
+export function listingPrice(l) { const f = fullPrice(l); return BLD.unbuilt(l) ? BLD.plotPrice(l, f) : Math.round(f * BLD.condPrice(l) * 2) / 2; }
 export function listingValue(l) { return r2(listingPrice(l) * (1 + 0.3 * (l.level - 1))); }
 export function upgradeCost(l) { const c = Math.round(fullPrice(l) * 0.4 * l.level * 2) / 2; return l.level >= BLD.B.upFrom ? Math.round(c * BLD.B.upMoney * 2) / 2 : c; }
 export const upgradeIsBuild = (l) => l.level >= BLD.B.upFrom;
@@ -277,7 +277,8 @@ export function priceAt(city, id, g = city.g) {
 export function stockValue(city, p) { return Object.keys(p.shares).reduce((a, k) => a + p.shares[k] * priceAt(city, k), 0); }
 export function holdingShares(h) { return Object.values(h.members).reduce((a, b) => a + b, 0); }
 export function holdingNav(city, h) { return h.div ? HD.nav(city, h, hx(city)) : r2(h.treasury + ownedBy(city, 'h', h.id).reduce((a, l) => a + listingValue(l), 0)); }
-const whValue = (city, pid) => (city.warehouses || []).filter((w) => w.owner === pid).reduce((a, w) => a + LOG.SITE[w.id].price * (0.7 + 0.25 * (w.level - 1)) + Object.entries(w.stock).reduce((x, [g, q]) => x + q * (city.market ? city.market[g].p : 0), 0), 0);
+const whWorth = (city, w) => (BLD.unbuilt(w) ? LOG.whPrice(w) : LOG.SITE[w.id].price * (0.7 + 0.25 * (w.level - 1))) + Object.entries(w.stock).reduce((x, [g, q]) => x + q * (city.market && city.market[g] ? city.market[g].p : 0), 0);
+const whValue = (city, pid) => (city.warehouses || []).filter((w) => w.owner === pid).reduce((a, w) => a + whWorth(city, w), 0);
 // what holding.js needs from the engine
 export const hx = (city) => ({ ownedBy: (k, id) => ownedBy(city, k, id), listingValue, listingPrice, listing: (id) => listing(city, id), stockValue: (p) => stockValue(city, p), whValue: (pid) => whValue(city, pid), debt,
   annualEstimate: (pid) => annualEstimate(city, 'p', pid), handOver: (l, o) => handOver(city, l, o),
@@ -949,15 +950,23 @@ function startUpgrade(city, l, budget) {
 }
 // what build.js needs from the city
 const cashOf = (city, o) => (!o ? 0 : o.k === 'p' ? (city.players[o.id] || { cash: 0 }).cash : (city.holdings[o.id] || { treasury: 0 }).treasury);
-export const bctx = (city) => ({ listing: (id) => listing(city, id), canRun: (pid, l) => !!l && canRun(city, pid, l), runners: (l) => runners(city, l), name: (l) => MAIL.coName(l),
-  credit: (o, v) => credit(city, o, v), debit: (o, v) => debit(city, o, v), cashOf: (o) => cashOf(city, o),
-  mail: (pid, x) => MAIL.send(city.players[pid], { g: city.g, m: city.m, ...x }), notify: (l, t, x, k) => notifyOwner(city, l, t, x, k), news: (t, x, k) => news(city, city.m, t, x, k),
-  away: (l) => { const rs = runners(city, l); return humanOwned(city, l) && (!rs.length || rs.every((p) => inactive(city, p))); },
+// a building site: a company, or a warehouse (W1…; its owner is a player id)
+export const siteOf = (city, id) => listing(city, id) || (city.warehouses ? LOG.warehouse(city, id) || null : null);
+const ownO = (o) => (typeof o === 'string' ? { k: 'p', id: o } : o);
+const whRunners = (city, w) => (w.owner && city.players[w.owner] ? [city.players[w.owner]] : []);
+export const bctx = (city) => ({ listing: (id) => siteOf(city, id), canRun: (pid, l) => !!l && (BLD.isWh(l) ? !!l.owner && l.owner === pid : canRun(city, pid, l)),
+  runners: (l) => (BLD.isWh(l) ? whRunners(city, l) : runners(city, l)), name: (l) => (BLD.isWh(l) ? LOG.SITE[l.id].name : MAIL.coName(l)),
+  credit: (o, v) => credit(city, ownO(o), v), debit: (o, v) => debit(city, ownO(o), v), cashOf: (o) => cashOf(city, ownO(o)),
+  mail: (pid, x) => MAIL.send(city.players[pid], { g: city.g, m: city.m, ...x }), news: (t, x, k) => news(city, city.m, t, x, k),
+  notify: (l, t, x, k) => { if (!BLD.isWh(l)) return notifyOwner(city, l, t, x, k); const p = city.players[l.owner]; if (p && !p.bot) feed(p, city.m, t, x, k); },
+  away: (l) => { if (BLD.isWh(l)) { const rs = whRunners(city, l); return !!rs.length && rs.every((p) => !p.bot && inactive(city, p)); } const rs = runners(city, l); return humanOwned(city, l) && (!rs.length || rs.every((p) => inactive(city, p))); },
+  // an owned warehouse that becomes a plot: the city pays what the owner paid (with its expansions) and its stock at market price
+  whBuyOut: (w) => { const p = city.players[w.owner]; const v = r2(whWorth(city, w)); if (p) { p.cash += v; if (!p.bot) feed(p, city.m, `${LOG.SITE[w.id].name} was bought out`, `The city paid ${v} M for the warehouse and its stock. It is a building plot now: whoever buys it builds it.`, 'good'); } w.owner = null; w.since = null; city.shipments = (city.shipments || []).filter((s) => !(s.to.k === 'w' && s.to.id === w.id)); },
   buyOut: (l) => { const v = r2(listingValue(l) + (l.upgrade ? upgradeCost(l) : 0)); payOwner(city, l, v); notifyOwner(city, l, `Your ${TYPES[l.type].name} in ${l.district} was bought out`, `The city paid ${v} M, its full value. The site is a building plot now: whoever buys it builds a new ${TYPES[l.type].name.toLowerCase()}.`, 'good'); releaseListing(city, l); },
-  opened: (l) => { l.ops = l.owner ? OPS.newOps(l, isManaged(city, l)) : null; },
-  fullPrice: (l) => fullPrice(l), priceOf: (g) => (city.market && city.market[g] ? city.market[g].p : GOODS[g].base),
+  opened: (l) => { if (!BLD.isWh(l)) l.ops = l.owner ? OPS.newOps(l, isManaged(city, l)) : null; },
+  fullPrice: (l) => (BLD.isWh(l) ? LOG.SITE[l.id].price : fullPrice(l)), priceOf: (g) => (city.market && city.market[g] ? city.market[g].p : GOODS[g].base),
   quote: (g, qty) => OPS.quote(city, { owner: null }, g, qty, 'cheapest').cost,
-  buy: (owner, g, qty) => OPS.buyGoods(city, CTX, { owner, ops: { inv: {}, cur: { sup: 0 }, managed: true } }, g, qty, 'cheapest') });
+  buy: (owner, g, qty) => OPS.buyGoods(city, CTX, { owner: ownO(owner), ops: { inv: {}, cur: { sup: 0 }, managed: true } }, g, qty, 'cheapest') });
 export { BLD };
 
 // ---------------------------------------------------------------- holdings (coop parent companies)
@@ -1022,7 +1031,7 @@ function botAct(city, p, m) {
   if (rand() < st[2] && p.cash > 12) { const s = pick(STOCKS), q = 2 + Math.floor(rand() * 5); tradeStock(city, p, s.id, q); }
   else if (rand() < 0.05) { const k = Object.keys(p.shares)[0]; if (k) tradeStock(city, p, k, -p.shares[k]); }
   if (debt(p) && p.cash > debt(p) + 8) { p.cash -= debt(p); p.loans = []; }
-  if (city.warehouses && rand() < 0.03 && mine.length >= 2 && !LOG.ownedWarehouses(city, p.id).length) { const w = city.warehouses.find((x) => !x.owner && LOG.SITE[x.id].price < p.cash - 10); if (w) { LOG.buy(city, p, w.id); news(city, m, `${p.name} buys ${LOG.SITE[w.id].name}`, 'More trucks on the roads of Aurex Bay.', 'info', { who: p.id }); } }
+  if (city.warehouses && rand() < 0.03 && mine.length >= 2 && !LOG.ownedWarehouses(city, p.id).length) { const w = city.warehouses.find((x) => !x.owner && !x.site && LOG.SITE[x.id].price < p.cash - 10); if (w) { LOG.buy(city, p, w.id); news(city, m, `${p.name} buys ${LOG.SITE[w.id].name}`, 'More trucks on the roads of Aurex Bay.', 'info', { who: p.id }); } }
 }
 function botHoldingsAct(city, m) {
   const bots = Object.values(city.players).filter((p) => p.bot && !myHoldings(city, p.id).length);
@@ -1035,7 +1044,7 @@ function botHoldingsAct(city, m) {
     }
   }
   Object.values(city.holdings).filter((h) => h.bot).forEach((h) => {
-    if (rand() < 0.2) { const free = city.listings.filter((l) => !l.owner && !TYPES[l.type].starter && !CB.isBank(l) && !GZ.isPaper(l) && listingPrice(l) <= h.treasury); if (free.length) { const l = BOT.allianceBuy(city, h, free, bx(city)) || pick(free); h.treasury -= listingPrice(l); assignOwner(city, l, { k: 'h', id: h.id }, m); news(city, m, `${h.name} buys ${TYPES[l.type].name}`, `${l.district} · ${listingPrice(l)} M.`, 'info'); } }
+    if (rand() < 0.2) { const free = city.listings.filter((l) => !l.owner && !TYPES[l.type].starter && !CB.isBank(l) && !GZ.isPaper(l) && !BLD.idle(l) && listingPrice(l) <= h.treasury); if (free.length) { const l = BOT.allianceBuy(city, h, free, bx(city)) || pick(free); h.treasury -= listingPrice(l); assignOwner(city, l, { k: 'h', id: h.id }, m); news(city, m, `${h.name} buys ${TYPES[l.type].name}`, `${l.district} · ${listingPrice(l)} M.`, 'info'); } }
     if (rand() < 0.1) { const l = ownedBy(city, 'h', h.id).find((x) => !x.upgrade && !x.site && !BLD.idle(x) && x.level < 5 && upgradeCost(x) < h.treasury); if (l) startUpgrade(city, l, h.treasury - upgradeCost(l)); }
   });
 }
@@ -1386,7 +1395,7 @@ function applyAs(city, pid, p, action, a, now) {
     case 'whBuy': { LOG.ensureWarehouses(city); return LOG.buy(city, p, a.wid); }
     case 'whSell': case 'whImport': case 'whDispatch': case 'whExport': case 'whUpgrade': case 'whAuto': {
       LOG.ensureWarehouses(city); const w = LOG.warehouse(city, a.wid); if (!w || w.owner !== pid) return err('Not your warehouse.');
-      if (action === 'whSell') return LOG.sell(city, p, w);
+      if (action === 'whSell') { BLD.onRelease(city, w, bctx(city)); return LOG.sell(city, p, w); }
       if (action === 'whImport') return LOG.importTo(city, p, w, a.g, Number(a.qty), OPS.importPrice(city, a.g), city.g, LOG.CARRIER[a.carrier] ? a.carrier : 'ridge');
       if (action === 'whDispatch') return LOG.dispatch(city, p, w, listing(city, a.lid), a.g, Number(a.qty), city.g);
       if (action === 'whExport') return LOG.exportFrom(city, p, w, a.g, Number(a.qty), OPS.exportPrice(city, a.g), city.g, LOG.CARRIER[a.carrier] ? a.carrier : 'ridge');

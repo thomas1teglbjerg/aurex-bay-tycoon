@@ -1,4 +1,5 @@
 // Power plants: Aurex Energy (Harbor Row) and Aurex City PowerPlant (Ironport) make energy for the city market
+import './standing.js';
 import * as E from '../supabase/functions/_shared/engine.js';
 import * as O from '../supabase/functions/_shared/ops.js';
 import { TYPES, GOODS, CONFIG } from '../supabase/functions/_shared/content.js';

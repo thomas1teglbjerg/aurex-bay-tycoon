@@ -1,4 +1,5 @@
 // Headless season simulation: runs a full 10-year season with one scripted human and the bots.
+import './standing.js';
 import * as E from '../supabase/functions/_shared/engine.js';
 import { CONFIG } from '../supabase/functions/_shared/content.js';
 const assert = (c, m) => { if (!c) { console.error('FAIL', m); process.exit(1); } };

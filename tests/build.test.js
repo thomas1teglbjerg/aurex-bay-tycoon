@@ -16,10 +16,20 @@ const free = (l) => { if (l.owner) { l.owner = null; l.ops = null; } };
 // ---- what is a plot
 const hrb = city.listings.find((l) => l.title === 'Harbor Row Builders'), cbb = city.listings.find((l) => l.title === 'Crown Bridge Builders');
 assert(hrb && hrb.id === 'L42' && hrb.type === 'construction' && hrb.size === 'S' && cbb && cbb.size === 'L', 'two new construction companies: Harbor Row Builders (S) and Crown Bridge Builders (L)');
-assert(BLD.unbuilt(hrb) && BLD.unbuilt(cbb), 'they start as building plots');
+assert(!BLD.unbuilt(hrb) && BLD.unbuilt(cbb), 'Harbor Row Builders stands from day one, Crown Bridge Builders is a plot');
 const cars = city.listings.filter((l) => l.type === 'car');
 assert(cars.length === 2 && cars.every(BLD.unbuilt), 'every car factory is a building plot');
-assert(!BLD.unbuilt(L('L36')) && !BLD.unbuilt(L('L1')), 'the older companies count as built');
+assert(!BLD.unbuilt(L('L1')) && !BLD.unbuilt(L('L8')), 'small older companies count as built');
+{
+  const ml = city.listings.filter((l) => ['M', 'L'].includes(l.size));
+  const standing = ml.filter((l) => !BLD.unbuilt(l)).map((l) => l.id).sort();
+  assert(JSON.stringify(standing) === JSON.stringify(BUILD.keep.slice().sort()), `every Medium and Large company is a plot except ${standing.join(', ')}`);
+  assert(['L13', 'L33', 'L37', 'L39'].every((id) => !BLD.unbuilt(L(id))) && L('L7').type === 'metal', 'Bank of Aurex, the Gazette, Bayside Concrete, Aurex City PowerPlant and the large steel works stand from day one');
+  assert(city.listings.filter((l) => l.size === 'S' && l.type !== 'car').every((l) => !BLD.unbuilt(l)), 'small companies stand (but the car factory)');
+  assert(city.warehouses.length === 5 && city.warehouses.every((w) => BLD.unbuilt(w) && !w.owner), 'every warehouse starts as a plot nobody owns');
+  assert(ml.filter(BLD.unbuilt).every((l) => !l.owner), 'nobody owns a plot at the start, bots neither');
+}
+if (hrb.owner) { hrb.owner = null; hrb.ops = null; } hrb.site = BLD.newSite(hrb, 'new', 1); // the rest of this test builds it as a small plot
 assert(Math.abs(E.listingPrice(hrb) - E.fullPrice(hrb) * BUILD.plotShare) <= 0.5, `a plot costs a quarter of the company (${E.listingPrice(hrb)} of ${E.fullPrice(hrb)} M)`);
 assert(E.listingYield(city, hrb).total === 0, 'a plot earns nothing');
 assert(E.protection(city, hrb).safe, 'no hostile bids on a building site');
@@ -28,14 +38,16 @@ assert(E.protection(city, hrb).safe, 'no hostile bids on a building site');
 {
   const c2 = E.createCity(now, { speed: 2016 }); E.addPlayer(c2, 'x', 'Old Owner', now);
   const car = c2.listings.find((l) => l.type === 'car'); delete car.site; car.owner = { k: 'p', id: 'x' }; car.level = 2; car.ops = null;
+  const w = c2.warehouses[2]; delete w.site; w.owner = 'x'; w.level = 2; w.stock = { steel: 40 };
   const before = c2.players.x.cash;
   E.advance(c2, now + 1);
+  assert(BLD.unbuilt(w) && !w.owner && !Object.keys(w.stock).length, 'an owned warehouse in an older city becomes a plot');
   assert(BLD.unbuilt(car) && !car.owner && car.level === 1, 'an owned car factory in an older city becomes a plot');
   assert(c2.players.x.cash > before + 20, `its owner was bought out at full value (+${Math.round(c2.players.x.cash - before)} M)`);
 }
 
 // ---- buy the plot and Structura
-free(hrb); const str = L('L36'); free(str);
+free(hrb); const str = L('L36'); free(str); delete str.site; str.built = true; // Structura (M) is a plot in a new city: built here so it can build
 assert(E.apply(city, 'u', 'buy', { lid: hrb.id }, now).ok, 'Thomas buys the Harbor Row Builders plot');
 assert(!hrb.ops, 'a plot has no company to run yet');
 assert(!E.apply(city, 'u', 'deptOpen', { lid: hrb.id, dept: 'sales' }, now).ok, 'no departments on a building site');
@@ -137,5 +149,29 @@ assert(E.listingYield(city, up).total > 0, 'the company keeps running while it i
 assert(E.apply(city, 'u', 'siteCity', { lid: up.id }, now).ok, 'city crew hired');
 n = 0; while (up.site && n++ < 60) week();
 assert(up.level === 3, 'level 3 reached');
+
+// ---- warehouses are built too
+{
+  const w = city.warehouses.find((x) => x.id === 'W5'), site = E.LOG.SITE.W5; u.cash = 300; const c0 = u.cash;
+  assert(E.LOG.whPrice(w) === Math.round(site.price * BUILD.plotShare * 2) / 2, `a warehouse plot costs a quarter (${E.LOG.whPrice(w)} of ${site.price} M)`);
+  r = E.apply(city, 'u', 'whBuy', { wid: 'W5' }, now);
+  assert(r.ok && w.owner === 'u' && Math.abs(u.cash - (c0 - E.LOG.whPrice(w))) < 0.51, 'Thomas buys the Crown Hills Depot plot: ' + r.msg);
+  assert(E.LOG.capacityOf(w) === 0 && !E.apply(city, 'u', 'whImport', { wid: 'W5', g: 'steel', qty: 10 }, now).ok, 'nothing can be stored before it is built');
+  assert(!E.apply(city, 'u', 'whUpgrade', { wid: 'W5' }, now).ok, 'no expansion before it is built');
+  assert(BLD.sizeOf(w) === 'S' && BLD.totalWeeks(w, w.site) === BUILD.weeks.S, 'a small depot builds like a small company');
+  assert(BLD.fitGood(w) === 'steel' && BLD.phaseNeed(w, w.site, 3).steel > 0, 'its fit-out is steel racking');
+  r = E.apply(city, 'u', 'siteTender', { lid: 'W5', turnkey: true }, now); assert(r.ok, 'call for bids on the warehouse: ' + r.msg);
+  assert(BLD.tenders(city).includes(w), 'the warehouse is listed on aurexbuild.ab');
+  r = E.apply(city, 'u', 'siteCity', { lid: 'W5' }, now); assert(r.ok && w.site.c.by === BLD.CITY, 'the city crew builds it: ' + r.msg);
+  n = 0; while (w.site && n++ < 40) week();
+  assert(!w.site && w.built && w.owner === 'u' && E.LOG.capacityOf(w) === site.cap, `built in ${n} weeks, ${E.LOG.capacityOf(w)} units of room`);
+  assert((u.mail || []).some((x) => /Crown Hills Depot is built/.test(x.subj)), 'the owner gets a mail');
+  assert(E.apply(city, 'u', 'whImport', { wid: 'W5', g: 'steel', qty: 10 }, now).ok, 'now it imports');
+  const w2 = city.warehouses.find((x) => x.id === 'W4'); u.cash = 300;
+  assert(E.apply(city, 'u', 'whBuy', { wid: 'W4' }, now).ok && E.apply(city, 'u', 'siteCity', { lid: 'W4' }, now).ok, 'a second plot with the city crew');
+  const held = w2.site.c.held, c1 = u.cash;
+  r = E.apply(city, 'u', 'whSell', { wid: 'W4' }, now);
+  assert(r.ok && !w2.owner && Math.abs(u.cash - (c1 + held + E.LOG.whPrice(w2))) < 0.6 && !w2.site.c, 'selling a plot under work gives the held money back: ' + r.msg);
+}
 
 console.log('all building tests passed');

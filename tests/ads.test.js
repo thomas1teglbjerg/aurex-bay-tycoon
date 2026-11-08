@@ -1,4 +1,5 @@
 // Marketing: ad campaigns on the city's websites, for the company or one piece it makes or the owner holds
+import './standing.js';
 import * as E from '../supabase/functions/_shared/engine.js';
 import { DEPTS, AD } from '../supabase/functions/_shared/content.js';
 const assert = (c, m) => { if (!c) { console.error('FAIL', m); process.exit(1); } console.log('ok ', m); };

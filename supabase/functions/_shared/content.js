@@ -106,7 +106,7 @@ export const LISTINGS = [
   ['power', 'ironport', 'M', 0.3, 0.39, 'Aurex City PowerPlant', 'c-powerplant'],
   ['woodworks', 'crown', 'S', 0.39, 0.61, 'Old Oak Joinery'],
   ['woodworks', 'crown', 'L', 0.935, 0.67, 'Crown Hills Timberworks', 'c-timberworks'],
-  // from L42 on every new company starts as a building plot that players build (BUILD, build.js)
+  // Harbor Row Builders (L42) stands from day one; from L43 on every new company starts as a building plot (BUILD, build.js)
   ['construction', 'harbor', 'S', 0.77, 0.47, 'Harbor Row Builders'],
   ['construction', 'aurex', 'L', 0.42, 0.52, 'Crown Bridge Builders']
 ].map(([type, d, size, px, py, title, img], i) => ({ id: 'L' + (i + 1), type, d, p: [px, py], district: DISTRICT[d].name, size, ...(title ? { title } : {}), ...(img ? { img } : {}), ...placeOn(d, [px, py]) }));
@@ -633,8 +633,11 @@ export const ROADS = { id: 'roads', name: 'City Road Maintenance', role: 'Aurex 
 // uses building supplies week by week through four phases, and the company opens when the last phase is done (build.js).
 // Buildings wear (cond 0–100) while nobody owns them or the owner is away; renovation and upgrades from level 2 are smaller projects.
 export const BUILD = {
-  firstPlot: 42,                       // listings from L42 on start as building plots
+  firstPlot: 43,                       // listings from L43 on start as building plots (L42 Harbor Row Builders stands from day one)
   plots: ['L10', 'L12'],               // older sites turned into plots: the car factories
+  sizes: ['M', 'L'],                   // every Medium and Large company starts as a plot ...
+  keep: ['L7', 'L13', 'L33', 'L37', 'L39'], // ... except these, standing from day one: Harbor Row steel works (L), Bank of Aurex, The Aurex Gazette, Bayside Concrete, Aurex City PowerPlant
+  warehouses: true,                    // every warehouse starts as a plot too (built like a company, priced by the warehouse)
   plotShare: 0.25,                     // a plot costs this share of the company's price ...
   siteShare: 0.6,                      // ... plus this share for the part already built
   weeks: { S: 12, M: 34, L: 48 },      // game weeks for a new building at full supply (S 3 game months, M ≈ 5 real days, L ≈ 7)

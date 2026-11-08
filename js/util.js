@@ -1,8 +1,10 @@
 // Shared helpers for the UI modules
 import * as E from '../supabase/functions/_shared/engine.js';
-import { CONFIG as GC, MAP, DISTRICT, TYPES, LISTINGS } from '../supabase/functions/_shared/content.js';
+import { CONFIG as GC, MAP, DISTRICT, TYPES, LISTINGS, WAREHOUSE_SITES } from '../supabase/functions/_shared/content.js';
+const WH = Object.fromEntries(WAREHOUSE_SITES.map((w) => [w.id, w]));
 // a company's display name: its own title when it has one, else its type
-export const lname = (l) => l.title || TYPES[l.type].name;
+// (a warehouse, when it shows as a building site: its own name)
+export const lname = (l) => l.title || (WH[l.id] ? WH[l.id].name : TYPES[l.type].name);
 // a listing may have its own picture (img in LISTINGS), otherwise the picture of its type
 const LIMG = Object.fromEntries(LISTINGS.filter((l) => l.img).map((l) => [l.id, l.img]));
 // Bump FACE_V when portraits in img/s-*.jpg change: /img is cached as immutable for a week.
@@ -10,7 +12,7 @@ const FACE_V = 4;
 export const faceUrl = (id) => `img/s-${id}.jpg?v=${FACE_V}`;
 // Bump CO_V when a company picture in img/c-*.jpg is replaced under the same name.
 const CO_V = 3;
-export const coImg = (l) => `img/${LIMG[l.id] || 'c-' + l.type}.jpg?v=${CO_V}`;
+export const coImg = (l) => (WH[l.id] ? (WH[l.id].img || `img/dist-${WH[l.id].d}.jpg`) : `img/${LIMG[l.id] || 'c-' + l.type}.jpg?v=${CO_V}`);
 
 export const S = { B: null };
 let madeSeen = null; // wines bottled by vineyards join the collectible catalogue when a new city state arrives

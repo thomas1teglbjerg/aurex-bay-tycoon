@@ -1,4 +1,5 @@
 // The Bank of Aurex as national bank: who may buy it, the bank rate, levies, the economy and the ministry
+import './standing.js';
 import * as E from '../supabase/functions/_shared/engine.js';
 import { CENTRAL as C, CENTRAL_BANK, TYPES } from '../supabase/functions/_shared/content.js';
 const assert = (c, m) => { if (!c) { console.error('FAIL', m); process.exit(1); } console.log('ok ', m); };

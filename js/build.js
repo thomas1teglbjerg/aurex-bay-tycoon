@@ -12,7 +12,7 @@ const wk = (n) => `${n} week${n === 1 ? '' : 's'}`;
 const realWeeks = (n) => { const c = city(); return dur(n * GC.YEAR_MS / 48 / c.clock.speed); };
 const realIn = (g) => { const c = city(); return dur(Math.max(0, (g - E.gameNow(c, now())) * GC.YEAR_MS / c.clock.speed)); };
 const starTxt = (v) => (v == null ? 'No jobs yet' : `${'★'.repeat(Math.round(v))}${'☆'.repeat(5 - Math.round(v))} ${v.toFixed(1)}`);
-const ownerName = (c, l) => (!l.owner ? 'For sale' : l.owner.k === 'p' ? (c.players[l.owner.id] || {}).name || '' : (c.holdings[l.owner.id] || {}).name || '');
+const ownerName = (c, l) => (!l.owner ? 'For sale' : typeof l.owner === 'string' ? (c.players[l.owner] || {}).name || '' : l.owner.k === 'p' ? (c.players[l.owner.id] || {}).name || '' : (c.holdings[l.owner.id] || {}).name || '');
 
 export function statusOf(l) {
   const s = l.site; if (!s) return null;
@@ -26,12 +26,12 @@ export function statusOf(l) {
 // ---------------------------------------------------------------- the site panel
 export function siteHTML(l) {
   const c = city(), p = me(), s = l.site; if (!s) return '';
-  const x = ctxOf(c), own = !!(p && l.owner && E.canRun(c, p.id, l)), bl = s.c && s.c.by !== BLD.CITY ? E.listing(c, s.c.by) : null;
+  const x = ctxOf(c), own = !!(p && l.owner && x.canRun(p.id, l)), bl = s.c && s.c.by !== BLD.CITY ? E.listing(c, s.c.by) : null;
   const builder = !!(p && bl && E.canRun(c, p.id, bl)), n = BLD.phaseCount(s), pc = BLD.progress(l), st = statusOf(l);
   const phases = BLD.phaseIds(s).map((_, i) => { const ph = BLD.phase(s, i), w = BLD.phaseWeeks(l, { ...s, cut: i === s.ph ? s.cut : 0 }, i);
     const cls = i < s.ph ? 'done' : i === s.ph && s.c ? 'now' : '';
     return `<li class="${cls}"><b>${esc(ph.name)}</b><span>${i < s.ph ? `Done${s.q[i] != null ? ` · task ${Math.round(s.q[i] * 100)}%` : ''}` : i === s.ph && s.c ? (s.st === 'task' ? 'Built · crane task waiting' : `Week ${Math.min(w, s.wk + 1)} of ${w}`) : wk(w)}</span></li>`; }).join('');
-  const out = [`<div class="bsite"><div class="bs-top"><div><span class="bs-k">${esc(BLD.kindName(s))}</span><b>${s.kind === 'new' ? `${esc(SIZES[l.size].label)} ${esc(TYPES[l.type].name.toLowerCase())}` : esc(lname(l))}</b></div><span class="chip ${st.cls}">${esc(st.label)}</span></div>
+  const out = [`<div class="bsite"><div class="bs-top"><div><span class="bs-k">${esc(BLD.kindName(s))}</span><b>${s.kind === 'new' ? esc(BLD.what(l)) : esc(lname(l))}</b></div><span class="chip ${st.cls}">${esc(st.label)}</span></div>
     <div class="bs-bar"><i style="width:${Math.max(2, pc * 100)}%"></i></div><div class="bs-cap">${Math.round(pc * 100)}% built · ${n} phase${n > 1 ? 's' : ''} · ${wk(BLD.totalWeeks(l, s))} with a builder at full supply (about ${realWeeks(BLD.totalWeeks(l, s))})</div>
     <ol class="bs-ph">${phases}</ol>`];
   if (s.c) {
@@ -47,7 +47,7 @@ export function siteHTML(l) {
     return out.join('') + '</div>';
   }
   if (!l.owner) { out.push(`<p class="bs-note">Buy the plot to build here. You hire a construction company, or the city's own crew, and the building opens when the last phase is done.</p></div>`); return out.join(''); }
-  const fee = BLD.fairFee(l, s, E.fullPrice(l)), mat = BLD.materialsValue(c, l, s, (g) => (c.market[g] ? c.market[g].p : GOODS[g].base)), cp = BLD.cityPrice(c, l, s, E.fullPrice(l), imp(c)), cw = Math.round(BLD.totalWeeks(l, s, BLD.CITY) * (1 - BLD.progress(l)));
+  const fee = BLD.fairFee(l, s, x.fullPrice(l)), mat = BLD.materialsValue(c, l, s, (g) => (c.market[g] ? c.market[g].p : GOODS[g].base)), cp = BLD.cityPrice(c, l, s, x.fullPrice(l), imp(c)), cw = Math.round(BLD.totalWeeks(l, s, BLD.CITY) * (1 - BLD.progress(l)));
   if (own) {
     if (!s.tender) out.push(`<div class="bs-hire"><div><b>Ask construction companies for bids</b><span>A fair price for the work is about ${M(fee)}${s.kind === 'new' ? '' : ''}. Supplies cost about ${M(mat)} more at today's market prices.</span>
         <div class="btns"><button class="btn gold sm" data-a="siteTender" data-lid="${l.id}" data-v="1">Ask for bids · turnkey</button><button class="btn sm" data-a="siteTender" data-lid="${l.id}" data-v="0">Ask for bids · labour only</button></div>
@@ -91,8 +91,8 @@ export function builderBox(l, ro) {
   const c = city(); if (!BLD.isBuilder(l)) return '';
   const jobs = BLD.contractsOf(c, l.id), open = BLD.tenders(c).filter((x) => !x.site.c);
   return `<div class="box"><h2>Building sites<small>${jobs.length} OF ${BLD.slots(l)} CREWS</small></h2><div class="in">
-    ${jobs.length ? `<div class="rows">${jobs.map((x) => { const st = statusOf(x); return `<button class="row" style="width:100%;text-align:left" data-a="open" data-lid="${x.id}"><span class="thumb" style="background-image:url(${coImg(x)})"></span><div class="grow"><b>${esc(lname(x))} · ${esc(x.district)}</b><span>${esc(BLD.kindName(x.site))} · ${M(x.site.c.price)} · ${esc(ownerName(c, x))}</span></div><span class="chip ${st.cls}">${esc(st.label)}</span></button>`; }).join('')}</div>` : '<p class="empty">No building work right now.</p>'}
-    ${!ro && open.length ? `<div class="cap" style="margin-top:8px">Calls for bids in the city</div><div class="rows">${open.map((x) => `<button class="row" style="width:100%;text-align:left" data-a="open" data-lid="${x.id}"><span class="thumb" style="background-image:url(${coImg(x)})"></span><div class="grow"><b>${esc(lname(x))} · ${esc(x.district)}</b><span>${esc(BLD.kindName(x.site))} · ${x.site.tender.turnkey ? 'turnkey' : 'labour only'} · ${x.site.bids.length} bid${x.site.bids.length === 1 ? '' : 's'}</span></div><span class="chip warn">Bid</span></button>`).join('')}</div>` : ''}
+    ${jobs.length ? `<div class="rows">${jobs.map((x) => { const st = statusOf(x); return `<button class="row" style="width:100%;text-align:left" data-a="open" data-lid="${x.id}"><span class="thumb" style="background-image:url(${coImg(x)})"></span><div class="grow"><b>${esc(lname(x))} · ${esc(BLD.whereOf(x))}</b><span>${esc(BLD.kindName(x.site))} · ${M(x.site.c.price)} · ${esc(ownerName(c, x))}</span></div><span class="chip ${st.cls}">${esc(st.label)}</span></button>`; }).join('')}</div>` : '<p class="empty">No building work right now.</p>'}
+    ${!ro && open.length ? `<div class="cap" style="margin-top:8px">Calls for bids in the city</div><div class="rows">${open.map((x) => `<button class="row" style="width:100%;text-align:left" data-a="open" data-lid="${x.id}"><span class="thumb" style="background-image:url(${coImg(x)})"></span><div class="grow"><b>${esc(lname(x))} · ${esc(BLD.whereOf(x))}</b><span>${esc(BLD.kindName(x.site))} · ${x.site.tender.turnkey ? 'turnkey' : 'labour only'} · ${x.site.bids.length} bid${x.site.bids.length === 1 ? '' : 's'}</span></div><span class="chip warn">Bid</span></button>`).join('')}</div>` : ''}
     <p class="empty" style="font-size:13px">${starTxt(BLD.stars(l))}${l.built ? '' : ''}. Developers hire you through bids on ${HOST}. Each crew runs one site; every level above 1 adds a crew. <a href="#" data-a="webGo" data-u="${HOST}">Open ${HOST} ›</a></p></div></div>`;
 }
 
@@ -104,19 +104,19 @@ export function buildSite(u, go) {
     <nav class="ab-nav">${tabs.map(([k, t]) => `<a href="#" class="${page === k ? 'on' : ''}" data-a="webGo" data-u="${HOST}${k ? '/' + k : ''}">${t}</a>`).join('')}</nav></header>`;
   let body = '';
   if (page === 'site') {
-    const l = E.listing(c, u.path[1]);
+    const l = E.siteOf(c, u.path[1]);
     body = !l || !l.site ? `<div class="ab-card"><b>Nothing is being built here now.</b>${l ? ` <a href="#" data-a="open" data-lid="${l.id}">Open ${esc(lname(l))} ›</a>` : ''}</div>`
-      : `<section class="ab-sitehero" style="background-image:linear-gradient(90deg, rgba(18,20,16,.9), rgba(18,20,16,.45)), url(${coImg(l)})"><small>${esc(l.district)} · ${esc(l.id)}</small><h1>${esc(lname(l))}</h1><p>${esc(BLD.kindName(l.site))} for ${esc(ownerName(c, l)) || 'whoever buys the plot'}.</p><a href="#" class="ab-btn" data-a="open" data-lid="${l.id}">Open the company card</a></section><div class="ab-card">${siteHTML(l)}</div>`;
+      : `<section class="ab-sitehero" style="background-image:linear-gradient(90deg, rgba(18,20,16,.9), rgba(18,20,16,.45)), url(${coImg(l)})"><small>${esc(BLD.whereOf(l))} · ${esc(l.id)}</small><h1>${esc(lname(l))}</h1><p>${esc(BLD.kindName(l.site))} for ${esc(ownerName(c, l)) || 'whoever buys the plot'}.</p><a href="#" class="ab-btn" data-a="open" data-lid="${l.id}">${BLD.isWh(l) ? 'Open the warehouse' : 'Open the company card'}</a></section><div class="ab-card">${siteHTML(l)}</div>`;
   } else if (page === 'builders') {
     const bs = c.listings.filter((x) => x.type === 'construction');
     body = `<h2 class="ab-h">Construction companies</h2><div class="ab-grid">${bs.map((b2) => `<a href="#" class="ab-tile" data-a="open" data-lid="${b2.id}"><span class="ab-img" style="background-image:url(${coImg(b2)})"></span><b>${esc(lname(b2))}</b><span>${esc(b2.district)} · ${esc(SIZES[b2.size].label)}${BLD.unbuilt(b2) ? ' · still a plot' : ` · ${BLD.slots(b2)} crew${BLD.slots(b2) > 1 ? 's' : ''}`}</span><span>${BLD.unbuilt(b2) ? 'Not built yet' : `${starTxt(BLD.stars(b2))} · ${b2.owner ? `${BLD.freeSlots(c, b2)} free · ${esc(ownerName(c, b2))}` : 'for sale'}`}</span></a>`).join('')}
       <div class="ab-tile city"><b>${esc(B.city.name)}</b><span>${esc(B.city.role)}</span><span>Takes any job, brings its own supplies. About ${Math.round((B.city.markup - 1) * 100)}% dearer and ${Math.round((B.city.slow - 1) * 100)}% slower.</span></div></div>`;
   } else if (page === 'mine') {
-    const ctx = ctxOf(c), mine = p ? BLD.sitesOf(c, ctx, p.id) : [], jobs = p ? c.listings.filter((x) => x.site && x.site.c && x.site.c.by !== BLD.CITY && E.canRun(c, p.id, E.listing(c, x.site.c.by))) : [];
+    const ctx = ctxOf(c), mine = p ? BLD.sitesOf(c, ctx, p.id) : [], jobs = p ? BLD.all(c).filter((x) => x.site && x.site.c && x.site.c.by !== BLD.CITY && E.canRun(c, p.id, E.listing(c, x.site.c.by))) : [];
     body = `<h2 class="ab-h">My sites</h2>${mine.length ? `<div class="ab-list">${mine.map((x) => siteRow(c, x)).join('')}</div>` : '<p class="ab-sub">You own no building plot or project. Plots are for sale on the map.</p>'}
       <h2 class="ab-h">My jobs as a builder</h2>${jobs.length ? `<div class="ab-list">${jobs.map((x) => siteRow(c, x)).join('')}</div>` : '<p class="ab-sub">No contracts. Run a construction company and bid on calls.</p>'}`;
   } else {
-    const plots = c.listings.filter((x) => x.site), calls = plots.filter((x) => x.site.tender && !x.site.c), works = plots.filter((x) => x.site.c), forSale = plots.filter((x) => !x.owner);
+    const plots = BLD.all(c).filter((x) => x.site), calls = plots.filter((x) => x.site.tender && !x.site.c), works = plots.filter((x) => x.site.c), forSale = plots.filter((x) => !x.owner);
     body = `<section class="ab-hero"><small>The city's building register</small><h1>Every new company in Aurex Bay is built by tycoons.</h1><p>Buy a plot, ask construction companies for bids, and watch your company rise week by week. Concrete from the pier, beams and wall elements from Crown Hills.</p></section>
       <div class="ab-facts"><div><b>${calls.length}</b><span>calls for bids</span></div><div><b>${works.length}</b><span>sites at work</span></div><div><b>${forSale.length}</b><span>plots for sale</span></div><div><b>${BLD.builders(c).length}</b><span>builders in business</span></div></div>
       <h2 class="ab-h">Calls for bids</h2>${calls.length ? `<div class="ab-list">${calls.map((x) => siteRow(c, x)).join('')}</div>` : '<p class="ab-sub">No open calls right now.</p>'}
@@ -127,5 +127,5 @@ export function buildSite(u, go) {
 }
 function siteRow(c, l) {
   const st = statusOf(l);
-  return `<a href="#" class="ab-row" data-a="webGo" data-u="${HOST}/site/${l.id}"><span class="ab-img" style="background-image:url(${coImg(l)})"></span><div><b>${esc(lname(l))}</b><span>${esc(TYPES[l.type].name)} · ${esc(l.district)} · ${esc(SIZES[l.size].label)} · ${esc(BLD.kindName(l.site))}</span><span>${l.owner ? `Developer: ${esc(ownerName(c, l))}` : `Plot for sale · ${M(E.listingPrice(l))}`}</span></div><span class="chip ${st.cls}">${esc(st.label)}</span></a>`;
+  return `<a href="#" class="ab-row" data-a="webGo" data-u="${HOST}/site/${l.id}"><span class="ab-img" style="background-image:url(${coImg(l)})"></span><div><b>${esc(lname(l))}</b><span>${esc(BLD.typeName(l))} · ${esc(BLD.whereOf(l))} · ${esc(SIZES[BLD.sizeOf(l)].label)} · ${esc(BLD.kindName(l.site))}</span><span>${l.owner ? `Developer: ${esc(ownerName(c, l))}` : `Plot for sale · ${M(BLD.isWh(l) ? E.LOG.whPrice(l) : E.listingPrice(l))}`}</span></div><span class="chip ${st.cls}">${esc(st.label)}</span></a>`;
 }
