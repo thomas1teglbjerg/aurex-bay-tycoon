@@ -8,6 +8,7 @@ import { scenesHTML, sceneFor } from './scenes.js';
 import { selfHeadHTML } from './profile.js';
 import { city, me, esc, lname, coImg, faceUrl, dollars, M, K, N, P, dateLabel, shortDate, deptIcon, spark, barChart, seg } from './util.js';
 
+import { siteHTML, builderBox, statusOf as siteStatus } from './build.js';
 const O = E.OPS;
 const STAFF_BY = Object.fromEntries(STAFF.map((s) => [s.id, s]));
 export const DEPT_TINT = { ops: '#22344f', procurement: '#5c4220', sales: '#175c3b', social: '#7a2f5f', hr: '#24578f', finance: '#34502a', rnd: '#3f347e', legal: '#4d3f31' };
@@ -19,6 +20,8 @@ export function deptHeader(l, d, state, compact) {
     <span class="dh-ic">${deptIcon(d.id, compact ? 20 : 26)}</span><div><b>${esc(d.name)}</b><span class="pill st-${state}">${STATE_LABEL[state]}</span></div></header>`;
 }
 export function statusOf(l) {
+  if (l.site && E.BLD.unbuilt(l)) return siteStatus(l);
+  if (E.BLD.ruined(l)) return { label: 'Ruin: renovate it', cls: 'bad' };
   const o = l.ops; if (!o) return { label: 'Starting up', cls: 'info' };
   if (o.eff < 0.05) return { label: 'Stopped: no supplies', cls: 'bad' };
   if (o.eff < 0.95) return { label: `Short of supplies (${Math.round(o.eff * 100)}%)`, cls: 'warn' };
@@ -104,6 +107,10 @@ function accountsBox(l, ui, y) {
 
 export function companyHTML(lid, ui = {}) {
   const c = city(), p = me(), l = E.listing(c, lid);
+  if (l && E.BLD.unbuilt(l) && l.owner && E.canSeeCompany(c, p.id, l)) return `<div class="crumbs"><button class="btn sm" data-a="back">‹ Empire</button><span class="muted">Building site</span></div>
+  <section class="chero plot" style="background-image:linear-gradient(180deg, rgba(10,20,35,0.05) 30%, rgba(10,20,35,0.88)), url(${coImg(l)})"><div class="chero-in"><span class="chip ${siteStatus(l).cls}">${esc(siteStatus(l).label)}</span><h2>${esc(lname(l))}</h2><p>${esc(TYPES[l.type].name)} · ${esc(l.district)} · ${SIZES[l.size].label} · building plot</p></div>
+    <div class="chero-act"><button class="btn sm" data-a="open" data-lid="${l.id}">Company card</button></div></section>
+  <div class="box"><h2>Building site<small>${esc(E.BLD.kindName(l.site).toUpperCase())}</small></h2><div class="in">${siteHTML(l)}</div></div>`;
   if (!l || !E.canSeeCompany(c, p.id, l) || !l.ops) return `<button class="btn" data-a="back">‹ Back</button><p class="empty">You can no longer see this company.</p>`;
   const ro = !E.canRun(c, p.id, l), coop = l.owner.k === 'h' ? c.holdings[l.owner.id] : null, owner = coop || c.players[l.owner.id];
   const o = l.ops, def = TYPES[l.type], rec = RECIPES[l.type], y = E.listingYield(c, l, l.owner), st = statusOf(l), rc = O.runningCosts(l);
@@ -152,6 +159,8 @@ export function companyHTML(lid, ui = {}) {
   <div class="grid">
     <div class="col">
       ${ro ? '' : `<div class="box"><h2>To-do<small>${tasks.length}</small></h2><div class="in">${taskHTML}<p class="empty" style="font-size:13px">Tasks appear when a department has no staff. Hire workers to hand the work over.</p></div></div>`}
+      ${l.site ? `<div class="box"><h2>Building work<small>${esc(E.BLD.kindName(l.site).toUpperCase())}</small></h2><div class="in">${siteHTML(l)}</div></div>` : ''}
+      ${builderBox(l, ro)}
       ${cellarBox(c, l, ro)}
       ${yardBox(c, l, ro)}
       ${newsroomBox(c, l, ro)}
@@ -181,7 +190,8 @@ export function companyHTML(lid, ui = {}) {
     <div class="col">
       <div class="box"><h2>Departments<small>${Object.keys(o.depts).length} OF ${O.deptsFor(l).length}</small></h2><div class="in"><div class="depts">${depts}</div></div></div>
       ${ro ? '' : `<div class="box"><h2>Company</h2><div class="in"><div class="btns">
-        ${l.upgrade ? `<span class="chip">Upgrading to level ${l.upgrade.to}</span>` : l.level < 5 ? `<button class="btn ${coop ? 'coop' : 'navy'}" data-a="upgrade" data-lid="${l.id}" ${!coop && p.cash < E.upgradeCost(l) ? 'disabled' : ''}>${coop ? 'Propose upgrade' : 'Upgrade'} to level ${l.level + 1} · ${M(E.upgradeCost(l))}</button>` : ''}
+        ${!l.site && E.BLD.cond(l) < E.BLD.B.renoBelow ? `<button class="btn navy" data-a="siteRenovate" data-lid="${l.id}">Plan a renovation · condition ${Math.round(E.BLD.cond(l))}%</button>` : ''}
+        ${l.upgrade ? `<span class="chip">Upgrading to level ${l.upgrade.to}</span>` : l.site ? `<span class="chip">${esc(E.BLD.kindName(l.site))} under way</span>` : l.level < 5 ? `<button class="btn ${coop ? 'coop' : 'navy'}" data-a="upgrade" data-lid="${l.id}" ${!coop && p.cash < E.upgradeCost(l) ? 'disabled' : ''}>${coop ? 'Propose upgrade' : 'Upgrade'} to level ${l.level + 1} · ${M(E.upgradeCost(l))}</button>` : ''}
         ${coop ? (coop.proposals.some((x) => x.status === 'open' && x.kind === 'sell' && x.lid === l.id) ? '<span class="chip">Sale vote running</span>' : `<button class="btn danger" data-a="sell" data-lid="${l.id}">Propose sale · ${M(E.listingValue(l) * 0.8)} to treasury</button>`) : `<button class="btn danger" data-a="sell" data-lid="${l.id}">Sell for ${M(E.listingValue(l) * 0.8)}</button>`}</div>${coop ? `<p class="empty" style="font-size:13px">Treasury ${M(coop.treasury)}. Upgrades and sales are decided by a vote of the co-owners.</p>` : ''}
         <p class="empty" style="font-size:13px">Upgrading raises capacity, steady income and the number of workers each department needs.</p></div></div>`}
     </div>

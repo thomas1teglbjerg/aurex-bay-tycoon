@@ -4,6 +4,7 @@
 // Bots and coops run in "managed" mode (fully staffed); human-owned companies run
 // exactly as well as their departments are staffed — or as attentive as the owner is.
 import { TYPES, SIZES, GOODS, RECIPES, DEPTS, DEPT_DEFAULTS, SMALL_SKIP, WORKER, MARKET_KIND, CLIENT_RULES, CLIENT_NAMES, DISTRICTS, VIP_GUESTS, DEPT_LOOK, SCENE_LOOK, INTERACTIONS, SOMMELIER } from './content.js';
+import * as BLD from './build.js';
 
 const r2 = (v) => Math.round(v * 100) / 100;
 const r4 = (v) => Math.round(v * 10000) / 10000;
@@ -206,7 +207,7 @@ export function capacity(l) {
   const training = !o.managed && o.depts.hr && setting(l, 'hr', 'training') === 'on' ? 1.08 : 1;
   const overtime = o.boost && o.boost.m === o.curM ? o.boost.mult : (o.overtimeM === o.curM ? 1.2 : 1);
   const chief = !o.managed && roleOn(o.depts.ops) ? 1.1 : 1, own = selfLv(l, 'ops') >= 6 ? 1.04 : 1, plant = hasSp(l, 'factory') ? 1.06 : 1;
-  return baseCap(l) * staff * shift * morale * training * overtime * chief * own * plant;
+  return baseCap(l) * staff * shift * morale * training * overtime * chief * own * plant * BLD.condMult(l);
 }
 export function demand(city, l) {
   const o = l.ops; const price = PRICE[o.managed ? 'standard' : setting(l, 'sales', 'price')];
