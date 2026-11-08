@@ -3,7 +3,7 @@
 import * as E from '../supabase/functions/_shared/engine.js';
 import { TALENT } from '../supabase/functions/_shared/content.js';
 import { city, me, meId, esc, faceUrl, dateLabel, coImg, lname } from './util.js';
-import { adHTML } from './web.js';
+import { adHTML, houseAd } from './web.js';
 import { dealCard } from './deals.js';
 
 const ML = E.MAIL;
@@ -77,7 +77,7 @@ function readerHTML(x) {
   const c = city(), p = me(), l = x.lid ? E.listing(c, x.lid) : null, mine = l && E.canSeeCompany(c, p.id, l);
   const first = String(p.name || '').split(' ')[0], sign = x.from.k ? x.from.n : String(x.from.n).split(' ')[0];
   const body = x.kind === 'news' ? newsHTML(x)
-    : `<div class="mbody"><p>Hi ${esc(first)},</p>${String(x.body || '').split('\n').map((t) => `<p>${esc(t)}</p>`).join('')}${x.fxt ? `<p class="mfx">${esc(x.fxt.charAt(0).toUpperCase() + x.fxt.slice(1))}.</p>` : ''}<p class="msign">${x.from.k === 'city' ? 'Kind regards,' : 'Best,'}<br>${esc(sign)}</p></div>`;
+    : `<div class="mbody"><p>Hi ${esc(first)},</p>${String(x.body || '').split('\n').map((t) => `<p>${esc(t)}</p>`).join('')}${x.fxt ? `<p class="mfx">${esc(x.fxt.charAt(0).toUpperCase() + x.fxt.slice(1))}.</p>` : ''}<p class="msign">${x.from.k === 'city' ? 'Kind regards,' : 'Best,'}<br>${esc(sign)}</p>${x.hAd ? `<div class="mhouse">${houseAd('wide', x.hAd)}</div>` : ''}</div>`;
   return `<article class="mread"><header>${face(x, 'lg')}<div><h3>${esc(x.subj)}</h3><span><b>${esc(x.from.n)}</b> · ${esc(x.from.r)}</span><time>${esc(when(x))}</time></div></header>
     ${body}${x.opts ? answerHTML(x) : ''}${x.deal ? (() => { const d = (c.deals || []).find((y) => y.id === x.deal); return d ? `<div class="mdeal">${dealCard(d)}</div>` : ''; })() : ''}${x.web ? `<p><button class="btn sm" data-a="web" data-u="${esc(x.web)}">Open ${esc(x.web.split('/')[0])} ›</button></p>` : ''}${x.go ? `<p><button class="btn sm" ${x.go.startsWith('report:') ? `data-a="report" data-v="${esc(x.go.slice(7))}:0"` : `data-a="tab" data-v="${esc(x.go)}"`}>${x.go.startsWith('report:') ? 'Open the annual report' : 'Open'} ›</button></p>` : ''}
     ${mine ? `<button class="row mco" data-a="company" data-lid="${l.id}"><span class="thumb" style="background-image:url(${coImg(l)})"></span><div class="grow"><b>Open ${esc(lname(l))}</b><span>${esc(l.district)} · company dashboard</span></div><span aria-hidden="true">›</span></button>` : ''}</article>`;
@@ -89,6 +89,7 @@ function sendAllHTML() {
   return `<div class="box"><form data-form="mailAll" class="msend"><p class="muted">Goes to every player's inbox (${n}) from <b>Aurex Bay City · What's new</b>. Each line is one paragraph; "Hi &lt;first name&gt;," and the sign-off are added.</p>
     <label>Subject<input name="subj" maxlength="80" required placeholder="What's new in Aurex Bay"></label>
     <label>Message<textarea name="body" maxlength="4000" required></textarea></label>
+    <label class="chk"><input type="checkbox" name="house" checked> Put the house ad at the bottom</label>
     <div><button class="btn" type="submit">Send to all players</button></div></form></div>`;
 }
 export function mailPageHTML(ui, admin = false) {
