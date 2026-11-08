@@ -1292,7 +1292,7 @@ function applyAs(city, pid, p, action, a, now) {
   if (action === 'meLeave') return CAR.leave(city, p, a.lid, a.dept);
   if (action === 'meSpec') return CAR.choose(city, p, a.sector, a.pick, cctx(city));
   // holdings with divisions: money between divisions, the central account and the owners' private accounts
-  if (['holdingTransfer', 'holdingBorrow', 'holdingRepay', 'holdingDeposit', 'holdingCashOut', 'holdingLend', 'holdingRecall', 'holdingGive'].includes(action)) return HD.act(city, p, action, a, hx(city)) || err('Unknown action.');
+  if (['holdingTransfer', 'holdingBorrow', 'holdingRepay', 'holdingDeposit', 'holdingCashOut', 'holdingLend', 'holdingRecall', 'holdingGive', 'holdingGrant'].includes(action)) return HD.act(city, p, action, a, hx(city)) || err('Unknown action.');
   if (action === 'coMerge') { const h = city.holdings[a.hid]; if (!h) return err('Unknown holding.'); if (p.bot || p.admin) return err('Only tycoons do that.'); return HD.merge(city, p, h, hx(city)); }
   if (action === 'lifeSalary' && HD.divOf(city, p)) return err(`Your CEO salary is set by the owners of ${HD.divOf(city, p).name}. Propose a new one under Network.`);
   if (/^(life|home|item|bid|trade|host|bank)/.test(action)) {

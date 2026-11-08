@@ -987,7 +987,7 @@ async function onClick(e) {
     case 'report': closeModal(); if (UI.tab !== 'empire') setTab('empire'); UI.company = d.v ? 'report:' + d.v : null; $('panel').scrollTop = 0; renderAll(); return;
     case 'coMerge': await act('coMerge', { hid: d.hid }); return;
     case 'closeBooks': { const r = await B.closeBooks(); toast(r && r.msg ? r.msg : 'Done.', r && r.ok === false ? 'bad' : 'good'); renderAll(); return; }
-    case 'hMoney': { const v = Number(($('hamt-' + d.hid) || {}).value) || 0; (UI.hAmt = UI.hAmt || {})[d.hid] = v; const to = ($('hto-' + d.hid) || {}).value; await act(d.k, { hid: d.hid, amt: v, to }); return; }
+    case 'hMoney': { const v = Number(($('hamt-' + d.hid) || {}).value) || 0; (UI.hAmt = UI.hAmt || {})[d.hid] = v; const to = ($((d.sel || 'hto') + '-' + d.hid) || {}).value; await act(d.k, { hid: d.hid, amt: v, to }); return; }
     case 'hGive': await act('holdingGive', { hid: d.hid, to: $('hgto-' + d.hid).value, pct: Number($('hgpct-' + d.hid).value) || 0 }); return;
     case 'hProp': {
       const g = (id) => ($(id + '-' + d.hid) || {}).value, x = { hid: d.hid, kind: d.k };
@@ -998,6 +998,7 @@ async function onClick(e) {
       if (d.k === 'equalize') x.mode = d.v;
       if (d.k === 'autoEq') x.on = d.v === '1';
       if (d.k === 'move') { x.lid = g('hmv'); x.to = g('hmvto'); }
+      if (d.k === 'grant') { x.amt = Number(g('hamt')) || 0; x.to = g('hgr'); }
       await act('holdingPropose', x); return;
     }
     case 'reset': await B.reset(); closeModal(); gate(); return;
