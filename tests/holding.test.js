@@ -40,6 +40,20 @@ assert(A('k', 'holdingBorrow', { hid: h.id, amt: 4 }).ok && h.iloans.k === 4, 'a
 assert(!A('k', 'holdingBorrow', { hid: h.id, amt: 999 }).ok, 'not more than the central account holds');
 assert(A('k', 'holdingRepay', { hid: h.id, amt: 4 }).ok && !h.iloans.k, 'and pays it back');
 
+// from the central account to a division: a plain transfer, not a loan
+tr = h.treasury; kc = K.cash; const n0 = E.holdingNav(city, h), gv = Math.min(2, h.treasury / 2);
+r = A('t', 'holdingGrant', { hid: h.id, to: 'k', amt: gv });
+assert(r.ok && near(K.cash, kc + gv) && near(h.treasury, tr - gv) && !h.iloans.k, 'the joint CEO sends money from the central account to a division: ' + r.msg);
+assert(near(E.holdingNav(city, h), n0, 0.05), 'and the holding keeps its value');
+r = A('k', 'holdingGrant', { hid: h.id, to: 'k', amt: 0.5 }); assert(!r.ok && r.vote, 'another CEO cannot send from central alone');
+assert(!A('t', 'holdingGrant', { hid: h.id, to: 'k', amt: h.treasury + 1 }).ok, 'not more than the central account holds');
+r = A('t', 'holdingGrant', { hid: h.id, to: 'k', amt: Math.min(h.treasury, HOLDING.grantPct * E.holdingNav(city, h) + 0.5) });
+assert(!r.ok, 'above the mandate the CEO cannot send alone');
+kc = K.cash; tr = h.treasury;
+r = A('k', 'holdingPropose', { hid: h.id, kind: 'grant', to: 'k', amt: 0.5 }); assert(r.ok, 'a CEO proposes money from central to their division: ' + r.msg);
+const gp = h.proposals.find((x) => x.kind === 'grant'); if (gp.status === 'open') A('t', 'holdingVote', { hid: h.id, prid: gp.id, yes: true });
+assert(gp.status !== 'open' && near(K.cash, kc + 0.5) && near(h.treasury, tr - 0.5), 'and after the vote it is sent');
+
 // CEO salary comes from the central account, not the division; the owners set it
 assert(!A('t', 'lifeSalary', { v: 2 }).ok, 'a CEO cannot set their own salary');
 r = A('t', 'holdingPropose', { hid: h.id, kind: 'salary', pid: 't', amt: 0.5, bonus: 0.1 });

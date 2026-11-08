@@ -1060,6 +1060,7 @@ export const HOLDING = {
   bidragMax: 0.5,
   buyPct: 0.25,         // a CEO buys alone up to this share of the holding's value; above it the owners vote
   sellPct: 0.1,         // ... and sells alone up to this share
+  grantPct: 0.1,        // the joint division's CEO sends money from the central account to a division alone up to this share of the holding's value
   salaryNav: 0.03,      // one CEO's salary above this share of the holding's value a year needs every owner's yes
   salaryProfit: 0.5,    // all salaries above this share of last year's profit need every owner's yes
   bonusMax: 0.2,        // a CEO bonus is at most 20% of the division's profit for the year

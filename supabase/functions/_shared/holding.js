@@ -13,7 +13,7 @@ import { HOLDING as H, SALARIES, TYPES } from './content.js';
 const r2 = (v) => Math.round(v * 100) / 100;
 const r4 = (v) => Math.round(v * 10000) / 10000;
 const sum = (xs) => xs.reduce((a, b) => a + b, 0);
-export const KINDS = ['dividend', 'salary', 'bidrag', 'ceo', 'autoEq', 'equalize', 'exit', 'divBuy', 'divSell', 'move'];
+export const KINDS = ['dividend', 'salary', 'bidrag', 'ceo', 'autoEq', 'equalize', 'exit', 'divBuy', 'divSell', 'move', 'grant'];
 // which part of the holding a company sits in: 'h' = the joint division, a player id = that CEO's division, null = outside
 export function sideOf(city, h, l) { if (!l || !l.owner) return null; if (l.owner.k === 'h') return l.owner.id === h.id ? 'h' : null; const p = city.players[l.owner.id]; return p && divOf(city, p) === h ? p.id : null; }
 const UNANIMOUS = ['equalize', 'autoEq'];
@@ -155,6 +155,12 @@ export function act(city, p, action, a, X) {
       p.cash -= amt; t.cash += amt; flow(h, p.id, 'tout', amt); flow(h, t.id, 'tin', amt);
       X.feed(t, `${p.name} sent your division ${amt} M`, `Inside ${h.name}.`, 'good'); return { ok: true, msg: `${amt} M sent to ${t.name}'s division.` };
     }
+    case 'holdingGrant': { // from the central account to a division: a plain transfer, not a loan
+      const t = city.players[a.to]; if (!t || divOf(city, t) !== h) return { ok: false, msg: 'Pick a division.' };
+      const e = need(h.treasury >= amt, `The central account has ${r2(h.treasury)} M.`); if (e) return e;
+      const g = grantAlone(city, h, p, amt, X); if (g) return g;
+      return grant(city, h, p, t, amt, X);
+    }
     case 'holdingBorrow': { // an internal loan from the central account, at the bank rate
       const e = need(mine, 'Only a CEO borrows for their division.') || need(h.treasury >= amt, `The central account has ${r2(h.treasury)} M.`); if (e) return e;
       h.treasury -= amt; p.cash += amt; h.iloans[p.id] = r2((h.iloans[p.id] || 0) + amt); flow(h, p.id, 'tin', amt);
@@ -196,6 +202,18 @@ export function act(city, p, action, a, X) {
   }
   return null;
 }
+// the joint division's CEO sends alone up to grantPct of the holding's value (always when they are the only CEO); otherwise the owners vote
+export function grantAlone(city, h, p, amt, X) {
+  if (divs(city, h).length < 2) return null;
+  if (ceo(city, h) !== p.id) return { ok: false, vote: true, msg: `Only the CEO of the joint division sends money from the central account alone. Propose it to your co-owners.` };
+  const cap = r2(H.grantPct * nav(city, h, X));
+  return amt > cap ? { ok: false, vote: true, msg: `That is more than ${Math.round(H.grantPct * 100)}% of ${h.name}'s value (${cap} M). Propose it to your co-owners.` } : null;
+}
+function grant(city, h, p, t, amt, X) {
+  h.treasury -= amt; t.cash += amt; flow(h, t.id, 'tin', amt);
+  if (p && t.id !== p.id) X.feed(t, `${amt} M from ${h.name}'s central account`, `Sent to your division by ${p.name}. Not a loan.`, 'good');
+  return { ok: true, msg: `${amt} M sent from the central account to ${p && t.id === p.id ? 'your division' : `${t.name}'s division`}.` };
+}
 function tx(L, m, text, amt) { if (!L || !amt) return; (L.tx = L.tx || []).unshift({ m, text, amt: r4(amt), bal: r4(L.wallet) }); if (L.tx.length > 40) L.tx.length = 40; }
 export const meetingOpen = (city, h) => h.ga != null && h.ga >= city.m;
 
@@ -227,6 +245,10 @@ export function check(city, h, p, a, X) {
     case 'exit': { if (Object.keys(h.members).length < 2) return no('You are the only owner.'); return { ok: true, pr: { pid: p.id } }; }
     case 'divBuy': { const l = X.listing(a.lid); if (!l || l.owner) return no('That company is not for sale.'); if (divOf(city, p) !== h) return no('Only a CEO buys for their division.'); return { ok: true, pr: { lid: l.id, pid: p.id } }; }
     case 'divSell': { const l = X.listing(a.lid); if (!l || !l.owner || l.owner.k !== 'p' || l.owner.id !== p.id) return no('Not your company.'); return { ok: true, pr: { lid: l.id, pid: p.id } }; }
+    case 'grant': {
+      const t = city.players[a.to], v = r2(Number(a.amt) || 0); if (!t || divOf(city, t) !== h) return no('Pick a division.');
+      if (v <= 0) return no('Enter an amount.'); if (v > h.treasury) return no(`The central account has ${r2(h.treasury)} M.`); return { ok: true, pr: { pid: t.id, amt: v } };
+    }
     case 'move': {
       const l = X.listing(a.lid), from = sideOf(city, h, l); if (!from) return no('That company is not part of the holding.');
       const to = a.to === 'h' ? 'h' : (city.players[a.to] && divOf(city, city.players[a.to]) === h ? a.to : null); if (!to) return no('Pick a division.');
@@ -263,6 +285,7 @@ export function exec(city, h, pr, X) {
       X.handOver(l, to === 'h' ? { k: 'h', id: h.id } : { k: 'p', id: to });
       return `${l.title || TYPES[l.type].name} in ${l.district} moved to ${to === 'h' ? 'the joint division' : `${city.players[to].name}'s division`}. It keeps its staff and stock.`;
     }
+    case 'grant': { const t = city.players[pr.pid], v = Math.min(pr.amt, Math.max(0, h.treasury)); if (!t || divOf(city, t) !== h) return 'That division is gone.'; if (v <= 0) return 'The central account was empty.'; h.treasury -= v; t.cash += v; flow(h, t.id, 'tin', v); return `${r2(v)} M moved from the central account to ${t.name}'s division. Not a loan.`; }
     case 'divSell': { const l = X.listing(pr.lid), p = city.players[pr.pid]; if (!l || !l.owner || l.owner.k !== 'p' || l.owner.id !== pr.pid) return 'The company is no longer theirs.'; const v = r2(X.listingValue(l) * 0.8); p.cash += v; X.release(l); return `Sold ${l.title || TYPES[l.type].name} for ${v} M.`; }
   }
   return null;
@@ -279,6 +302,7 @@ export function label(city, pr, X) {
     case 'exit': return `${n(pr.pid)} leaves with their division`;
     case 'divBuy': return `${n(pr.pid)}'s division buys ${ln}${l ? ` (${X.listingPrice(l)} M)` : ''}`;
     case 'move': return `Move ${ln} from ${pr.from === 'h' ? 'the joint division' : `${n(pr.from)}'s division`} to ${pr.to === 'h' ? 'the joint division' : `${n(pr.to)}'s division`}`;
+    case 'grant': return `Send ${pr.amt} M from the central account to ${n(pr.pid)}'s division (not a loan)`;
     case 'divSell': return `${n(pr.pid)}'s division sells ${ln}${l && l.owner ? ` (${r2(X.listingValue(l) * 0.8)} M)` : ''}`;
   }
   return pr.kind;
