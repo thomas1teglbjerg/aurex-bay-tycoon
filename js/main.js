@@ -11,7 +11,7 @@ import { SCENES, startScene, endScene, sceneFor, tickScenes, sceneTitle } from '
 import { WAREHOUSE_SITES, HOMES, TAKEOVER as GC_T } from '../supabase/functions/_shared/content.js';
 import { webHTML, parseUrl, HOME_URL, gazetteBox } from './web.js';
 import { teamBoxHTML, talentModal, talentStep } from './team.js';
-import { lifeHTML, lifeModal, newDinner, startDinner, dinnerHTML, money, bidBase } from './life.js';
+import { lifeHTML, lifeModal, newDinner, startDinner, dinnerHTML, money, bidBase, HOME_V } from './life.js';
 import { logoMark, logoFull, symbolIcon } from './brand.js';
 import { initChat, openChat, unreadFrom, inboxOf } from './chat.js';
 import { openMixer } from './mixer.js';
@@ -200,7 +200,7 @@ function mapCardHTML(key) {
   if (k === 'w') { const site = WAREHOUSE_SITES.find((x) => x.id === id), w = (c.warehouses || []).find((x) => x.id === id), own = w && w.owner ? c.players[w.owner] : null;
     return `<div class="mc-img" style="${site.img ? `background-image:url(${site.img})` : cropStyle(site, 2.4)}"></div><div class="mc-b"><span class="mc-k">Warehouse · ${esc(MODE_LABEL[site.mode])}</span><h4>${esc(site.name)}</h4><p>${esc(site.district)}</p>${row('Owner', own ? `<i class="mc-dot" style="background:${own.id === meId() ? 'var(--good)' : own.color}"></i>${esc(own.id === meId() ? 'You' : own.name)}` : '<em class="s">For sale</em>')}${row(own ? 'Storage' : 'Price', own ? `${N(E.LOG.capacityOf(w))} units` : M(site.price))}${row('Upkeep', `${M(site.upkeep)} / yr`)}<div class="mc-foot">${lastPointer === 'touch' ? `<button class="btn sm gold" data-a="wh" data-wid="${id}">Open</button>` : 'Click to open'}</div></div>`; }
   if (k === 'h') { const h = HOMES.find((x) => x.id === id), lp = me().life, mine = lp && lp.homes.find((x) => x.hid === id), price = c.life ? h.price * c.life.homes[id].ix : h.price, left = c.life ? E.LIFE.unitsLeft(c, id) : h.units;
-    return `<div class="mc-img" style="background-image:url(img/${h.img}-ext.jpg), url(img/h1-ext.jpg)"></div><div class="mc-b"><span class="mc-k">Residential</span><h4>${esc(h.name)}</h4><p>${esc(h.district)}</p>${row('Status', mine ? '<em class="m">Yours</em>' : left > 0 ? `${left} of ${h.units} units for sale` : 'Sold out')}${row('Price', money(price))}${row('Prestige', '+' + h.prestige)}<div class="mc-foot">${lastPointer === 'touch' ? `<button class="btn sm gold" data-a="mapHome" data-hid="${id}">Open</button>` : 'Click to open'}</div></div>`; }
+    return `<div class="mc-img" style="background-image:url(img/${h.img}-ext.jpg?v=${HOME_V}), url(img/h1-ext.jpg)"></div><div class="mc-b"><span class="mc-k">Residential</span><h4>${esc(h.name)}</h4><p>${esc(h.district)}</p>${row('Status', mine ? '<em class="m">Yours</em>' : left > 0 ? `${left} of ${h.units} units for sale` : 'Sold out')}${row('Price', money(price))}${row('Prestige', '+' + h.prestige)}<div class="mc-foot">${lastPointer === 'touch' ? `<button class="btn sm gold" data-a="mapHome" data-hid="${id}">Open</button>` : 'Click to open'}</div></div>`; }
   return '';
 }
 function showMapCard(key, el) {
