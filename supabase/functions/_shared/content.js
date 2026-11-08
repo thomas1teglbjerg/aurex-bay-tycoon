@@ -371,7 +371,7 @@ export const SPEEDS = [
   { id: 2016, label: 'Demo', note: '1 year per 5 minutes' }
 ];
 
-export const CONFIG = { START_CASH: 20, PLAYER_START_CASH: 10, SEASON_YEARS: 10, HQ_CAP: 3, LOAN_RATE: 8, YEAR_MS: 7 * 24 * 3600 * 1000, HISTORY_MONTHS: 9 };
+export const CONFIG = { START_CASH: 26, PLAYER_START_CASH: 26, SEASON_YEARS: 10, HQ_CAP: 3, LOAN_RATE: 8, YEAR_MS: 7 * 24 * 3600 * 1000, HISTORY_MONTHS: 9 };
 
 // ---------------------------------------------------------------- supplies
 // Prices are in M per unit. Import = base × 1.5 for goods players can make, × 1.1 for raw goods only importers sell (always available, the ceiling). Export = base × 0.7 (always possible, the floor).

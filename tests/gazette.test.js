@@ -61,6 +61,7 @@ assert(!act('ad', 'gzPress', { lid: shop.id, kind: 'hire' }).ok, 'one press rele
 assert(!act('ed', 'gzPress', { lid: shop.id, kind: 'hire' }).ok, 'only for your own companies');
 
 // 3. the front page: a weekly mail with three stories about other tycoons' companies
+Object.values(city.players).filter((x) => x.bot).slice(0, 3).forEach((b) => { const l = city.listings.find((x) => !x.owner && !E.BLD.idle(x) && !E.CB.isBank(x) && x.type !== 'newspaper'); l.owner = { k: 'p', id: b.id }; l.ops = E.OPS.newOps(l, true); }); // bots start empty-handed: three of them run a company
 const wk = city.wk; let tries = 0;
 while (!ED.mail.some((x) => x.subj === 'Pick this week\'s front page' && !x.done) && tries++ < 4) { now += E.realMsPerMonth(city) / 4; E.advance(city, now); }
 m = ED.mail.find((x) => x.subj === 'Pick this week\'s front page' && !x.done);

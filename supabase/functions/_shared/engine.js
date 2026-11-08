@@ -1,7 +1,7 @@
 // Aurex Bay Tycoon — game engine.
 // Pure functions over one plain "city" object, so the exact same rules run in the browser demo
 // and server-side in the Supabase Edge Function. Time is real time: 1 game year = 1 real week (speed 1).
-import { DISTRICTS, TYPES, SYNERGY, SIZES, LISTINGS, STAFF, STOCKS, WORLD, DECISIONS, HAPPENINGS, BOTS, CONFIG, VINTAGE, VIP, DEPT_DEFAULTS, WORKER, GOODS, TAKEOVER, SOMMELIER, CRAFT, BOT_REL, MAIL_HAP, DEC_FROM, GAZETTE, PRESTIGE_TIERS, MAINT, placeOn } from './content.js';
+import { DISTRICTS, TYPES, SYNERGY, SIZES, LISTINGS, STAFF, STOCKS, WORLD, DECISIONS, HAPPENINGS, BOTS, CONFIG, VINTAGE, VIP, DEPT_DEFAULTS, WORKER, GOODS, TAKEOVER, SOMMELIER, CRAFT, BOT_REL, MAIL_HAP, DEC_FROM, GAZETTE, PRESTIGE_TIERS, MAINT, placeOn, LIFE as LIFE_CFG } from './content.js';
 import * as OPS from './ops.js';
 import * as LOG from './logistics.js';
 import * as LIFE from './life.js';
@@ -184,7 +184,28 @@ export function createCity(now, opts = {}) {
   for (let wk = 1; wk <= CONFIG.HISTORY_MONTHS * 4; wk++) stepWeek(city, wk);
   city.wk = CONFIG.HISTORY_MONTHS * 4;
   city.clock = { g: CONFIG.HISTORY_MONTHS / 12, at: now, speed: opts.speed || 1 }; city.mapV = 4;
+  equalStart(city, CONFIG.START_CASH); // the history moves prices and news, but every tycoon starts equal
   return city;
+}
+// A level start: every bot lets go of what it gathered (companies, warehouses, shares, loans, specialists, homes and
+// collectibles) and holds exactly `cash`; human tycoons get `topUp` on top of what they have. The administrator is left alone.
+export function equalStart(city, cash, topUp = 0) {
+  Object.values(city.players).forEach((p) => {
+    if (AS_IDS.includes(p.id)) return;
+    if (!p.bot) { if (topUp) { p.cash = r2(p.cash + topUp); feed(p, city.m, 'A level start', `Every tycoon in Aurex Bay starts with ${cash} M. You got ${topUp} M more.`, 'good'); } return; }
+    ownedBy(city, 'p', p.id).forEach((l) => releaseListing(city, l));
+    (city.warehouses || []).filter((w) => w.owner === p.id).forEach((w) => { w.owner = null; w.since = null; w.stock = {}; w.level = 1; });
+    if (city.shipments) city.shipments = city.shipments.filter((s) => s.owner !== p.id);
+    p.shares = {}; p.cost = {}; p.realized = 0; p.rlz = {}; p.loans = []; p.phist = []; p.hist = []; p.inf = 0;
+    if (city.talent) TAL.releaseAll(city, p, TCTX);
+    p.staff = []; p.assign = {}; p.team = {};
+    if (p.life) {
+      if (city.life) { city.life.lots = (city.life.lots || []).filter((l) => l.seller !== p.id); city.life.trades = (city.life.trades || []).filter((t) => t.from !== p.id && t.to !== p.id); }
+      p.life.homes = []; p.life.items = []; p.life.res = null; p.life.wallet = LIFE_CFG.startWallet; p.life.hist = []; p.life.ledger = [];
+    }
+    p.cash = cash;
+  });
+  return { ok: true, msg: `Level start: every bot holds ${cash} M and nothing else${topUp ? `, human tycoons got ${topUp} M more` : ''}.` };
 }
 function newPlayer(id, name, m, o = {}) {
   return { id, name, bot: !!o.bot, style: o.style || null, color: o.color || '#1b2b44', avatar: o.avatar || null, cash: o.cash ?? CONFIG.START_CASH, inf: 0, settledG: m / 12,

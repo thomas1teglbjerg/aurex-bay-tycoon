@@ -7,7 +7,7 @@ const city = E.createCity(now, { speed: 2016 }); E.addPlayer(city, 'u', 'Thomas'
 const step = (act = true) => { now += E.realMsPerMonth(city); E.advance(city, now); if (act) E.apply(city, 'u', 'ping', {}, now); };
 const A = (a, x) => E.apply(city, 'u', a, x, now);
 assert(Object.keys(city.talent).length === 29, '29 specialists in the city');
-assert(Object.values(city.players).filter((x) => x.bot).some((b) => T.teamOf(city, b).length), 'rival tycoons employ specialists');
+assert(Object.values(city.players).filter((x) => x.bot).every((b) => !T.teamOf(city, b).length), 'rival tycoons start without specialists (a level start)');
 const free = (kind) => Object.keys(city.talent).find((id) => T.PERSON[id].kind === kind && !city.talent[id].owner);
 let tid = free('jason') || free('sofia') || Object.keys(city.talent).find((id) => !city.talent[id].owner); const kind = T.PERSON[tid].kind;
 assert(!A('hire', { tid, salary: T.ask(city, tid) * 0.6, years: 2 }).ok, 'a lowball salary is refused');

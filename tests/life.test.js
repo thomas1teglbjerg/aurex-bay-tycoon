@@ -7,7 +7,7 @@ const city = E.createCity(now, { speed: 2016 }); E.addPlayer(city, 'u', 'Thomas'
 const step = () => { now += E.realMsPerMonth(city); E.advance(city, now); };
 const A = (a, x) => E.apply(city, 'u', a, x, now);
 assert(p.life && p.life.wallet === 0.4, 'personal wallet starts at 0.4 M');
-assert(Object.values(city.players).filter((x) => x.bot).reduce((a, b) => a + b.life.items.length, 0) >= 12, 'rival tycoons own collections');
+assert(Object.values(city.players).filter((x) => x.bot).every((b) => !b.life.items.length && !b.life.homes.length), 'rival tycoons start without homes or collections (a level start)');
 assert(city.life.lots.length >= 5 && city.life.dealer.length > 0, 'auction house and dealer are stocked');
 assert(!A('homeBuy', { hid: 'H1' }).ok, 'cannot buy the loft without a down payment');
 const d = A('lifeDividend', { amt: 10 }); assert(d.ok && Math.abs(p.life.wallet - (0.4 + 7.3)) < 0.01, 'dividend is taxed 27%');
