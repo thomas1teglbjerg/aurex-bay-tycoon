@@ -188,8 +188,8 @@ function homes(u, st) {
 
 // ---------------------------------------------------------------- The Aurex Gazette
 // the house ad is set by the administrator / system (HOUSE_AD in content.js), never bought by players
-export function houseAd(cls = '') {
-  const a = E.GZ.houseAd(city()); if (!a) return '';
+export function houseAd(cls = '', a = E.GZ.houseAd(city())) {
+  if (!a) return '';
   return `<div class="adv house ${cls}"><span class="adv-img" style="background-image:url(${esc(a.img)});background-position:${esc(a.pos || 'center')}"></span><span class="adv-t"><small>Advertisement · ${esc(a.from)}</small><b>${esc(a.head)}</b><span>${esc(a.line)}</span></span></div>`;
 }
 const worldCard = (c) => { const w = c.lastCard ? WORLD.find((x) => x.id === c.lastCard.id) : null; return w ? { ...w, m: c.lastCard.m } : null; };

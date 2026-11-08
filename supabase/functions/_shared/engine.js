@@ -85,7 +85,9 @@ export function mailAll(city, a) {
   const body = String((a && a.body) || '').split('\n').map((t) => t.trim()).filter(Boolean).join('\n').slice(0, 4000);
   if (!subj || !body) return { ok: false, msg: 'Write a subject and a message.' };
   const to = Object.values(city.players).filter((p) => !p.bot && !p.admin);
-  to.forEach((p) => MAIL.send(p, { g: city.g, m: city.m, kind: 'info', from: { ...ANNOUNCE_FROM }, subj, body }));
+  // the admin house ad at the bottom (a copy, so the mail keeps the ad that ran when it was sent)
+  const h = a && a.house ? GZ.houseAd(city) : null, hAd = h ? { img: h.img, pos: h.pos, from: h.from, head: h.head, line: h.line } : null;
+  to.forEach((p) => MAIL.send(p, { g: city.g, m: city.m, kind: 'info', from: { ...ANNOUNCE_FROM }, subj, body, ...(hAd ? { hAd: { ...hAd } } : {}) }));
   return { ok: true, n: to.length, msg: `Sent to ${to.length} player${to.length === 1 ? '' : 's'}.` };
 }
 // direct sales between tycoons (deals.js): who you can sell to, and money in and out of a company's owner

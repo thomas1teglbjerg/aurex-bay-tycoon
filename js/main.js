@@ -1171,7 +1171,7 @@ async function boot(hot) {
     const hf = e.target.closest('[data-form="house"]');
     if (hf) { e.preventDefault(); const v = (n) => (hf.elements[n] ? hf.elements[n].value : ''); const r = await B.setHouseAd({ pic: v('pic'), from: v('from'), head: v('head'), line: v('line') }); toast(r && r.msg ? r.msg : 'Saved.', r && r.ok === false ? 'bad' : 'good'); if (r && r.ok !== false && UI.web) navWeb('aurexgazette.ab'); renderAll(); return; }
     const ma = e.target.closest('[data-form="mailAll"]');
-    if (ma) { e.preventDefault(); const r = await B.mailAll({ subj: ma.elements.subj.value, body: ma.elements.body.value }); toast(r && r.msg ? r.msg : 'Sent.', r && r.ok === false ? 'bad' : 'good'); if (r && r.ok !== false) { UI.mailF = 'all'; UI.company = 'mail'; } renderAll(); return; }
+    if (ma) { e.preventDefault(); const r = await B.mailAll({ subj: ma.elements.subj.value, body: ma.elements.body.value, house: ma.elements.house.checked }); toast(r && r.msg ? r.msg : 'Sent.', r && r.ok === false ? 'bad' : 'good'); if (r && r.ok !== false) { UI.mailF = 'all'; UI.company = 'mail'; } renderAll(); return; }
     const f = e.target.closest('[data-form="post"]'); if (!f) return; e.preventDefault();
     const inp = f.querySelector('input'), text = inp.value.trim(); if (!text) return;
     inp.value = ''; inp.blur(); await act('post', { lid: f.dataset.lid, text }, 'Posted to the company board.');

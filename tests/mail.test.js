@@ -78,4 +78,8 @@ x = city.players.v.mail[0];
 assert(x.subj === "What's new in Aurex Bay" && x.body === 'Line one.\nLine two.' && x.from.k === 'city' && !x.opts, 'it is a plain city mail, blank lines dropped');
 assert(p.mail[0].subj === x.subj && p.mail[0].id !== x.id, 'each player gets their own copy');
 assert(!bot || (bot.mail || []).length === botN, 'bots get no changelog');
+assert(!x.hAd, 'no house ad unless asked');
+E.mailAll(city, { subj: 'With ad', body: 'Hello.', house: true });
+x = city.players.v.mail[0];
+assert(x.hAd && x.hAd.head === E.GZ.houseAd(city).head && x.hAd.img, 'the house ad rides at the bottom of the changelog');
 console.log('ALL OK');
