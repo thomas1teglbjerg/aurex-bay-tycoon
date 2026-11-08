@@ -18,7 +18,7 @@ delete city.market.concrete; delete city.market.sand; E.advance(city, now + 1);
 assert(city.market.concrete && city.market.sand, 'older markets gain the new goods');
 if (l.owner) { l.owner = null; l.ops = null; }
 assert(E.apply(city, 'u', 'buy', { lid: l.id }, now + 2).ok, 'buy the concrete plant');
-assert(TYPES.concrete.ypi === 1.4 && TYPES.concrete.trade === 1, 'base 1.4 M YPI and 1 M Trade a year');
+assert(TYPES.concrete.ypi === 0.6 && TYPES.concrete.trade === 1, 'base 0.6 M YPI and 1 M Trade a year');
 assert(E.listingYield(city, l, { k: 'p', id: 'u' }).ypi > 0, 'it earns passive income');
 assert(Math.abs(E.monthLines(city, l).maint - 0.5 / 12) < 1e-9, 'kiln upkeep 0.5 M a year');
 // the yard starts half full, nothing is used by the month, the owner mixes by hand
