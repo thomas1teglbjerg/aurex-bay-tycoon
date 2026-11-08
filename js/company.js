@@ -142,7 +142,7 @@ export function companyHTML(lid, ui = {}) {
     <div class="stat"><small>Wages & budgets / mo</small><b class="num">${M(rc.total / 12)}</b></div>
     ${hotel ? `<div class="stat"><small>Guests last month</small><b class="num">${N(last.units)}</b><span class="sub">${esc(rec.unit)}</span></div>
     <div class="stat"><small>Rooms this month</small><b class="num">${N(o.rooms ? o.rooms.used : 0)} / ${N(o.rooms ? o.rooms.cap : O.capacity(l))}</b><span class="sub">stays checked in</span></div>`
-    : `<div class="stat"><small>Output</small><b class="num">${N(last.units)} / ${N(last.cap)}</b><span class="sub">${esc(rec.unit)}</span></div>
+    : `<div class="stat"><small>Output</small><b class="num">${N(last.units)} / ${N(last.cap)}</b><span class="sub">${esc(rec.unit)}${o.pl && o.pl.per > 0 ? ` · supplies ${N(o.pl.per)} a week` : ''}</span></div>
     <div class="stat"><small>Finished stock</small><b class="num">${N(o.fg || 0)}</b><span class="sub">${o.line && o.line.left > 0 ? `+${N(o.line.per)} a week · ${o.line.left} wk left` : 'ready to deliver'}</span></div>`}
     <div class="stat"><small>Clients</small><b class="num">${clients.length}</b><span class="sub">${left ? `${left} left you` : (hotel ? rec.guests.client : R.label).toLowerCase() + 's'}</span></div>
     <div class="stat"><small>Reputation</small><b class="num">${Math.round(o.rep)}</b><div class="bar"><i style="width:${o.rep}%"></i></div></div>

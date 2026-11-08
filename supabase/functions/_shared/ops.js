@@ -320,7 +320,12 @@ export function produce(city, ctx, l, m) {
   if (man) { units = o.mixed || 0; o.mixed = 0; }
   // guests use supplies when they check in, not here; units is how many stayed last month
   if (guests) { const prev = o.rooms && o.rooms.m === m - 1 ? o.rooms.used : null; if (prev != null) units = prev; o.fg = 0; o.line = null; o.rooms = { m, cap: r2(cap), used: 0 }; }
-  else if (!man) {
+  else if (!man && hasOut) {
+    // supplies come off the line week by week: a quarter of the month's target now, the rest in the coming weekly steps (makeWeek)
+    o.pl = { per: target / 4, left: 3 };
+    makeWeek(city, ctx, l, target / 4);
+  } else if (!man) {
+    o.pl = null;
     stocked(l).forEach(([g, q]) => { o.inv[g] = Math.max(0, (o.inv[g] || 0) - q * units); });
     payMains(city, ctx, l, units);
     Object.entries(rec.out).forEach(([g, q]) => { o.inv[g] = (o.inv[g] || 0) + q * units; });
@@ -371,6 +376,16 @@ export function produce(city, ctx, l, m) {
   o.booksPenalty = !o.managed && !!o.depts.finance && automation(l, 'finance') === 0 && o.booksM !== m - 1;
   if (!o.managed && !o.depts.finance) o.booksPenalty = false;
   o.last = { m, cap: r2(cap), dem: r2(dem), units: r2(units), sold: r2(sold), price: r4(price), eff: r2(o.eff) };
+}
+// one week of supply output: uses what the stores hold now (deliveries that arrived mid-month count), at most `per` units
+export function makeWeek(city, ctx, l, per) {
+  const o = l.ops, rec = RECIPES[l.type]; let u = Math.max(0, per);
+  stocked(l).forEach(([g, q]) => { u = Math.min(u, (o.inv[g] || 0) / q); });
+  if (u <= 0) return 0;
+  stocked(l).forEach(([g, q]) => { o.inv[g] = Math.max(0, (o.inv[g] || 0) - q * u); });
+  payMains(city, ctx, l, u);
+  Object.entries(rec.out).forEach(([g, q]) => { o.inv[g] = (o.inv[g] || 0) + q * u; });
+  return u;
 }
 // phase 2: sellers put surplus on the market
 export function autoSell(city, ctx, l) {
@@ -498,6 +513,10 @@ function autoAnswer(o, od, a, m) { if (rand() < a) { od.auto = true; if (od.earn
 // weekly: queued orders arrive one by one
 export function weekStep(city, ctx, l, wk) {
   const o = l.ops; if (!o) return;
+  if (o.pl && o.pl.left > 0 && !isManual(l)) {
+    o.pl.left--; makeWeek(city, ctx, l, o.pl.per);
+    if (city.market) autoSell(city, ctx, l); // the sales team lists the new week's supplies right away
+  }
   if (hosts(l) && !o.managed) checkIn(city, ctx, l, Math.floor(wk / 4));
   else if (o.line && o.line.left > 0) {
     o.fg = (o.fg || 0) + o.line.per; o.line.left--;
