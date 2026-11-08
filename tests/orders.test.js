@@ -6,6 +6,7 @@ const city = E.createCity(now, { speed: 2016 }); E.addPlayer(city, 'u', 'Thomas'
 const step = () => { now += E.realMsPerMonth(city); E.advance(city, now); };
 const car = city.listings.find((l) => l.type === 'car' && !l.owner) || city.listings.find((l) => l.type === 'car');
 if (car.owner) { car.owner = null; car.ops = null; }
+delete car.site; car.built = true; // the car factories are building plots now: this test needs a finished one
 assert(E.apply(city, 'u', 'buy', { lid: car.id }, now).ok, 'buy car factory');
 assert(car.ops.clients.length === 6 && car.ops.clients.every((c) => c.kind === 'b2c'), 'B2C company starts with 6 retail clients');
 step();

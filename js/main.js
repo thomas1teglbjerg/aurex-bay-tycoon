@@ -15,6 +15,8 @@ import { lifeHTML, lifeModal, newDinner, startDinner, dinnerHTML, money, bidBase
 import { logoMark, logoFull, symbolIcon } from './brand.js';
 import { initChat, openChat, unreadFrom, inboxOf } from './chat.js';
 import { openMixer } from './mixer.js';
+import { openCrane } from './crane.js';
+import { siteHTML, statusOf as siteStatus } from './build.js';
 import { dealsToDo, dealsNeedingMe, newDealHTML, deliveryRun, DUI, RUN_S } from './deals.js';
 import { mailBoxHTML, mailPageHTML, mails, isRead as mailRead, markRead } from './mail.js';
 import { profilePageHTML, portraitUrl, canView } from './profile.js';
@@ -66,7 +68,8 @@ const PIN_COL = { sale: '#e0a526', mine: '#1f9d63', taken: '#3567b0', coop: '#7b
 const PIN_SVG = {
   company: '<path d="M4 20V9l5 3V9l5 3V5l6 3v12z"/>',
   wh: '<path d="M3 10l9-5 9 5v10H3z"/><path d="M7 20v-6h10v6"/>',
-  home: '<path d="M4 11l8-6 8 6v9h-5v-5H9v5H4z"/>'
+  home: '<path d="M4 11l8-6 8 6v9h-5v-5H9v5H4z"/>',
+  site: '<path d="M5 21V5h9M5 8l7-3M13 5v5M11 10h4v3h-4zM3 21h18" fill="none" stroke="#fff" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>'
 };
 const pinIcon = (k) => `<svg viewBox="0 0 24 24" width="14" height="14" fill="#fff" aria-hidden="true">${PIN_SVG[k]}</svg>`;
 function layerFor(level) {
@@ -175,7 +178,7 @@ function renderMarks() {
   }
   const d = DISTRICT[view.level], pos = (o) => ({ x: o.p[0] * view.W, y: o.p[1] * view.H }), out = [];
   c.listings.filter((l) => l.d === d.id).forEach((l) => { const o = ownerLabel(c, l), col = !l.owner ? PIN_COL.sale : o.mine ? PIN_COL.mine : o.coop ? PIN_COL.coop : PIN_COL.taken, q = pos(l);
-    out.push(`<button class="mp ${o.mine ? 'mine' : ''}${pinEdit ? ' mv' : ''}" data-mk="l:${l.id}" style="left:${q.x}px;top:${q.y}px;--c:${col}" aria-label="${esc(TYPES[l.type].name)}">${pinIcon('company')}</button>`); });
+    out.push(`<button class="mp ${o.mine ? 'mine' : ''}${pinEdit ? ' mv' : ''}${E.BLD.unbuilt(l) ? ' plot' : ''}" data-mk="l:${l.id}" style="left:${q.x}px;top:${q.y}px;--c:${col}" aria-label="${esc(TYPES[l.type].name)}${E.BLD.unbuilt(l) ? ' (building plot)' : ''}">${pinIcon(l.site ? 'site' : 'company')}</button>`); });
   WAREHOUSE_SITES.filter((x) => x.d === d.id).forEach((site) => { const w = (c.warehouses || []).find((x) => x.id === site.id), mine = w && w.owner === meId(), q = pos(site);
     out.push(`<button class="mp sq ${mine ? 'mine' : ''}" data-mk="w:${site.id}" style="left:${q.x}px;top:${q.y}px;--c:${mine ? PIN_COL.mine : PIN_COL.wh}" aria-label="${esc(site.name)}">${pinIcon('wh')}</button>`); });
   HOMES.filter((h) => h.d === d.id).forEach((h) => { const lp = me() && me().life, mine = lp && lp.homes.some((x) => x.hid === h.id), q = pos(h);
@@ -195,7 +198,8 @@ function mapCardHTML(key) {
   if (k === 'z') { const d = DISTRICT[id], st = districtStats(c, d);
     return `<div class="mc-img" style="${cropStyle({ d: d.id, p: [0.5, 0.5] }, 1.2)}"></div><div class="mc-b"><span class="mc-k">District</span><h4>${esc(d.name)}</h4><p>${esc(d.blurb)}</p>${row('Companies', `${st.total}${st.sale ? ` · ${st.sale} for sale` : ''}`)}${st.mine ? row('Yours', st.mine) : ''}${row('Warehouses', st.wh)}${row('Homes', st.homes)}<div class="mc-foot">Click to explore</div></div>`; }
   if (k === 'l') { const l = E.listing(c, id), o = ownerLabel(c, l), y = E.listingYield(c, l, l.owner || { k: 'p', id: meId() });
-    return `<div class="mc-img" style="background-image:url(${coImg(l)})"></div><div class="mc-b"><span class="mc-k">${esc(TYPES[l.type].sector)}</span><h4>${esc(lname(l))}</h4><p>${l.title ? esc(TYPES[l.type].name) + ' · ' : ''}${esc(l.district)} · ${SIZES[l.size].label} · Level ${l.level}</p>
+    const ss = l.site ? siteStatus(l) : null;
+    return `<div class="mc-img${E.BLD.unbuilt(l) ? ' plot' : ''}" style="background-image:url(${coImg(l)})"></div><div class="mc-b"><span class="mc-k">${E.BLD.unbuilt(l) ? 'Building plot · ' : ''}${esc(TYPES[l.type].sector)}</span><h4>${esc(lname(l))}</h4><p>${l.title ? esc(TYPES[l.type].name) + ' · ' : ''}${esc(l.district)} · ${SIZES[l.size].label} · Level ${l.level}</p>${ss ? row('Site', esc(ss.label)) : E.BLD.cond(l) < E.BLD.B.cond.worn ? row('Condition', `${Math.round(E.BLD.cond(l))}% · ${E.BLD.condLabel(l)}`) : ''}
       ${row('Owner', l.owner ? `${o.brand ? logoMark(o.brand, 16) : `<i class="mc-dot" style="background:${o.color}"></i>`} ${esc(o.mine ? 'You' : o.brand ? o.brand.name : o.name)}` : '<em class="s">For sale</em>')}${row(l.owner ? 'Value' : 'Price', M(l.owner ? E.listingValue(l) : E.listingPrice(l)))}${row('Earns', `${M(y.total, true)} / yr`)}<div class="mc-foot">${lastPointer === 'touch' ? '<button class="btn sm gold" data-a="open" data-lid="' + l.id + '">Open</button>' : 'Click to open'}</div></div>`; }
   if (k === 'w') { const site = WAREHOUSE_SITES.find((x) => x.id === id), w = (c.warehouses || []).find((x) => x.id === id), own = w && w.owner ? c.players[w.owner] : null;
     return `<div class="mc-img" style="${site.img ? `background-image:url(${site.img})` : cropStyle(site, 2.4)}"></div><div class="mc-b"><span class="mc-k">Warehouse · ${esc(MODE_LABEL[site.mode])}</span><h4>${esc(site.name)}</h4><p>${esc(site.district)}</p>${row('Owner', own ? `<i class="mc-dot" style="background:${own.id === meId() ? 'var(--good)' : own.color}"></i>${esc(own.id === meId() ? 'You' : own.name)}` : '<em class="s">For sale</em>')}${row(own ? 'Storage' : 'Price', own ? `${N(E.LOG.capacityOf(w))} units` : M(site.price))}${row('Upkeep', `${M(site.upkeep)} / yr`)}<div class="mc-foot">${lastPointer === 'touch' ? `<button class="btn sm gold" data-a="wh" data-wid="${id}">Open</button>` : 'Click to open'}</div></div>`; }
@@ -437,12 +441,14 @@ function companyCard(l) {
   const coord = `${l.id} · ${l.district.toUpperCase()} · ${(l.p[0] * 90).toFixed(1)}N`;
   const chips = def.perks.map((p) => `<span class="dz-perk up" title="${esc(p.d)}">+ ${esc(p.t)} <i>${esc(p.d)}</i></span>`).join('') + def.neg.map((p) => `<span class="dz-perk down" title="${esc(p.d)}">− ${esc(p.t)} <i>${esc(p.d)}</i></span>`).join('');
   return `<article class="sheet dz dzc">
-    <div class="dz-hero" style="background-image:url(${coImg(l)})" role="img" aria-label="${esc(lname(l))}"><span class="dz-coord">${esc(coord)}</span>${l.owner ? `<span class="dz-own">${o.brand ? logoMark(o.brand, 18) : `<i style="background:${o.mine ? 'var(--good)' : o.color}"></i>`}${esc(o.mine ? 'Yours' + (o.brand ? ' · ' + o.brand.name : '') : o.full || o.name)}</span>` : '<span class="dz-own sale">For sale</span>'}</div>
+    <div class="dz-hero${E.BLD.unbuilt(l) ? ' plot' : ''}" style="background-image:url(${coImg(l)})" role="img" aria-label="${esc(lname(l))}">${E.BLD.unbuilt(l) ? '<span class="dz-plot">Building plot</span>' : ''}<span class="dz-coord">${esc(coord)}</span>${l.owner ? `<span class="dz-own">${o.brand ? logoMark(o.brand, 18) : `<i style="background:${o.mine ? 'var(--good)' : o.color}"></i>`}${esc(o.mine ? 'Yours' + (o.brand ? ' · ' + o.brand.name : '') : o.full || o.name)}</span>` : '<span class="dz-own sale">For sale</span>'}</div>
     <div class="dz-body">
       <div class="dz-title"><div><span class="dz-k">${esc(def.sector)}</span><h2>${esc(lname(l))}</h2><span class="dz-sub">${l.title ? esc(def.name) + ' · ' : ''}${SIZES[l.size].label} · Level ${l.level}</span></div>
         <div class="dz-price"><span>${l.owner ? 'Value' : 'Asking'}</span><b>${M(price)}</b></div></div>
       <div class="dz-tiles"><div><span>Earns</span><b class="up">${M(y.total, true)}</b></div><div><span>Yield</span><b>${yieldPct}%</b></div><div><span>YPI</span><b>${y.ypi.toFixed(1)}</b></div><div><span>Trade</span><b>${y.trade.toFixed(1)}</b></div></div>
       ${y.notes.length ? `<p class="dz-notes">${esc(y.notes.join(' · '))}</p>` : ''}
+      ${E.BLD.unbuilt(l) ? `<p class="dz-notes">Built, it earns about ${M(E.listingYield(c, { ...l, site: null, cond: 100 }, l.owner || { k: 'p', id: meId() }).total, true)} a year. Worth ${M(E.fullPrice(l))} when it opens.</p>` : E.BLD.cond(l) < 100 ? `<p class="dz-notes">Condition ${Math.round(E.BLD.cond(l))}% · ${E.BLD.condLabel(l)}${E.BLD.ruined(l) ? ': it does not work until it is renovated' : ''}</p>` : ''}
+      ${l.site ? siteHTML(l) : ''}
       <div class="dz-perks">${chips}</div>
       <div class="act">${listingActions(l)}</div>
       <div class="dz-tags">${def.tags.map((t) => `<span>${esc(t)}</span>`).join('')}</div>
@@ -457,9 +463,10 @@ function listingActions(l) {
     out.push(`<button class="btn gold" data-a="buy" data-lid="${l.id}" ${p.cash < price ? 'disabled' : ''}>Buy for ${M(price)}${p.cash < price ? ` · you have ${M(p.cash)}` : ''}</button>`);
     E.myHoldings(c, p.id).forEach((h) => out.push(`<button class="btn coop" data-a="buyas" data-lid="${l.id}" data-hid="${h.id}" ${h.treasury < price ? 'disabled' : ''}>Buy with ${esc(h.name)} · treasury ${M(h.treasury)}</button>`));
   } else if (o.mine && !o.coop) {
-    out.push(`<button class="btn gold" data-a="company" data-lid="${l.id}">Open company dashboard</button>`);
+    if (!E.BLD.unbuilt(l)) out.push(`<button class="btn gold" data-a="company" data-lid="${l.id}">Open company dashboard</button>`);
     if (l.upgrade) out.push(`<div><div class="cap">Upgrading to level ${l.upgrade.to} · ready in <span data-live="until:${l.upgrade.doneM}">…</span></div><div class="bar" style="margin-top:6px"><i data-live="prog:${l.id}"></i></div></div>`);
-    else if (l.level < 5) out.push(`<button class="btn navy" data-a="upgrade" data-lid="${l.id}" ${p.cash < E.upgradeCost(l) ? 'disabled' : ''}>Upgrade to level ${l.level + 1} · ${M(E.upgradeCost(l))} · ${dur(E.upgradeMonths(l) * E.realMsPerMonth(c))}</button>`);
+    else if (l.level < 5 && !l.site && !E.BLD.idle(l)) out.push(`<button class="btn navy" data-a="upgrade" data-lid="${l.id}" ${p.cash < E.upgradeCost(l) ? 'disabled' : ''}>Upgrade to level ${l.level + 1} · ${M(E.upgradeCost(l))} · ${E.upgradeIsBuild(l) ? 'plus a building project' : dur(E.upgradeMonths(l) * E.realMsPerMonth(c))}</button>`);
+    if (!l.site && E.BLD.cond(l) < E.BLD.B.renoBelow) out.push(`<button class="btn navy" data-a="siteRenovate" data-lid="${l.id}">Plan a renovation · condition ${Math.round(E.BLD.cond(l))}%</button>`);
     const cs = c.contracts.filter((k) => k.status === 'active' && (k.a === l.id || k.b === l.id));
     cs.forEach((k) => { const other = E.listing(c, k.a === l.id ? k.b : k.a), op = c.players[other.owner?.id]; out.push(`<div class="row" style="padding:4px 0"><div class="grow"><b>Supply contract</b><span>${esc(TYPES[other.type].name)} · ${esc(op ? op.name : '')}</span></div><button class="btn sm" data-a="contractEnd" data-id="${k.id}">End</button></div>`); });
     const partners = [];
@@ -468,9 +475,9 @@ function listingActions(l) {
     out.push(`<button class="btn danger" data-a="sell" data-lid="${l.id}">Sell to the market for ${M(E.listingValue(l) * 0.8)}</button>`);
   } else if (o.coop) {
     if (o.mine) {
-      if (E.canRun(c, p.id, l)) out.push(`<button class="btn gold" data-a="company" data-lid="${l.id}">Open company dashboard</button>`);
+      if (E.canRun(c, p.id, l) && !E.BLD.unbuilt(l)) out.push(`<button class="btn gold" data-a="company" data-lid="${l.id}">Open company dashboard</button>`);
       if (l.upgrade) out.push(`<div class="cap">Upgrading · ready in <span data-live="until:${l.upgrade.doneM}">…</span></div>`);
-      else if (l.level < 5) out.push(`<button class="btn coop" data-a="upgrade" data-lid="${l.id}">Propose upgrade to level ${l.level + 1} · ${M(E.upgradeCost(l))}</button>`);
+      else if (l.level < 5 && !l.site && !E.BLD.idle(l)) out.push(`<button class="btn coop" data-a="upgrade" data-lid="${l.id}">Propose upgrade to level ${l.level + 1} · ${M(E.upgradeCost(l))}</button>`);
       const h = c.holdings[l.owner.id];
       if (h && h.proposals.some((x) => x.status === 'open' && x.kind === 'sell' && x.lid === l.id)) out.push('<span class="chip">Sale vote running</span>');
       else out.push(`<button class="btn danger" data-a="sell" data-lid="${l.id}">Propose sale to the market · ${M(E.listingValue(l) * 0.8)} to the treasury</button>`);
@@ -853,6 +860,13 @@ async function onClick(e) {
     case 'buyQty': UI.buyQty[d.g] = Math.max(10, (UI.buyQty[d.g] || Number(t.parentElement.querySelector('output').textContent)) + Number(d.v)); renderPanel(); return;
     case 'mixStart': { const inp = document.getElementById('mix-qty-' + d.lid), r = await act('mixStart', { lid: d.lid, qty: Number(inp && inp.value) || 0 }); if (r && r.ok) openMixer(d.lid, act); return; }
     case 'mixOpen': openMixer(d.lid, act); return;
+    case 'crane': openCrane(d.lid, act); return;
+    case 'siteTender': await act('siteTender', { lid: d.lid, turnkey: d.v === '1' }); return;
+    case 'siteCancel': case 'siteCity': case 'siteFire': case 'siteRenovate': await act(a, { lid: d.lid }); return;
+    case 'siteAccept': case 'siteDecline': case 'siteWithdraw': await act(a, { lid: d.lid, bid: d.v }); return;
+    case 'siteBid': await act('siteBid', { lid: d.lid, from: $('bf-from-' + d.lid) && $('bf-from-' + d.lid).value, price: Number($('bf-price-' + d.lid) && $('bf-price-' + d.lid).value), weeks: Number($('bf-weeks-' + d.lid) && $('bf-weeks-' + d.lid).value) }); return;
+    case 'siteBuy': await act('siteBuy', { lid: d.lid, g: d.g, qty: Number($(`sq-${d.lid}-${d.g}`) && $(`sq-${d.lid}-${d.g}`).value) }); return;
+    case 'siteMove': await act('siteMove', { lid: d.lid, g: d.g, qty: Number($(`sq-${d.lid}-${d.g}`) && $(`sq-${d.lid}-${d.g}`).value), from: $(`ss-${d.lid}-${d.g}`) && $(`ss-${d.lid}-${d.g}`).value }); return;
     case 'buySupply': await act('buySupply', { lid: d.lid, g: d.g, qty: Number(d.q), carrier: d.c }); return;
     case 'carrier': UI.carrier[d.lid] = d.v; renderPanel(); return;
     case 'acctPeriod': UI.acct = UI.acct || {}; UI.acct[d.lid] = d.v; renderPanel(); return;

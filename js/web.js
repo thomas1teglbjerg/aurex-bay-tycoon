@@ -7,6 +7,7 @@ import { money, ricon, homeBg, bidBase, standing } from './life.js';
 import { apexSite } from './team.js';
 import { freightSite, freightAlias } from './freight.js';
 import { concreteSite } from './concrete-site.js';
+import { buildSite, HOST as BUILD_HOST } from './build.js';
 import { CENTRAL, CENTRAL_BANK, WORLD, TYPES, GOODS, HOUSE_PICS } from '../supabase/functions/_shared/content.js';
 
 const L = E.LIFE;
@@ -33,7 +34,8 @@ export const SITES = {
   'harbortrust.ab': { name: 'Harbor Trust', tag: 'Private banking · your personal account', logo: ['HT', '#0b3d4f', '#7fe0c9'] },
   'bayhomes.ab': { name: 'BayHomes', tag: 'Find your place in Aurex Bay', logo: ['BH', '#0e8a7e', '#fff'] },
   'aurexgazette.ab': { name: 'The Aurex Gazette', tag: 'News, markets and society', logo: ['G', '#fff', '#111'] },
-  'baysideconcrete.ab': { name: 'Bayside Concrete', tag: 'Ready-mix concrete · prices and quotes · Harbor Row', logo: ['BC', '#24272c', '#f28c28'] }
+  'baysideconcrete.ab': { name: 'Bayside Concrete', tag: 'Ready-mix concrete · prices and quotes · Harbor Row', logo: ['BC', '#24272c', '#f28c28'] },
+  'aurexbuild.ab': { name: 'Aurex Build', tag: 'Building plots, calls for bids and builders', logo: ['AB', '#2b2f24', '#f2c230'] }
 };
 const favicon = (host, s = 22) => { const [t, bg, fg] = SITES[host].logo; return `<span class="fav" style="width:${s}px;height:${s}px;background:${bg};color:${fg};font-size:${Math.round(s * (t.length > 2 ? 0.34 : 0.48))}px">${esc(t)}</span>`; };
 const go = (u, inner, cls = '') => `<a href="#" class="${cls}" data-a="webGo" data-u="${esc(u)}">${inner}</a>`;
@@ -73,7 +75,7 @@ function adSlot(slot, cls = '') {
 export function parseUrl(u) { const s = String(u || HOME_URL).trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, ''); const [host, ...rest] = s.split('/'), r = { host: host.toLowerCase(), path: rest, url: s || HOME_URL }; const alias = freightAlias(r); return alias ? parseUrl(alias) : r; }
 export function webHTML(st) {
   const u = parseUrl(st.url), site = SITES[u.host];
-  const page = !site ? notFound(u) : u.host === 'baylink.ab' ? portal(st) : u.host === 'aurexauctions.ab' ? auctions(u, st) : SITES[u.host].cat ? dealer(SITES[u.host].cat, u) : u.host === 'bayhomes.ab' ? homes(u, st) : u.host === 'harbortrust.ab' ? bank(u) : u.host === 'bankofaurex.ab' ? boa(u) : u.host === 'apextalent.ab' ? apexSite(u, go) : SITES[u.host].freight ? freightSite(u, go) : u.host === 'baysideconcrete.ab' ? concreteSite(u, st, go) : gazette(u, st);
+  const page = !site ? notFound(u) : u.host === 'baylink.ab' ? portal(st) : u.host === 'aurexauctions.ab' ? auctions(u, st) : SITES[u.host].cat ? dealer(SITES[u.host].cat, u) : u.host === 'bayhomes.ab' ? homes(u, st) : u.host === 'harbortrust.ab' ? bank(u) : u.host === 'bankofaurex.ab' ? boa(u) : u.host === 'apextalent.ab' ? apexSite(u, go) : SITES[u.host].freight ? freightSite(u, go) : u.host === 'baysideconcrete.ab' ? concreteSite(u, st, go) : u.host === BUILD_HOST ? buildSite(u, go) : gazette(u, st);
   const bm = Object.keys(SITES).filter((h) => h !== 'baylink.ab').map((h) => `<button data-a="webGo" data-u="${h}" class="${u.host === h ? 'on' : ''}">${favicon(h, 18)}<span>${esc(SITES[h].name.replace(/^The /, ''))}</span></button>`).join('');
   return `<div class="wwin"><div class="wchrome">
     <div class="wbar"><button data-a="webBack" aria-label="Back" ${st.back.length ? '' : 'disabled'}>‹</button><button data-a="webFwd" aria-label="Forward" ${st.fwd.length ? '' : 'disabled'}>›</button><button data-a="webHome" aria-label="Home" class="hm"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/></svg></button>

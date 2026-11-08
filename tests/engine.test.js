@@ -14,7 +14,7 @@ for (let run = 0; run < 12; run++) {
     now += stepMs; E.advance(city, now);
     const p = city.players[me];
     // scripted player: buys affordable synergies, upgrades, hires, networks, forms a coop
-    const free = city.listings.filter((l) => !l.owner).sort((a, b) => E.listingPrice(a) - E.listingPrice(b));
+    const free = city.listings.filter((l) => !l.owner && !E.BLD.idle(l)).sort((a, b) => E.listingPrice(a) - E.listingPrice(b));
     if (free[0] && p.cash > E.listingPrice(free[0]) + 2) E.apply(city, me, 'buy', { lid: free[0].id }, now);
     const up = E.ownedBy(city, 'p', me).find((l) => !l.upgrade && l.level < 5 && E.upgradeCost(l) < p.cash - 3);
     if (up) E.apply(city, me, 'upgrade', { lid: up.id }, now);
@@ -25,10 +25,11 @@ for (let run = 0; run < 12; run++) {
     city.contracts.filter((c) => c.to === me && c.status === 'pending').forEach((c) => E.apply(city, me, 'contractAccept', { id: c.id }, now));
     if (p.net.length < 2) { const b = Object.values(city.players).find((x) => x.bot && !p.net.includes(x.id)); E.apply(city, me, 'netRequest', { pid: b.id }, now); }
     if (!hid && p.cash > 9) { const r = E.apply(city, me, 'holdingCreate', { name: 'Thomas & Co', amt: 8 }, now); assert(r.ok, 'create holding ' + r.msg); hid = Object.values(city.holdings).find((h) => h.founder === me).id; E.apply(city, me, 'holdingInvite', { hid, pid: 'bot-lars' }, now); }
-    if (hid && city.holdings[hid]) { const h = city.holdings[hid]; const f = city.listings.find((l) => !l.owner && E.listingPrice(l) <= h.treasury); if (f && !h.proposals.some((x) => x.status === 'open')) E.apply(city, me, 'buy', { lid: f.id, as: hid }, now); }
+    if (hid && city.holdings[hid]) { const h = city.holdings[hid]; const f = city.listings.find((l) => !l.owner && !E.BLD.idle(l) && E.listingPrice(l) <= h.treasury); if (f && !h.proposals.some((x) => x.status === 'open')) E.apply(city, me, 'buy', { lid: f.id, as: hid }, now); }
     city.offers.filter((o) => o.to === me && o.status === 'open').forEach((o) => E.apply(city, me, 'offerDecline', { id: o.id }, now));
     if (city.listings.every((l) => l.owner) && p.cash > 40) { const t = city.listings.find((l) => l.owner.k === 'p' && l.owner.id !== me); if (t) E.apply(city, me, 'offer', { lid: t.id, amt: Math.round(E.listingValue(t) * 1.45) }, now); }
     E.ownedBy(city, 'p', me).forEach((l) => {
+      if (!l.ops) return;
       (l.ops.orders || []).slice().forEach((o) => {
         if (o.status === 'new') E.apply(city, me, 'order', { lid: l.id, op: o.earning > 0 ? 'accept' : 'reject', oid: o.id }, now);
         else if (o.status === 'accepted') E.apply(city, me, 'order', { lid: l.id, op: 'deliver', oid: o.id, cid: o.cid }, now);

@@ -83,7 +83,7 @@ DISTRICTS.forEach((d) => { d.x = Math.round(d.box.x + d.box.w / 2); d.y = Math.r
 export const DISTRICT = Object.fromEntries(DISTRICTS.map((d) => [d.id, d]));
 export function placeOn(d, p) { const b = DISTRICT[d].box; return { x: Math.round(b.x + p[0] * b.w), y: Math.round(b.y + p[1] * b.h) }; }
 
-// 41 unique listings: [type, district, size, x, y within the district view, title, own picture in img/]
+// 43 unique listings: [type, district, size, x, y within the district view, title, own picture in img/]
 export const LISTINGS = [
   ['clothing', 'ironport', 'S', 0.24, 0.31, 'Eastbridge Supply Co.'], ['fashion', 'aurex', 'L', 0.6, 0.72], ['fashion', 'marina', 'S', 0.54, 0.5],
   ['hotel', 'marina', 'L', 0.2, 0.3], ['hotel', 'marina', 'M', 0.42, 0.4], ['hotel', 'sunset', 'S', 0.45, 0.4, null, 'c-hotel-sunset'],
@@ -105,7 +105,10 @@ export const LISTINGS = [
   ['power', 'harbor', 'L', 0.38, 0.2, 'Aurex Energy'],
   ['power', 'ironport', 'M', 0.3, 0.39, 'Aurex City PowerPlant', 'c-powerplant'],
   ['woodworks', 'crown', 'S', 0.39, 0.61, 'Old Oak Joinery'],
-  ['woodworks', 'crown', 'L', 0.935, 0.67, 'Crown Hills Timberworks', 'c-timberworks']
+  ['woodworks', 'crown', 'L', 0.935, 0.67, 'Crown Hills Timberworks', 'c-timberworks'],
+  // from L42 on every new company starts as a building plot that players build (BUILD, build.js)
+  ['construction', 'harbor', 'S', 0.77, 0.47, 'Harbor Row Builders'],
+  ['construction', 'aurex', 'L', 0.42, 0.52, 'Crown Bridge Builders']
 ].map(([type, d, size, px, py, title, img], i) => ({ id: 'L' + (i + 1), type, d, p: [px, py], district: DISTRICT[d].name, size, ...(title ? { title } : {}), ...(img ? { img } : {}), ...placeOn(d, [px, py]) }));
 
 // the national bank: the Bank of Aurex site in Aurex City (bankofaurex.ab in the in-game browser)
@@ -626,6 +629,37 @@ export const QUOTES = { minQty: 10, maxQty: 2000, maxWeeks: 12, answerWeeks: 2, 
 export const ROADS = { id: 'roads', name: 'City Road Maintenance', role: 'Aurex Bay public works', week: 0.3, qty: [30, 200], weeks: [2, 5], markup: 1.1,
   jobs: ['Pothole repairs on the harbour road', 'A new kerb line along the avenue', 'Resurfacing a junction', 'Bridge deck patching', 'A new bus stop platform', 'Repairs to the sea wall walkway', 'Footpath renewal by the school'] };
 // company websites that take quote requests: host → the listing and the good it sells
+// Building: new companies start as a plot. The owner hires a construction company (or the city's own crew), the site
+// uses building supplies week by week through four phases, and the company opens when the last phase is done (build.js).
+// Buildings wear (cond 0–100) while nobody owns them or the owner is away; renovation and upgrades from level 2 are smaller projects.
+export const BUILD = {
+  firstPlot: 42,                       // listings from L42 on start as building plots
+  plots: ['L10', 'L12'],               // older sites turned into plots: the car factories
+  plotShare: 0.25,                     // a plot costs this share of the company's price ...
+  siteShare: 0.6,                      // ... plus this share for the part already built
+  weeks: { S: 12, M: 34, L: 48 },      // game weeks for a new building at full supply (S 3 game months, M ≈ 5 real days, L ≈ 7)
+  partWeeks: 0.5,                      // renovations and upgrades take half as long per phase
+  phases: [
+    { id: 'found', name: 'Foundation', share: 0.25, need: { concrete: 800, steel: 80 }, task: 'Pour the foundation', verb: 'Pour each bucket of concrete into the formwork' },
+    { id: 'frame', name: 'Structure', share: 0.33, need: { concrete: 400, steel: 220, beams: 300 }, task: 'Lift the frame', verb: 'Lower each steel girder and beam onto its column' },
+    { id: 'close', name: 'Walls and roof', share: 0.25, need: { walls: 300, chemicals: 50 }, task: 'Set the wall panels', verb: 'Set each wall element in its slot' },
+    { id: 'fit', name: 'Fit-out', share: 0.17, need: { energy: 250 }, fit: 0.2, task: 'Hoist the plant room', verb: 'Land each plant unit on the roof' }
+  ],                                   // materials for a company worth ref M (more or less in proportion to its price). fit: M of the company's own main supply
+  ref: 14,
+  parts: [1, 2],                       // renovations and upgrades: Structure + Walls and roof only
+  labour: 0.15,                        // a fair builder's fee: this share of the company's price (× the share of materials in partial works)
+  city: { name: 'Aurex Municipal Works', role: 'The city building crew', markup: 1.4, slow: 1.25 },
+  slots: { S: 1, M: 2, L: 3 },         // sites a construction company runs at once (+1 per level above 1)
+  bidWeeks: 4,                         // a bid stays open this long
+  taskWeeks: 2,                        // the builder has this long to do a phase task; then the crew does it (score auto)
+  auto: 0.5, cityScore: 0.6, fast: 0.8, // task scores: done by the crew, by the city crew; at fast or better the next phase is one week shorter
+  fine: 0.02, fineMax: 0.2,            // late: 2% of the contract per week, at most 20%, back to the owner
+  newBonus: 0.1, newMonths: 12,        // a new building earns +10% YPI its first year
+  decay: { idle: 6, free: 3, away: 1 },// points a month: unowned after 6 months, owner away (inactive)
+  cond: { worn: 70, poor: 40, ruin: 20 }, condMult: { worn: 0.9, poor: 0.7 }, ruinPrice: 0.5,
+  reno: [0.2, 0.3], renoBelow: 90,     // renovation materials: 20% + 30% × wear; possible below 90% condition
+  upFrom: 2, upShare: 0.25, upMoney: 0.5 // from level 2 an upgrade is a project with 25% of the materials per level and half the money
+};
 export const SITE_CO = { 'baysideconcrete.ab': { lid: 'L37', g: 'concrete' } };
 export const LOGISTICS = { truckDaysPer100px: 0.9, minTruckDays: 1, bulkDiscountQty: 500, bulkDiscount: 0.05, upgradeCostMult: 0.5, levelCap: 1.5 };
 

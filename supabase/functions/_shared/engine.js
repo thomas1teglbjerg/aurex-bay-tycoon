@@ -16,6 +16,7 @@ import * as GZ from './gazette.js';
 import * as QT from './quotes.js';
 import * as HD from './holding.js';
 import * as BOT from './bots.js';
+import * as BLD from './build.js';
 export { OPS, LOG, LIFE, TAL, BR, ADS, MAIL, CAR, DEAL, GZ, QT, HD, BOT };
 OPS.setFreightQuote((cid, v, q, route) => LOG.freight(cid, v, q, route));
 
@@ -103,7 +104,7 @@ const bx = (city) => ({
   placeHostile: (l, b, amt, consent) => placeHostile(city, l, b, amt, consent), offerAccept: (o) => completeOffer(city, o, city.m),
   pressFee: () => GZ.pressFee(city), payPaper: (v) => { const l = GZ.paper(city); if (l && l.owner && cctx(city).owners(l).length) credit(city, l.owner, v); },
   canRun: (pid, l) => canRun(city, pid, l), sell: (l, p) => sellTo(city, l, p), netWorth: (id) => netWorth(city, id), px: () => (city.cb && city.cb.px) || 1,
-  reserved: (l) => CB.isBank(l) || GZ.isPaper(l), inHolding: (b) => myHoldings(city, b.id).length > 0, ally: (a, b, p) => makeAlliance(city, a, b, p), dctx: dctx(city),
+  reserved: (l) => CB.isBank(l) || GZ.isPaper(l) || BLD.idle(l), inHolding: (b) => myHoldings(city, b.id).length > 0, ally: (a, b, p) => makeAlliance(city, a, b, p), dctx: dctx(city),
   talentTargets: (b, p) => (city.talent ? Object.keys(TAL.PERSON).filter((tid) => { const t = TAL.PERSON[tid], s = city.talent[tid]; return s && s.owner === p.id && !t.starter && s.sat < 75 && s.leave == null && !(b.team && b.team[t.kind]) && !(city.tOffers || []).some((x) => x.tid === tid && x.status === 'open'); })
     .map((tid) => ({ tid, name: TAL.PERSON[tid].name, fee: r2(TAL.value(city, tid) * (1 + rand() * 0.2)), salary: r2(TAL.ask(city, tid) * 1.15) })).filter((t) => b.cash > t.fee + 5 && TAL.willAccept(city, t.tid, t.salary, true).ok) : []),
   talentBid: (b, tid, fee, salary) => TAL.bid(city, b, tid, fee, salary, 2, { ...TCTX, inactive: (x) => inactive(city, x) }),
@@ -150,8 +151,9 @@ export function bossOf(city, owner) { if (!owner) return null; if (owner.k === '
 export function hasHead(city, l, p, spec) { if (!p) return false; if (p.bot) return hasStaff(p, spec); const a = p.assign && p.assign[spec]; return !!(a && a.lid === l.id); }
 function assignOwner(city, l, owner, m) {
   if (l.owner && l.owner.k === 'p') CAR.count(city.players[l.owner.id], 'sold'); if (owner && owner.k === 'p') CAR.count(city.players[owner.id], 'bought');
-  const prevOps = l.ops; l.owner = owner; l.boughtM = m; l.upgrade = l.upgrade && prevOps ? l.upgrade : null;
+  const prevOps = l.ops; l.owner = owner; l.boughtM = m; l.upgrade = l.upgrade && prevOps ? l.upgrade : null; l.freeSince = null;
   city.book = (city.book || []).filter((o) => o.lid !== l.id);
+  if (BLD.unbuilt(l)) { l.ops = null; return; } // a building site runs nothing until it opens
   if (isManaged(city, l)) { l.ops = prevOps || OPS.newOps(l, true); l.ops.managed = true; Object.values(l.ops.depts).forEach((d) => (d.head = null)); }
   else if (prevOps) OPS.takeOverOps(l); else l.ops = OPS.newOps(l, false);
 }
@@ -245,9 +247,12 @@ export function setSpeed(city, speed, now) { advance(city, now); city.clock = { 
 
 // ---------------------------------------------------------------- lookups
 export const listing = (city, id) => city.listings.find((l) => l.id === id);
-export function listingPrice(l) { return Math.round(TYPES[l.type].price * SIZES[l.size].mult * 2) / 2; }
+export function fullPrice(l) { return Math.round(TYPES[l.type].price * SIZES[l.size].mult * 2) / 2; }
+// a plot costs a share of the company, more as the building grows; a worn building sells for less (build.js)
+export function listingPrice(l) { const f = fullPrice(l); return BLD.unbuilt(l) ? Math.max(0.5, Math.round(f * (BLD.B.plotShare + BLD.B.siteShare * BLD.progress(l)) * 2) / 2) : Math.round(f * BLD.condPrice(l) * 2) / 2; }
 export function listingValue(l) { return r2(listingPrice(l) * (1 + 0.3 * (l.level - 1))); }
-export function upgradeCost(l) { return Math.round(listingPrice(l) * 0.4 * l.level * 2) / 2; }
+export function upgradeCost(l) { const c = Math.round(fullPrice(l) * 0.4 * l.level * 2) / 2; return l.level >= BLD.B.upFrom ? Math.round(c * BLD.B.upMoney * 2) / 2 : c; }
+export const upgradeIsBuild = (l) => l.level >= BLD.B.upFrom;
 export function upgradeMonths(l) { return l.level; }
 const ownerIs = (l, k, id) => l.owner && l.owner.k === k && l.owner.id === id;
 export function ownedBy(city, k, id) { return city.listings.filter((l) => ownerIs(l, k, id)); }
@@ -339,6 +344,8 @@ function contractPartnerTypes(city, l) {
   return out;
 }
 export function listingYield(city, l, owner) {
+  if (BLD.unbuilt(l)) return { ypi: 0, trade: 0, total: 0, notes: ['Building site: earns nothing until it is built'] };
+  if (BLD.ruined(l)) return { ypi: 0, trade: 0, total: 0, notes: ['A ruin: renovate it to open again'] };
   owner = owner || l.owner; const def = TYPES[l.type], s = SIZES[l.size].mult, lv = 1 + 0.35 * (l.level - 1), econ = city.econ, notes = [];
   let mult = TRADE_MULT[econ];
   if ((l.type === 'pharma' || l.type === 'autorepair') && econ === 'Recession') mult = 1;
@@ -393,6 +400,8 @@ export function listingYield(city, l, owner) {
     }
   }
   const lv2 = CB.sectorLevy(city, l.type); if (lv2 && ypi > 0) { const v = ypi * lv2 / 100; ypi -= v; notes.push(`National bank levy −${r2(v)}`); }
+  if (l.newUntil != null && city.m < l.newUntil && ypi > 0) { const v = ypi * BLD.B.newBonus; ypi += v; notes.push(`New building +${r2(v)}`); }
+  { const k = BLD.condMult(l); if (k < 1) { if (ypi > 0) { notes.push(`${BLD.condLabel(l)} repair −${r2(ypi * (1 - k))}`); ypi *= k; } trade *= k; } }
   return { ypi: r2(ypi), trade: r2(trade), total: r2(ypi + trade), notes };
 }
 // yearly interest every other tycoon pays on bank loans (the national bank earns a share of it)
@@ -406,14 +415,14 @@ export function monthLines(city, l) {
   let heads = 0;
   const p = bossOf(city, l.owner);
   if (p && !p.bot && city.talent) Object.entries(p.assign || {}).forEach(([spec, a]) => { if (a && a.lid === l.id) { const t = city.talent[p.team && p.team[spec]]; if (t) heads += t.salary / 12; } });
-  return { ypi: Math.max(0, y.ypi) * eff / 12, maint: (MAINT[l.type] || 0) * s / 12, heads };
+  return { ypi: Math.max(0, y.ypi) * eff / 12, maint: BLD.idle(l) ? 0 : (MAINT[l.type] || 0) * s / 12, heads };
 }
 // yearly rates for a player or a holding
 export function rates(city, k, id) {
   const ls = ownedBy(city, k, id), lines = ls.map((l) => ({ l, y: listingYield(city, l, { k, id }), eff: l.ops ? l.ops.eff : 1, run: OPS.runningCosts(l).total }));
   const income = lines.reduce((a, x) => a + Math.max(0, x.y.ypi) * x.eff, 0);
   const running = lines.reduce((a, x) => a + x.run, 0);
-  const maint = ls.reduce((a, l) => a + (MAINT[l.type] || 0) * SIZES[l.size].mult, 0);
+  const maint = ls.reduce((a, l) => a + (BLD.idle(l) ? 0 : (MAINT[l.type] || 0) * SIZES[l.size].mult), 0);
   let upkeep = 0, interest = 0;
   if (k === 'h' && city.talent && city.holdings[id]) upkeep = TAL.salaries(city, TAL.coopEmp(city, city.holdings[id]));
   if (k === 'h' && city.holdings[id] && city.holdings[id].div) upkeep += HD.divs(city, city.holdings[id]).reduce((a, p) => a + (p.life ? p.life.salary : 0), 0); // CEO salaries come from the central account
@@ -502,7 +511,7 @@ export function moveListing(city, lid, p) {
   Object.assign(l, { p: q, ...placeOn(l.d, q) });
   return { ok: true, msg: `${l.title || TYPES[l.type].name} moved.` };
 }
-function migrateLife(city) { migrateMap(city); LIFE.register(city); if (city.over) city.over = false; if (!city.talent) TAL.ensure(city); if (city.wk == null) city.wk = city.m * 4; if (city.migratedLife === 1) return; LIFE.ensure(city); city.migratedLife = 1; }
+function migrateLife(city) { migrateMap(city); BLD.migrate(city, bctx(city)); LIFE.register(city); if (city.over) city.over = false; if (!city.talent) TAL.ensure(city); if (city.wk == null) city.wk = city.m * 4; if (city.migratedLife === 1) return; LIFE.ensure(city); city.migratedLife = 1; }
 // small companies lost HR, Finance, R&D and Legal: whoever led them steps down (specialists stay on the team),
 // workers move to Operations where there is room, the rest leave without severance, and the opening fee is paid back
 function trimSmall(city) {
@@ -569,7 +578,7 @@ function weekBoundary(city, wk, monthEnd) {
   });
   if (city.market) Object.entries(city.market).forEach(([g, mk]) => { mk.p = Math.max(OPS.exportPrice(city, g), Math.min(OPS.importPrice(city, g), Math.round(mk.p * (1 + (rand() - 0.5) * 0.012) * 10000) / 10000)); });
   if (!monthEnd) {
-    city.listings.forEach((l) => { if (l.ops && l.owner) OPS.weekStep(city, CTX, l, wk); });
+    city.listings.forEach((l) => { if (l.ops && l.owner && !BLD.idle(l)) OPS.weekStep(city, CTX, l, wk); });
     if (city.life) LIFE.weekStep(city, wk, LCTX);
   }
   ADS.weekStep(city, wk / 48, CTX);
@@ -577,6 +586,7 @@ function weekBoundary(city, wk, monthEnd) {
   CB.weekStep(city);
   DEAL.weekStep(city, dctx(city));
   QT.weekStep(city, dctx(city));
+  BLD.weekStep(city, bctx(city));
   BOT.weekStep(city, bx(city));
   mailWeek(city);
   insightWeek(city);
@@ -597,14 +607,14 @@ function planWeek(city, wk) {
     if (p.inbox.length + waiting < 3 && rand() < 0.12) plan(city, inWeek(wk), 'decision', { pid: p.id });
   });
   city.listings.forEach((l) => {
-    if (!l.ops || l.ops.managed || !humanOwned(city, l)) return;
+    if (!l.ops || l.ops.managed || !humanOwned(city, l) || BLD.idle(l)) return;
     if (rand() < 0.33) plan(city, inWeek(wk), 'happening', { lid: l.id });
     if ((l.type === 'film' || l.type === 'music') && rand() < (OPS.hasSp(l, 'hit') ? 1.5 : 1) / 130) plan(city, inWeek(wk), 'hit', { lid: l.id });
     // a rare VIP guest books a hotel; a better reputation draws them more often
     if (OPS.hosts(l) && rand() < VIP.week * (0.5 + l.ops.rep / 100)) plan(city, inWeek(wk), 'vip', { lid: l.id });
   });
   // vineyards harvest once a year, each in its own week of the autumn; auto repair shops build a tuner car for the spring show (CRAFT)
-  city.listings.forEach((l) => { if (makes(l) && l.owner && wk % 48 === harvestWeek(l)) plan(city, inWeek(wk), 'vintage', { lid: l.id }); });
+  city.listings.forEach((l) => { if (makes(l) && l.owner && !BLD.idle(l) && wk % 48 === harvestWeek(l)) plan(city, inWeek(wk), 'vintage', { lid: l.id }); });
   planWorld(city, wk);
 }
 // the next world card lands somewhere in the first half of its quarter. It is planned a quarter ahead
@@ -808,7 +818,8 @@ function monthBoundary(city, m) {
   influenceMonth(city, m);
   if (m % 12 === 0) yearReview(city, m);
   OPS.ensureMarket(city);
-  const running = city.listings.filter((l) => l.owner);
+  BLD.monthStep(city, m, bctx(city));
+  const running = city.listings.filter((l) => l.owner && !BLD.idle(l));
   CAR.refresh(city, cctx(city));
   running.forEach((l) => { if (!l.ops) l.ops = OPS.newOps(l, isManaged(city, l)); if (city.life && l.owner.k === 'p' && city.players[l.owner.id]) l.ops.pt = LIFE.tierOf(city, city.players[l.owner.id]); OPS.produce(city, CTX, l, m); });
   running.forEach((l) => OPS.autoSell(city, CTX, l));
@@ -920,11 +931,34 @@ function solvency(city, p, m) {
   if (p.cash < 0) { const l = ownedBy(city, 'p', p.id).sort((a, b) => listingValue(a) - listingValue(b))[0]; if (l) { const v = r2(listingValue(l) * 0.7); p.cash += v; releaseListing(city, l); feed(p, m, `Forced sale: ${TYPES[l.type].name} in ${l.district}`, `Sold for ${v} M to cover your debts.`, 'bad'); } }
 }
 function releaseListing(city, l) {
+  BLD.onRelease(city, l, bctx(city)); l.freeSince = city.m;
   if (l.owner && l.owner.k === 'p') CAR.count(city.players[l.owner.id], 'sold');
   if (l.owner) { const p = l.owner.k === 'p' ? city.players[l.owner.id] : city.holdings[l.owner.id]; if (p && p.assign) Object.keys(p.assign).forEach((k) => { if (p.assign[k].lid === l.id) delete p.assign[k]; }); }
   city.book = (city.book || []).filter((o) => o.lid !== l.id);
   l.owner = null; l.upgrade = null; l.boughtM = null; l.ops = null; city.contracts = city.contracts.filter((c) => c.a !== l.id && c.b !== l.id);
 }
+
+// an upgrade: up to level 2 money and months; from level 2 on a building project with half the money (build.js).
+// budget ≥ 0 (bots, bot coops): the city crew is hired at once, and nothing starts if that does not fit the budget
+function startUpgrade(city, l, budget) {
+  const c = upgradeCost(l);
+  if (!upgradeIsBuild(l)) { debit(city, l.owner, c); l.upgrade = { to: l.level + 1, doneM: city.m + upgradeMonths(l) }; return true; }
+  const x = bctx(city); BLD.startUpgrade(l);
+  if (budget >= 0) { if (BLD.cityPrice(city, l, l.site, fullPrice(l), x.priceOf) > budget) { delete l.site; return false; } debit(city, l.owner, c); BLD.cityHire(city, l, x); return true; }
+  debit(city, l.owner, c); return true;
+}
+// what build.js needs from the city
+const cashOf = (city, o) => (!o ? 0 : o.k === 'p' ? (city.players[o.id] || { cash: 0 }).cash : (city.holdings[o.id] || { treasury: 0 }).treasury);
+export const bctx = (city) => ({ listing: (id) => listing(city, id), canRun: (pid, l) => !!l && canRun(city, pid, l), runners: (l) => runners(city, l), name: (l) => MAIL.coName(l),
+  credit: (o, v) => credit(city, o, v), debit: (o, v) => debit(city, o, v), cashOf: (o) => cashOf(city, o),
+  mail: (pid, x) => MAIL.send(city.players[pid], { g: city.g, m: city.m, ...x }), notify: (l, t, x, k) => notifyOwner(city, l, t, x, k), news: (t, x, k) => news(city, city.m, t, x, k),
+  away: (l) => { const rs = runners(city, l); return humanOwned(city, l) && (!rs.length || rs.every((p) => inactive(city, p))); },
+  buyOut: (l) => { const v = r2(listingValue(l) + (l.upgrade ? upgradeCost(l) : 0)); payOwner(city, l, v); notifyOwner(city, l, `Your ${TYPES[l.type].name} in ${l.district} was bought out`, `The city paid ${v} M, its full value. The site is a building plot now: whoever buys it builds a new ${TYPES[l.type].name.toLowerCase()}.`, 'good'); releaseListing(city, l); },
+  opened: (l) => { l.ops = l.owner ? OPS.newOps(l, isManaged(city, l)) : null; },
+  fullPrice: (l) => fullPrice(l), priceOf: (g) => (city.market && city.market[g] ? city.market[g].p : GOODS[g].base),
+  quote: (g, qty) => OPS.quote(city, { owner: null }, g, qty, 'cheapest').cost,
+  buy: (owner, g, qty) => OPS.buyGoods(city, CTX, { owner, ops: { inv: {}, cur: { sup: 0 }, managed: true } }, g, qty, 'cheapest') });
+export { BLD };
 
 // ---------------------------------------------------------------- holdings (coop parent companies)
 function holdingsMonthly(city, m) {
@@ -951,7 +985,7 @@ function closeProposal(city, h, pr, deadline) {
   let text = '';
   if (pass) {
     if (pr.kind === 'buy') { const price = listingPrice(l); if (l.owner || h.treasury < price) { pr.status = 'failed'; text = 'Could not complete: the company is gone or the treasury is short.'; } else { h.treasury -= price; assignOwner(city, l, { k: 'h', id: h.id }, city.m); text = `${h.name} bought ${TYPES[l.type].name} in ${l.district} for ${price} M.`; news(city, city.m, `${h.name} buys ${TYPES[l.type].name}`, `${l.district} is now owned by a coop.`, 'info'); } }
-    if (pr.kind === 'upgrade') { const c = upgradeCost(l); if (!ownerIs(l, 'h', h.id) || l.upgrade || h.treasury < c) { pr.status = 'failed'; text = 'Could not start the upgrade.'; } else { h.treasury -= c; l.upgrade = { to: l.level + 1, doneM: city.m + upgradeMonths(l) }; text = `Upgrade of ${TYPES[l.type].name} to level ${l.level + 1} started.`; } }
+    if (pr.kind === 'upgrade') { const c = upgradeCost(l); if (!ownerIs(l, 'h', h.id) || l.upgrade || l.site || BLD.idle(l) || h.treasury < c) { pr.status = 'failed'; text = 'Could not start the upgrade.'; } else { const b = upgradeIsBuild(l); startUpgrade(city, l, b && h.bot ? h.treasury - c : -1); text = b ? `Upgrade of ${TYPES[l.type].name} to level ${l.level + 1} planned: hire a builder on its building site.` : `Upgrade of ${TYPES[l.type].name} to level ${l.level + 1} started.`; } }
     if (pr.kind === 'sell') { if (ownerIs(l, 'h', h.id)) { const v = r2(listingValue(l) * 0.8); h.treasury += v; releaseListing(city, l); text = `Sold ${TYPES[l.type].name} for ${v} M.`; } }
     if (pr.kind === 'payout') { h.payout = pr.pct; text = `Dividend payout set to ${Math.round(pr.pct * 100)}% of profits.`; }
     if (HD.KINDS.includes(pr.kind)) text = HD.exec(city, h, pr, hx(city)) || '';
@@ -974,7 +1008,7 @@ function botAct(city, p, m) {
   const mine = ownedBy(city, 'p', p.id), types = new Set(mine.map((l) => l.type));
   const room = p.style === 'aggressive' && debt(p) < 20 ? Math.max(0, Math.min(15, loanCap(city, p) - debt(p))) : 0;
   if (rand() < st[0]) {
-    const free = city.listings.filter((l) => !l.owner && !TYPES[l.type].starter && !CB.isBank(l) && !GZ.isPaper(l) && listingPrice(l) <= p.cash - 1 + room);
+    const free = city.listings.filter((l) => !l.owner && !TYPES[l.type].starter && !CB.isBank(l) && !GZ.isPaper(l) && !BLD.idle(l) && listingPrice(l) <= p.cash - 1 + room);
     if (free.length) {
       const syn = free.filter((l) => SYNERGY.some(([a, b]) => (l.type === b && types.has(a)) || (l.type === a && types.has(b))));
       const l = BOT.chooseBuy(city, p, free, bx(city)) || (syn.length && rand() < 0.6 ? pick(syn) : pick(free)), price = listingPrice(l);
@@ -983,7 +1017,7 @@ function botAct(city, p, m) {
       news(city, m, `${p.name} buys ${TYPES[l.type].name}`, `${l.district} · ${price} M.`, 'info', { who: p.id });
     }
   }
-  if (rand() < st[1] * BOT.upgradeBoost(city, p)) { const l = mine.filter((x) => !x.upgrade && x.level < 5 && upgradeCost(x) < p.cash - 3)[0]; if (l) { p.cash -= upgradeCost(l); l.upgrade = { to: l.level + 1, doneM: m + upgradeMonths(l) }; } }
+  if (rand() < st[1] * BOT.upgradeBoost(city, p)) { const l = mine.filter((x) => !x.upgrade && !x.site && !BLD.idle(x) && x.level < 5 && upgradeCost(x) < p.cash - 3)[0]; if (l) startUpgrade(city, l, p.cash - 3 - upgradeCost(l)); }
   if (city.talent) TAL.botStep(city, p, m, { ...TCTX, inactive: (x) => inactive(city, x) });
   if (rand() < st[2] && p.cash > 12) { const s = pick(STOCKS), q = 2 + Math.floor(rand() * 5); tradeStock(city, p, s.id, q); }
   else if (rand() < 0.05) { const k = Object.keys(p.shares)[0]; if (k) tradeStock(city, p, k, -p.shares[k]); }
@@ -1002,7 +1036,7 @@ function botHoldingsAct(city, m) {
   }
   Object.values(city.holdings).filter((h) => h.bot).forEach((h) => {
     if (rand() < 0.2) { const free = city.listings.filter((l) => !l.owner && !TYPES[l.type].starter && !CB.isBank(l) && !GZ.isPaper(l) && listingPrice(l) <= h.treasury); if (free.length) { const l = BOT.allianceBuy(city, h, free, bx(city)) || pick(free); h.treasury -= listingPrice(l); assignOwner(city, l, { k: 'h', id: h.id }, m); news(city, m, `${h.name} buys ${TYPES[l.type].name}`, `${l.district} · ${listingPrice(l)} M.`, 'info'); } }
-    if (rand() < 0.1) { const l = ownedBy(city, 'h', h.id).find((x) => !x.upgrade && x.level < 5 && upgradeCost(x) < h.treasury); if (l) { h.treasury -= upgradeCost(l); l.upgrade = { to: l.level + 1, doneM: m + upgradeMonths(l) }; } }
+    if (rand() < 0.1) { const l = ownedBy(city, 'h', h.id).find((x) => !x.upgrade && !x.site && !BLD.idle(x) && x.level < 5 && upgradeCost(x) < h.treasury); if (l) startUpgrade(city, l, h.treasury - upgradeCost(l)); }
   });
 }
 function resolveBotReplies(city, m) {
@@ -1089,6 +1123,7 @@ export const cbGovTypes = govTypes;
 export function protection(city, l) {
   if (!l.owner || l.owner.k !== 'p') return { safe: true, why: 'Not a private company' };
   if (CB.isBank(l)) return { safe: true, why: 'The national bank cannot be taken over' };
+  if (BLD.unbuilt(l)) return { safe: true, why: 'A building site' };
   const p = city.players[l.owner.id]; if (!p || p.bot) return { safe: true, why: '' };
   if (p.admin) return { safe: true, why: 'Administrator' };
   if (hasHead(city, l, p, 'robert')) return { safe: true, why: 'Legal head blocks hostile bids' };
@@ -1223,7 +1258,7 @@ function applyAs(city, pid, p, action, a, now) {
   if (action === 'hostileBid') return hostileBid(city, p, a);
   if (action === 'cbRate' || action === 'cbLevy') return CB.act(city, p, action, a, { governor: (c, id) => canRun(c, id, listing(c, CB.ID)), ownTypes: (c, id) => govTypes(c, id), news: (t, x, k) => news(city, m, t, x, k) });
   // the tycoon's own career: lead a department yourself, step down, pick a sector specialisation
-  if (action === 'meHead') { if (p.bot || p.admin) return err('Only tycoons lead departments themselves.'); const l = listing(city, a.lid); if (!l || !canRun(city, pid, l)) return err('You do not run this company.'); if (!l.ops) l.ops = OPS.newOps(l, false); if (l.ops.managed) return err('This company runs on autopilot.'); if (!OPS.DEPT[a.dept]) return err('Unknown department.'); const ctx = cctx(city); if (!p.career || !p.career.seeded) CAR.seed(city, p, ctx); return CAR.take(city, p, l, a.dept, ctx); }
+  if (action === 'meHead') { if (p.bot || p.admin) return err('Only tycoons lead departments themselves.'); const l = listing(city, a.lid); if (!l || !canRun(city, pid, l)) return err('You do not run this company.'); if (BLD.unbuilt(l)) return err('It is still a building site.'); if (!l.ops) l.ops = OPS.newOps(l, false); if (l.ops.managed) return err('This company runs on autopilot.'); if (!OPS.DEPT[a.dept]) return err('Unknown department.'); const ctx = cctx(city); if (!p.career || !p.career.seeded) CAR.seed(city, p, ctx); return CAR.take(city, p, l, a.dept, ctx); }
   if (action === 'meLeave') return CAR.leave(city, p, a.lid, a.dept);
   if (action === 'meSpec') return CAR.choose(city, p, a.sector, a.pick, cctx(city));
   // holdings with divisions: money between divisions, the central account and the owners' private accounts
@@ -1234,6 +1269,7 @@ function applyAs(city, pid, p, action, a, now) {
     const ctx = { ...LCTX, canRun: (l) => canRun(city, pid, l), clientsBoost: (id, n) => { let k = 0; ownedBy(city, 'p', id).forEach((l) => (l.ops && l.ops.clients || []).forEach((c) => { if (c.status === 'active') { c.mood = Math.min(100, c.mood + n); k++; } })); return k; } };
     const r = LIFE.act(city, p, action, a, ctx); if (r) return r;
   }
+  if (/^site[A-Z]/.test(action)) return BLD.act(city, p, action, a, bctx(city)) || err('Unknown action.');
   switch (action) {
     case 'buy': {
       const l = listing(city, a.lid); if (!l) return err('Unknown company.'); if (l.owner) return err('Someone already owns this company.');
@@ -1269,14 +1305,15 @@ function applyAs(city, pid, p, action, a, now) {
       // a coop's company is sold by a vote of its owners (by stake); the money goes to the coop treasury
       if (l && l.owner && l.owner.k === 'h') { const h = city.holdings[l.owner.id]; if (!h || !h.members[pid]) return err('Not your coop.'); if (h.proposals.some((x) => x.status === 'open' && x.kind === 'sell' && x.lid === l.id)) return err('A sale vote is already running.');
         const pr = { id: uid('p'), by: pid, kind: 'sell', lid: l.id, votes: { [pid]: true }, m, dueM: m + 1, status: 'open' }; h.proposals.push(pr); botVotes(city, h, pr); closeProposal(city, h, pr, false); return ok(pr.status === 'passed' ? 'Sold. The money is in the coop treasury.' : 'Sale proposed to your co-owners.'); }
-      if (!l || !ownerIs(l, 'p', pid)) return err('You do not own this company.'); { const md = HD.mandate(city, p, 'sell', listingValue(l), hx(city)); if (md) return md; } const v = r2(listingValue(l) * 0.8); p.cash += v; releaseListing(city, l); return ok(`Sold for ${v} M.`); }
+      if (!l || !ownerIs(l, 'p', pid)) return err('You do not own this company.'); if (l.site && l.site.c) return err('A builder is working on it. End the contract first.'); { const md = HD.mandate(city, p, 'sell', listingValue(l), hx(city)); if (md) return md; } const v = r2(listingValue(l) * 0.8); p.cash += v; releaseListing(city, l); return ok(`Sold for ${v} M.`); }
     case 'upgrade': {
       const l = listing(city, a.lid); if (!l) return err('Unknown company.');
       if (l.owner && l.owner.k === 'h') { const h = city.holdings[l.owner.id]; if (!h.members[pid]) return err('Not your coop.'); const pr = { id: uid('p'), by: pid, kind: 'upgrade', lid: l.id, votes: { [pid]: true }, m, dueM: m + 1, status: 'open' }; h.proposals.push(pr); botVotes(city, h, pr); closeProposal(city, h, pr, false); return ok(pr.status === 'passed' ? 'Upgrade started.' : 'Proposal sent to your co-owners.'); }
-      if (!ownerIs(l, 'p', pid)) return err('You do not own this company.'); if (l.upgrade) return err('An upgrade is already running.'); if (l.level >= 5) return err('Already at the top level.');
+      if (!ownerIs(l, 'p', pid)) return err('You do not own this company.'); if (l.upgrade || l.site) return err(l.site ? 'Building work is already planned here.' : 'An upgrade is already running.'); if (l.level >= 5) return err('Already at the top level.');
+      if (BLD.idle(l)) return err(BLD.unbuilt(l) ? 'Build it first.' : 'Renovate it first.');
       const c = upgradeCost(l); if (p.cash < c) return err(`The upgrade costs ${c} M.`);
-      p.cash -= c; l.upgrade = { to: l.level + 1, doneM: m + upgradeMonths(l) };
-      return ok(`Construction started. Level ${l.level + 1} in ${upgradeMonths(l)} game month${upgradeMonths(l) > 1 ? 's' : ''}.`);
+      const b = upgradeIsBuild(l); startUpgrade(city, l, -1);
+      return ok(b ? `Upgrade planned: ${c} M paid. Level ${l.level + 1} is a building project: ask builders for bids or hire the city crew on its site.` : `Construction started. Level ${l.level + 1} in ${upgradeMonths(l)} game month${upgradeMonths(l) > 1 ? 's' : ''}.`);
     }
     case 'hire': {
       const s = staffDef(a.id); if (!s) return err('Unknown specialist.'); if (hasStaff(p, a.id)) return err('Already at your HQ.');
@@ -1288,6 +1325,7 @@ function applyAs(city, pid, p, action, a, now) {
     // ---------------- company management (human-owned companies)
     case 'deptOpen': case 'deptClose': case 'workers': case 'deptSet': case 'task': case 'listGoods': case 'mixStart': case 'mixEnd': case 'mixCheck': case 'exportGoods': case 'assignHead': case 'order': case 'buySupply': {
       const l = listing(city, a.lid); if (!l || !canRun(city, pid, l)) return err('You do not run this company.');
+      if (BLD.unbuilt(l)) return err('It is still a building site.');
       if (!l.ops) l.ops = OPS.newOps(l, false);
       // a coop's company is paid for from the coop treasury, not the pocket of the owner pressing the button
       const hq = l.owner.k === 'h' ? city.holdings[l.owner.id] : null;
