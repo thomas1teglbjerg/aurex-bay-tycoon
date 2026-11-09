@@ -18,7 +18,7 @@ import { openMixer } from './mixer.js';
 import { openCrane } from './crane.js';
 import { openCredit, UIB } from './banks.js';
 import { siteHTML, statusOf as siteStatus } from './build.js';
-import { dealsToDo, dealsNeedingMe, newDealHTML, deliveryRun, DUI, RUN_S } from './deals.js';
+import { dealsToDo, dealsNeedingMe, newDealHTML, moveHTML, deliveryRun, DUI, RUN_S } from './deals.js';
 import { mailBoxHTML, mailPageHTML, mails, isRead as mailRead, markRead } from './mail.js';
 import { profilePageHTML, portraitUrl, canView } from './profile.js';
 import { holdingCardHTML, reportPageHTML, groupsHTML } from './holding.js';
@@ -669,6 +669,7 @@ function closeModal() { $('modal').hidden = true; $('modal').innerHTML = ''; UI.
 function openListing(lid) { UI.modal = { t: 'listing', id: lid }; const st = $('modal').scrollTop; modal(companyCard(E.listing(city(), lid))); $('modal').scrollTop = st; }
 function openStaff(id, keep, coop) { if (!keep || !UI.modal || UI.modal.id !== id) UI.modal = { t: 'staff', id, coop: coop || UI.talentFor || null }; const sc = $('modal').scrollTop; modal(c0().talent ? talentModal(UI.modal) : staffCard(STAFF_BY[id])); if (keep) $('modal').scrollTop = sc; }
 const c0 = () => city();
+function openMove(st) { UI.modal = st; const sc = $('modal').scrollTop; modal(moveHTML(st)); $('modal').scrollTop = sc; }
 function openDeal(st) { UI.modal = st; const sc = $('modal').scrollTop; modal(newDealHTML(st)); $('modal').scrollTop = sc; }
 const keepPrice = () => { const i = $('dl-price'); if (i && UI.modal) UI.modal.price = Number(i.value); };
 function openStock(id) { UI.modal = { t: 'stock', id }; const st = $('modal').scrollTop; modal(stockModal(id, UI.sqty)); $('modal').scrollTop = st; }
@@ -689,7 +690,7 @@ function tickDinner() {
   if (Date.now() - lastDinner > 450) { lastDinner = Date.now(); const el = document.querySelector('.scene'); if (el) el.outerHTML = dinnerHTML(st); }
 }
 const GC_DINNER_MS = 20000;
-function refreshModal() { if (!UI.modal) return; if (LIFE_MODALS.includes(UI.modal.t)) openLife(UI.modal); if (UI.modal.t === 'wh') openWarehouse(UI.modal.id); if (UI.modal.t === 'deliv' && !UI.modal.truck) renderDelivery(); if (UI.modal.t === 'listing') openListing(UI.modal.id); if (UI.modal.t === 'staff') openStaff(UI.modal.id, true); if (UI.modal.t === 'stock') openStock(UI.modal.id); if (UI.modal.t === 'dealNew') openDeal(UI.modal); }
+function refreshModal() { if (!UI.modal) return; if (LIFE_MODALS.includes(UI.modal.t)) openLife(UI.modal); if (UI.modal.t === 'wh') openWarehouse(UI.modal.id); if (UI.modal.t === 'deliv' && !UI.modal.truck) renderDelivery(); if (UI.modal.t === 'listing') openListing(UI.modal.id); if (UI.modal.t === 'staff') openStaff(UI.modal.id, true); if (UI.modal.t === 'stock') openStock(UI.modal.id); if (UI.modal.t === 'dealNew') openDeal(UI.modal); if (UI.modal.t === 'move') openMove(UI.modal); }
 // ---------------------------------------------------------------- account and parent company (shown before the game)
 // Order: log in (online) → avatar name → parent company → game. Older guest players are asked once to add e-mail + password.
 function parentBox(c, p) {
@@ -894,6 +895,11 @@ async function onClick(e) {
     case 'listGoods': await act('listGoods', { lid: d.lid, g: d.g }); return;
     case 'exportGoods': await act('exportGoods', { lid: d.lid, g: d.g, carrier: d.c }); return;
     case 'cancelOffer': await act('cancelOffer', { id: d.id }); return;
+    case 'moveNew': openMove({ t: 'move', lid: d.lid, g: d.g }); return;
+    case 'moveTo': UI.modal.to = d.v; UI.modal.qty = null; openMove(UI.modal); return;
+    case 'moveQty': { const l = E.listing(c, UI.modal.lid), have = Math.floor(l.ops.inv[UI.modal.g] || 0); UI.modal.qty = Math.max(1, Math.min(have, (UI.modal.qty || have) + Number(d.v))); openMove(UI.modal); return; }
+    case 'moveQtySet': UI.modal.qty = Number(d.v); openMove(UI.modal); return;
+    case 'moveSend': { const r = await act('stockMove', { from: d.lid, to: d.to, g: d.g, qty: Number(d.q) }); if (r && r.ok !== false) closeModal(); return; }
     case 'dealNew': openDeal({ t: 'dealNew', lid: d.lid, g: d.g }); return;
     case 'dealTo': keepPrice(); UI.modal.to = d.v; openDeal(UI.modal); return;
     case 'dealQty': { keepPrice(); const l = E.listing(c, UI.modal.lid), have = Math.floor(l.ops.inv[UI.modal.g] || 0); UI.modal.qty = Math.max(1, Math.min(have, (UI.modal.qty || have) + Number(d.v))); openDeal(UI.modal); return; }

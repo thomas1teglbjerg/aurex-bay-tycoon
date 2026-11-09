@@ -202,6 +202,7 @@ const ACTIONS = {
   listGoods: h('Supplies', 'List all stock of this supply on the city market at your Sales price. Buyers pay when they buy.'),
   exportGoods: h('Supplies', 'Sell all stock of this supply abroad at the export price. Always possible, but the lowest price.'),
   cancelOffer: h('Market', 'Take your offer off the market. The units go back to stock.'),
+  moveNew: h('Move', 'Send this supply to another of your own companies that uses it, or to your warehouse. Your own truck drives it: no price, no freight, it arrives in a few game days.'),
   dealNew: h('Sell to a contact', 'Offer this supply to someone in your network or a co-owner, at your own price. The buyer picks a carrier, or lets you deliver it yourself as soon as possible for a fee between Ridgeway and Harborline freight.'),
   dealSend: h('Sell to a contact', 'Send the offer. The units are put aside until the buyer answers, or come back after 4 weeks.'),
   dealAccept: h('Buy from a contact', 'Buy at the asked price. With a carrier you pay goods and freight now. If the seller delivers, you pay a delivery fee between Ridgeway and Harborline freight and your money is held until the goods leave.'),

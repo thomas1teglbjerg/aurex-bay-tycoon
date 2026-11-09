@@ -84,3 +84,18 @@ export function newDealHTML(st) {
     <button class="btn gold" data-a="dealSend" data-lid="${l.id}" data-g="${g}" data-q="${qty}" data-to="${to}" ${have < 1 ? 'disabled' : ''}>Send offer</button>`
     : '<p class="empty">Nobody to sell to yet. Add tycoons to your network, or share a parent company with a co-owner.</p>'}</article>`;
 }
+
+// the modal: move a supply from this company to another of your own companies (or your warehouse) with your own truck
+export function moveHTML(st) {
+  const c = city(), p = me(), l = E.listing(c, st.lid), g = st.g, have = Math.floor((l && l.ops && l.ops.inv[g]) || 0);
+  const ts = E.moveTargets(c, p.id, l, g), key = (t) => (t.k === 'w' ? 'w:' + t.id : t.id), t = ts.find((x) => key(x) === st.to) || ts.find((x) => x.room >= 1) || ts[0];
+  const max = t ? Math.min(have, t.room) : 0, qty = Math.max(1, Math.min(max || 1, st.qty || max || 1));
+  const tname = (x) => (x.k === 'w' ? `${esc(E.LOG.SITE[x.id].name)} · warehouse` : esc(lname(E.listing(c, x.id))));
+  return `<article class="sheet"><span class="cap">Move to your own company</span><h2 style="margin:2px 0 4px">${esc(GOODS[g].name)} from ${esc(lname(l))}</h2>
+    <p class="empty" style="font-size:13.5px">${N(have)} ${esc(GOODS[g].unit)} in stock. Your own truck drives it over: no price, no freight.${GOODS[g].fresh ? ' Fresh goods do not go to a warehouse.' : ''}</p>
+    ${ts.length ? `<span class="cap">To</span><div class="seg" role="group" style="flex-wrap:wrap">${ts.map((x) => `<button data-a="moveTo" data-v="${key(x)}" aria-pressed="${t === x}" ${x.room < 1 ? 'disabled' : ''}>${tname(x)} · ${x.room < 1 ? 'full' : `${x.days} d`}</button>`).join('')}</div>
+    <div class="btns" style="align-items:center"><span class="cap">${esc(GOODS[g].unit)}</span><div class="stepper"><button data-a="moveQty" data-v="-10" aria-label="Fewer">−</button><output class="num">${qty}</output><button data-a="moveQty" data-v="10" aria-label="More">+</button></div>${[10, 50, 100].filter((n) => n < max).map((n) => `<button class="btn sm" data-a="moveQtySet" data-v="${n}">${n}</button>`).join('')}<button class="btn sm" data-a="moveQtySet" data-v="${max}">All${t && t.room < have ? ' that fits' : ''}</button></div>
+    <p class="empty" style="font-size:13px">${t ? `Arrives in about ${t.days} game days.${t.room < Infinity && t.room < have ? ` Room for ${N(t.room)} ${esc(GOODS[g].unit)} there.` : ''}` : ''}</p>
+    <button class="btn gold" data-a="moveSend" data-lid="${l.id}" data-g="${g}" data-q="${qty}" data-to="${t ? key(t) : ''}" ${have < 1 || !t || t.room < 1 ? 'disabled' : ''}>Send truck</button>`
+    : `<p class="empty">None of your other companies uses ${esc(GOODS[g].name.toLowerCase())}${l.owner.k === 'p' && !GOODS[g].fresh ? ', and you have no warehouse' : ''}.</p>`}</article>`;
+}
