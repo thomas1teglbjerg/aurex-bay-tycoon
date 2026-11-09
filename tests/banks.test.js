@@ -50,7 +50,9 @@ city.cb.rate = cr0;
 // capital: a bank its owner runs needs equity of 8% of its loans (mortgages count half) before it lends more
 const k0 = BK.capital(city, bank, E.kx(city));
 assert(k0.on && k0.cap === 0 && k0.short && near(k0.need, 10 * B.capital.ratio), `the 10 M loan needs ${k0.need} M of equity; the bank has none`);
-assert(!A('c', 'loan', { amt: 5, bank: bank.id }).ok, 'no new loans without equity');
+const ap0 = A('c', 'loan', { amt: 5, bank: bank.id });
+assert(ap0.ok && ap0.pending && C.loans.length === 1, 'without equity a loan becomes an application, nothing paid out: ' + ap0.msg);
+assert(BK.offers(city, Object.values(city.players).find((q) => q.bot), E.kx(city)).every((x) => x.croom < 5) && BK.borrow(city, Object.values(city.players).find((q) => q.bot), 5, { force: true }, E.kx(city)).bank === 'cb', 'forced borrowing skips a bank without equity');
 assert(!A('c', 'bkCap', { lid: bank.id, v: 5 }).ok, 'only the owner puts in equity');
 const oc0 = O.cash;
 assert(A('o', 'bkCap', { lid: bank.id, v: 4 }).ok && near(oc0 - O.cash, 4), 'Thomas puts 4 M of equity in the bank');
@@ -60,6 +62,8 @@ const f1 = BK.funding(city, bank, E.kx(city));
 assert(near(f1.line, 6) && near(f1.own, 4) && near(BK.margin(city, bank), mar + 4 * mk() / 100, 1e-3), 'equity funds 4 M of the loan: the funding line is 6 M, the margin higher');
 assert(!A('o', 'bkCap', { lid: bank.id, v: -4 }).ok && A('o', 'bkCap', { lid: bank.id, v: -3 }).ok, `he can take out what the loans do not need (${k1.free} M)`);
 A('o', 'bkCap', { lid: bank.id, v: 9 });
+const apx = city.bk.apps.find((a) => a.pid === 'c' && a.lid === bank.id && a.status === 'open');
+assert(apx, 'the application waits for the owner'); { const n0 = C.loans.length; A('o', 'bkDecide', { app: apx.id, v: 'ok' }); assert(C.loans.length === n0 + 1, 'with equity in place the owner approves the application'); C.cash -= 5; C.loans.pop(); }
 
 // the owner sets the margin: new loans follow, old loans keep their rate
 assert(!A('c', 'bkSet', { lid: bank.id, k: 'sp', v: 4 }).ok, 'only the owner sets the rate');
