@@ -380,18 +380,39 @@ export function fail(city, p, x, ctx) {
 export function migrate(city, ctx) {
   const bk = ensure(city); if (bk.v === 1) return; bk.v = 1;
   Object.values(city.players).forEach((p) => {
-    const own = ownsBank(city, p.id), list = own ? [] : offers(city, p, ctx);
+    const own = ownsBank(city, p.id), list = own ? [] : offers(city, p, ctx), moved = [];
     (p.loans || []).forEach((x) => {
       if (!x.id) x.id = uid('ln');
       if (x.bank) return;
       if (own) { x.bank = 'cb'; return; }
       if (list.length) { x.bank = list[0].l.id; x.rate = list[0].rate; } else { x.bank = 'cb'; x.rate = lastResort(city, p, ctx); }
+      moved.push({ k: 'loan', amt: x.amt, rate: x.rate, bank: x.bank });
     });
     ((p.life && p.life.homes) || []).forEach((h) => {
       if (!(h.bal > 0) || h.bank) return;
       if (own) { h.bank = 'cb'; return; }
       const best = list.slice().sort((a, b) => a.mrate - b.mrate)[0];
       if (best) { h.bank = best.l.id; h.rate = best.mrate; } else { h.bank = 'cb'; h.rate = r2(ctx.mortRate() + B.mLastResort); }
+      moved.push({ k: 'home', amt: h.bal, rate: h.rate, bank: h.bank, home: h.hid });
     });
+    if (moved.length && !p.bot) welcome(city, p, moved, ctx);
+  });
+}
+// one welcome mail per bank that took over a tycoon's loans, with what changed in banking
+function welcome(city, p, moved, ctx) {
+  const by = {}; moved.forEach((x) => (by[x.bank] = by[x.bank] || []).push(x));
+  Object.entries(by).forEach(([lid, xs]) => {
+    const l = lid === 'cb' ? null : ctx.listing(lid), who = l ? name(l) : 'the Bank of Aurex', site = l ? host(l) : 'bankofaurex.ab/loans';
+    const lines = xs.map((x) => `${x.k === 'home' ? 'Mortgage' : 'Business loan'}: ${r2(x.amt)} M at ${r2(x.rate)}%, fixed.`);
+    ctx.mail(p, { kind: 'info', from: l ? officer(l) : { n: 'Bank of Aurex', r: 'Business banking', k: 'bank' }, subj: `Welcome to ${who}: your loans have a new home`,
+      body: [`Aurex Bay has private banks now, and ${who} has taken over your loans from the Bank of Aurex. Nothing is due: you pay the same way as before, from your company account (mortgages from your personal account).`, ...lines,
+        'What is new in banking:',
+        '• The Bank of Aurex sets the market rate. Only owners of a bank borrow there at that rate; everyone else borrows from a bank.',
+        '• Each bank sets its own rate on top of the market rate. Your rate is fixed when you borrow. Repay or move to a cheaper bank whenever you like.',
+        '• Every bank has its own website with rates, a Borrow page and Your loans. Compare them at bankofaurex.ab/loans.',
+        '• Own a bank? You set its rates in the bank office, earn the margin, and can hold a 20-second credit committee on every application.',
+        `• Stay in the red for ${B.arrears} months and a loan defaults: the bank takes a pledged company, and a mortgage ends in a foreclosure auction.`,
+        '• Rival tycoons borrow from your bank too, and a rival with a bank may start a rate war.',
+        `Your bank: ${site}`].join('\n'), web: site });
   });
 }

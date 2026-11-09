@@ -145,4 +145,10 @@ assert(offs[0].l === rb, 'their bank is now the cheapest in the city');
 C.cash = 10; delete city.bk.rec.c; r = A('c', 'loan', { amt: 5 });
 const lr = C.loans[C.loans.length - 1];
 assert(r.ok && lr.bank === 'cb' && near(lr.rate, mk() + B.lastResort), 'with no bank standing the Bank of Aurex lends at market + ' + B.lastResort);
+// an older city: loans from before the banks move to a bank, and the borrower gets a welcome mail
+{ const c2 = E.createCity(now, { speed: 2016 }); E.addPlayer(c2, 'x', 'Old Loan', now); const X = c2.players.x;
+  delete c2.bk; X.loans = [{ amt: 5, rate: 'bank', m: 0 }];
+  E.BK.migrate(c2, E.kx(c2));
+  assert(X.loans[0].bank && X.loans[0].bank !== 'cb' && typeof X.loans[0].rate === 'number', 'an old loan moves to a bank at a fixed rate');
+  assert(X.mail.some((m) => /Welcome to/.test(m.subj) && /What is new in banking/.test(m.body)), 'and a welcome mail from the bank explains what changed'); }
 console.log('banks: all good');
