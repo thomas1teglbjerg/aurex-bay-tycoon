@@ -759,6 +759,32 @@ a.adv:hover .adv-t em { text-decoration: underline; }
 .ba-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
 .ba-tile { text-decoration: none; background: #19150f; border: 1px solid var(--ba-line); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; } .ba-tile b { color: #f1dfae; font-family: 'Playfair Display', Georgia, serif; font-size: 17px; } .ba-tile span { color: #a4977e; font-size: 13px; } .ba-tile:hover { border-color: #5a4c33; }
 @media (max-width: 520px) { .ba-hero { min-height: 340px; padding: 18px 16px; background-position: 72% top; background-size: auto 62%; background-repeat: no-repeat; background-color: #0f0d0a; } .ba-hero::before { background: linear-gradient(180deg, rgba(15,13,10,0) 30%, rgba(15,13,10,0.95) 62%); } .ba-hero h1 { font-size: 24px; } }
+/* ---------------- private banks: each bank's own site (js/banks.js) */
+.s-pbank { background: #f3f5f8; min-height: 100%; }
+.pb { background: #f3f5f8; color: #14233a; min-height: 100%; }
+.pb-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 12px 18px; background: #16324f; }
+.pb-brand a { display: flex; align-items: center; gap: 10px; color: #fff; text-decoration: none; } .pb-brand b { display: block; font-family: var(--head); font-size: 18px; letter-spacing: 0.03em; } .pb-brand small { font-size: 11.5px; opacity: 0.75; }
+.pb-logo { width: 34px; height: 34px; border-radius: 8px; background: #f3c969; color: #16324f; display: grid; place-items: center; font-weight: 800; font-size: 13px; }
+.pb-nav { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; } .pb-nav::-webkit-scrollbar { display: none; }
+.pb-nav a { flex: none; text-decoration: none; padding: 8px 12px; font-size: 13.5px; font-weight: 700; color: #b9c8da; border-bottom: 2px solid transparent; } .pb-nav a.on { color: #fff; border-color: #f3c969; }
+.pb-main { max-width: 1000px; margin: 0 auto; padding: 18px 16px 24px; display: flex; flex-direction: column; gap: 12px; }
+.pb-main h2 { font-family: var(--head); font-size: 24px; margin: 0; color: #16324f; } .pb-sub { margin: -4px 0 0; color: #50617a; font-size: 14px; }
+.pb-hero { position: relative; overflow: hidden; min-height: 240px; border-radius: 16px; background-size: cover; background-position: center; display: flex; align-items: flex-end; padding: 22px 20px; }
+.pb-hero::before { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(14,30,50,0.9) 0%, rgba(14,30,50,0.55) 50%, rgba(14,30,50,0.1) 85%); }
+.pb-hero > div { position: relative; max-width: 420px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; color: #fff; } .pb-hero small { color: #f3c969; letter-spacing: 0.14em; text-transform: uppercase; font-size: 11.5px; font-weight: 700; }
+.pb-hero h1 { font-family: var(--head); font-size: 28px; margin: 0; } .pb-hero p { margin: 0; opacity: 0.9; }
+.pb-cta { margin-top: 6px; background: #f3c969; color: #16324f; padding: 9px 15px; border-radius: 10px; font-weight: 800; text-decoration: none; font-size: 14px; }
+.pb-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.pb-stat { background: #fff; border: 1px solid #dbe2ea; border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px; } .pb-stat small { font-size: 11.5px; color: #60718a; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 700; } .pb-stat b { font-size: 20px; color: #16324f; } .pb-stat span { font-size: 12.5px; color: #60718a; }
+.pb-stat b.down, .pb .down { color: var(--bad); }
+.pb-card { background: #fff; border: 1px solid #dbe2ea; border-radius: 14px; padding: 14px 16px; } .pb-card h3 { margin: 0 0 8px; font-size: 15px; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; color: #16324f; } .pb-card h3 em { font-style: normal; font-size: 13px; color: #60718a; }
+.pb-note { border-color: #e6c66a; background: #fffaf0; } .pb-warn { border-color: #e7a59a; background: #fff4f2; }
+.pb-small { font-size: 13px; color: #50617a; margin: 6px 0 0; } .pb-more { color: #1f5fa8; font-weight: 700; text-decoration: none; }
+.pb-l { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 7px 0; font-size: 14px; border-bottom: 1px dashed #dbe2ea; } .pb-l span { color: #42536b; min-width: 0; } .pb-l b { color: #14233a; flex: none; } .pb-l select { font: inherit; padding: 4px 6px; border-radius: 8px; border: 1px solid #c8d2de; max-width: 220px; }
+.pb-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; } .pb-btn { background: #16324f; color: #fff; padding: 8px 13px; border-radius: 10px; font-weight: 800; font-size: 13.5px; } .pb-btn.ghost { background: #fff; color: #16324f; border: 1px solid #b9c6d6; } .pb-btn.sm { padding: 6px 10px; font-size: 12.5px; } .pb-btn:disabled { opacity: 0.4; }
+.pb-app { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px dashed #dbe2ea; } .pb-app b { display: block; } .pb-app span { font-size: 12.5px; color: #50617a; }
+#lending-box .pb-app { border-color: var(--line); } #lending-box .pb-app span { color: var(--ink-2); }
+#lending-box .pb-btn { background: var(--navy, #16324f); }
 /* ---------------- Harbor Trust bank card and online banking */
 .bankcard { display: flex; flex-direction: column; gap: 10px; text-align: left; padding: 16px 18px; border-radius: 16px; color: #e8fff8; background: radial-gradient(120% 140% at 100% 0%, #1b7a76 0%, #0b3d4f 55%, #072431 100%); box-shadow: 0 12px 30px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(127,224,201,0.25); }
 .bc-top { display: flex; justify-content: space-between; align-items: baseline; } .bc-top b { font-family: var(--head); letter-spacing: 0.06em; text-transform: uppercase; } .bc-top span { font-size: 12px; opacity: 0.75; }

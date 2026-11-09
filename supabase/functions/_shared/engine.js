@@ -17,7 +17,8 @@ import * as QT from './quotes.js';
 import * as HD from './holding.js';
 import * as BOT from './bots.js';
 import * as BLD from './build.js';
-export { OPS, LOG, LIFE, TAL, BR, ADS, MAIL, CAR, DEAL, GZ, QT, HD, BOT };
+import * as BK from './banks.js';
+export { OPS, LOG, LIFE, TAL, BR, ADS, MAIL, CAR, DEAL, GZ, QT, HD, BOT, BK };
 OPS.setFreightQuote((cid, v, q, route) => LOG.freight(cid, v, q, route));
 
 const TRADE_MULT = { Boom: 1.3, Stable: 1, Recession: 0.6, Crisis: 0.4 };
@@ -57,7 +58,8 @@ const CTX = { listingYield: (...a) => listingYield(...a), credit, debit, notify:
   fromWarehouse: (city, l, needs) => (l.owner && l.owner.k === 'p' && city.players[l.owner.id] && hasStaff(city.players[l.owner.id], 'carlos') ? LOG.supplyFromWarehouses(city, city.players[l.owner.id], l, needs, city.g) : needs) };
 const LCTX = { feed: (p, m, t, x, k) => feed(p, m, t, x, k), news: (city, m, t, x, k) => news(city, m, t, x, k),
   auctionBidder: (city, lot, cands, val) => BOT.auctionBidder(city, lot, cands, val), botFriend: (city, bid, pid) => BOT.isFriend(city, bid, pid), auctionDone: (city, name, win, hs, bs) => BOT.auctionDone(city, name, win, hs, bs, bx(city)),
-  credit, notify: (city, l, t, x, k) => notifyOwner(city, l, t, x, k), clientsBoost: (city0, n) => 0 };
+  credit, notify: (city, l, t, x, k) => notifyOwner(city, l, t, x, k), clientsBoost: (city0, n) => 0,
+  mortgage: (city, p, amt, lid) => BK.mortgage(city, p, amt, lid, kx(city)), mortPaid: (city, h, i) => BK.mortPaid(city, h, i, kx(city)), foreclosed: (city, p, h, got) => BK.foreclosed(city, p, h, got, kx(city)) };
 // a tycoon who has not done anything for a while is "away": their specialists drift and unprotected companies can be taken over
 export function inactive(city, p) { if (p && p.coop) { const hs = p.people.filter((x) => !x.bot); return !hs.length || hs.every((x) => inactive(city, x)); } return !!p && !p.bot && !p.admin && city.m - (p.lastAct ?? city.m) >= TAKEOVER.inactiveMonths; }
 const TCTX = { onPoach: (city, b, p, tid, name) => BOT.onPoach(city, b, p, tid, name, bx(city)), mail: (city, p, x) => mailEmp(city, p, x), feed: (p, m, t, x, k) => (p.coop ? p.people.filter((q) => !q.bot).forEach((q) => feed(q, m, `${p.name}: ${t}`, x, k)) : feed(p, m, t, x, k)), news: (city, m, t, x, k) => news(city, m, t, x, k), unassign: (city, p, k) => unassign(city, p, k),
@@ -124,6 +126,15 @@ function makeAlliance(city, a, b, p) {
 export const dctx = (city) => ({ listing: (id) => listing(city, id), canRun: (pid, l) => canRun(city, pid, l), contacts: (pid) => contacts(city, pid), name: (l) => MAIL.coName(l),
   credit: (o, v) => credit(city, o, v), debit: (o, v) => debit(city, o, v), cashOf: (o) => (o.k === 'p' ? (city.players[o.id] || { cash: 0 }).cash : (city.holdings[o.id] || { treasury: 0 }).treasury),
   book: (l, o) => CTX.book(city, l, o), mail: (pid, x) => MAIL.send(city.players[pid], { g: city.g, m: city.m, ...x }), runners: (l) => runners(city, l) });
+// what banks.js needs: owners, money, mail, the borrower's numbers and the rival tycoons
+export const kx = (city) => ({ listing: (id) => listing(city, id), canRun: (pid, l) => canRun(city, pid, l), runners: (l) => runners(city, l),
+  run: (l) => runners(city, l).some((p) => !inactive(city, p)), credit: (o, v) => credit(city, o, v), loanCap: (p) => loanCap(city, p), debt, loanRate: (p) => loanRate(city, p),
+  netWorth: (id) => netWorth(city, id), value: (l) => listingValue(l), ownedBy: (k, id) => ownedBy(city, k, id), net: (p) => rates(city, 'p', p.id).net,
+  personal: (p) => personalParts(city, p).reduce((a, [, v]) => a + v, 0), mortRate: () => LIFE.mortgageRate(city), pers: (id) => BOT.pers(id),
+  seize: (l, owner) => { city.contracts = city.contracts.filter((c) => c.a !== l.id && c.b !== l.id); l.upgrade = null; if (owner.k === 'p' && city.players[owner.id] && !city.players[owner.id].bot) { assignOwner(city, l, owner, city.m); BOT.onBuy(city, city.players[owner.id], l, bx(city)); } else assignOwner(city, l, owner, city.m); },
+  mailTo: (l, x) => mailTo(city, l, x), mail: (p, x) => MAIL.send(p, { g: city.g, m: city.m, ...x }), feed: (p, t, x, k) => feed(p, city.m, t, x, k), notify: (l, t, x, k) => notifyOwner(city, l, t, x, k),
+  news: (t, x, k, e) => news(city, city.m, t, x, k, e), task: (p, l) => CAR.task(city, p, l, 'credit', cctx(city)),
+  say: (b, p, sit, x, extra) => BOT.say(city, b, p, sit, x, extra), event: (bid, pid, kind, x) => BOT.event(city, bid, pid, kind, x, bx(city)), relV: (bid, pid) => BOT.relV(city, bid, pid), isRival: (bid, pid) => BOT.isRival(city, bid, pid) });
 // the humans who run a company: its owner, or the human co-owners of a holding
 export function runners(city, l) { if (!l || !l.owner) return []; if (l.owner.k === 'p') { const p = city.players[l.owner.id]; return p && !p.bot ? [p] : []; } const h = city.holdings[l.owner.id]; if (h && h.div) { const c = city.players[HD.ceo(city, h)]; return c && !c.bot ? [c] : []; } return h && humanCoop(city, h) ? Object.keys(h.members).map((id) => city.players[id]).filter((p) => p && !p.bot) : []; }
 // the stock market's sectors, for career XP from stock profit
@@ -322,10 +333,16 @@ export function netWorth(city, pid) {
 }
 export function loanCap(city, p) { return Math.max(10, Math.floor((ownedBy(city, 'p', p.id).reduce((a, l) => a + listingValue(l), 0) * 0.5 + 10) / 5) * 5); }
 // what makes up a player's bank rate: the base rate and every discount, as [label, points] (points negative = cheaper)
+// (the market rate at the Bank of Aurex: only owners of a bank borrow there; everyone else borrows from a bank, see banks.js)
 export function loanRateParts(city, p) {
   const own = ownedBy(city, 'p', p.id), parts = [['Bank rate', CB.rate(city)]];
   if (own.some((l) => l.type === 'finance') && city.econ !== 'Recession') parts.push(['Finance company you own', -2]);
   else if (own.some((l) => l.type === 'bank')) parts.push(['Bank you own', -0.5]);
+  return parts.concat(personalParts(city, p));
+}
+// a tycoon's own discounts, at the Bank of Aurex and at every bank: prestige, friends among bankers, the Banker specialisation
+export function personalParts(city, p) {
+  const parts = [];
   if (city.life) { const t = LIFE.tierOf(city, p); if (t) parts.push(['Prestige tier', -t * 0.5]); const cut = LIFE.bankCut(city, p); if (cut) parts.push(['Friends among bankers', -cut]); }
   if (CAR.hasSpec(p, 'banker')) parts.push(['Banker specialisation', -1]);
   return parts;
@@ -430,7 +447,7 @@ export function listingYield(city, l, owner) {
 // yearly interest every other tycoon pays on bank loans (the national bank earns a share of it)
 function cityInterest(city, owner) {
   const skip = owner.k === 'p' ? new Set([owner.id]) : new Set(Object.keys((city.holdings[owner.id] || {}).members || {}));
-  return Object.values(city.players).filter((p) => !skip.has(p.id) && p.loans && p.loans.length).reduce((a, p) => { const r = loanRate(city, p); return a + p.loans.reduce((b, x) => b + x.amt * (x.rate === 'bank' ? r : x.rate) / 100, 0); }, 0);
+  return BK.cbInterest(city, skip, (p) => loanRate(city, p));
 }
 // the parts of a company's month that live outside ops: passive income, maintenance and the specialists who lead it
 export function monthLines(city, l) {
@@ -443,7 +460,8 @@ export function monthLines(city, l) {
 // yearly rates for a player or a holding
 export function rates(city, k, id) {
   const ls = ownedBy(city, k, id), lines = ls.map((l) => ({ l, y: listingYield(city, l, { k, id }), eff: l.ops ? l.ops.eff : 1, run: OPS.runningCosts(l).total }));
-  const income = lines.reduce((a, x) => a + Math.max(0, x.y.ypi) * x.eff, 0);
+  const lending = ls.filter(BK.isLender).reduce((a, l) => a + BK.margin(city, l), 0); // a bank's margin over the market rate on its loans
+  const income = lines.reduce((a, x) => a + Math.max(0, x.y.ypi) * x.eff, 0) + lending;
   const running = lines.reduce((a, x) => a + x.run, 0);
   const maint = ls.reduce((a, l) => a + (BLD.idle(l) ? 0 : (MAINT[l.type] || 0) * SIZES[l.size].mult), 0);
   let upkeep = 0, interest = 0;
@@ -457,7 +475,7 @@ export function rates(city, k, id) {
     if (hasStaff(p, 'michael')) interest = Math.max(0, interest - 1);
   }
   const costs = maint + upkeep + interest + running;
-  return { income: r2(income), maint: r2(maint), upkeep: r2(upkeep), interest: r2(interest), running: r2(running), costs: r2(costs), net: r2(income - costs), lines };
+  return { income: r2(income), lending: r2(lending), maint: r2(maint), upkeep: r2(upkeep), interest: r2(interest), running: r2(running), costs: r2(costs), net: r2(income - costs), lines };
 }
 // customer sales and supply trade happen once a month; this annualizes the last month for display
 export function opsEstimate(city, l) { const h = l.ops && l.ops.hist[l.ops.hist.length - 1]; return h ? r2((h.b2c + h.goods - h.sup) * 12) : 0; }
@@ -555,7 +573,7 @@ function trimSmall(city) {
   city.smallV = 1;
 }
 export function advance(city, now) {
-  migrate(city); migrateLife(city); trimSmall(city); coopRunMode(city); HD.migrate(city, hx(city));
+  migrate(city); migrateLife(city); trimSmall(city); coopRunMode(city); HD.migrate(city, hx(city)); BK.migrate(city, kx(city));
   Object.values(city.players).forEach((p) => { if (!p.bot && !p.admin && !(p.career && p.career.seeded)) CAR.seed(city, p, cctx(city)); });
   mailSync(city);
   if (city.over) return;
@@ -607,6 +625,7 @@ function weekBoundary(city, wk, monthEnd) {
   ADS.weekStep(city, wk / 48, CTX);
   GZ.weekStep(city, gzctx(city));
   CB.weekStep(city);
+  BK.weekStep(city, kx(city));
   DEAL.weekStep(city, dctx(city));
   QT.weekStep(city, dctx(city));
   BLD.weekStep(city, bctx(city));
@@ -805,6 +824,7 @@ export function answerMail(city, p, id, ix, auto) {
   if (o.tfx) { const s = city.talent && city.talent[o.tfx.tid]; if (s) { if (o.tfx.sat) s.sat = Math.max(0, Math.min(100, s.sat + o.tfx.sat)); } out = out || 'Noted.'; }
   if (o.fwd) out = forwardIntel(city, p, x);
   if (o.bot) { const r = BOT.answer(city, p, x, o, bx(city)); if (r.ok === false && !auto) return r; out = r.msg || ''; }
+  if (o.bk) { const r = BK.answer(city, p, o.bk, kx(city)); out = r.msg || ''; }
   if (o.gz) { const pl = GZ.paper(city); if (!pl || !canRun(city, p.id, pl)) out = 'The paper is no longer yours.'; else { const r = GZ.answer(city, o.gz, gzctx(city)); out = r.msg || ''; } }
   if (o.act) {
     const r = mailTalent(city, p, o.act[0], o.act[1]);
@@ -865,6 +885,7 @@ function monthBoundary(city, m) {
   botSocial(city, m);
   BOT.monthStep(city, m, bx(city));
   Object.values(city.players).forEach((p) => solvency(city, p, m));
+  BK.monthStep(city, m, kx(city));
   Object.values(city.players).forEach((p) => {
     p.hist.push([m, netWorth(city, p.id)]); if (p.hist.length > 130) p.hist.shift();
     if (!p.phist) p.phist = []; p.phist.push([m, r2(stockValue(city, p)), r2(Object.values(p.cost || {}).reduce((a, b) => a + b, 0)), r2(p.realized || 0)]); if (p.phist.length > 130) p.phist.shift();
@@ -883,16 +904,17 @@ const BANK_FROM = { n: 'Bank of Aurex', r: 'Business banking', k: 'bank' };
 function bankMail(city, m, was) {
   const cb = city.cb, moved = cb.rate !== was;
   Object.values(city.players).filter((p) => !p.bot && !p.coop).forEach((p) => {
-    const d = debt(p), mine = loanRate(city, p);
+    const d = debt(p), mine = loanRate(city, p), fl = r2(p.loans.filter((x) => x.rate === 'bank').reduce((a, x) => a + x.amt, 0));
     if (moved) {
-      const owe = d > 0 ? ` On the ${r2(d)} M you owe, that is ${r2(d * mine / 100)} M in interest a year.` : '';
+      const owe = fl > 0 ? ` On the ${fl} M you owe us at the market rate, that is ${r2(fl * mine / 100)} M in interest a year.` : '';
+      const yours = BK.ownsBank(city, p.id) ? ` As a bank owner you borrow from us at ${mine}% a year.${owe}` : ' The banks price new loans from it; the loans you have keep the rate they were made at.';
       MAIL.send(p, { g: city.g, m, kind: cb.rate < was ? 'good' : 'bad', from: { ...BANK_FROM }, subj: `Bank rate ${cb.rate < was ? 'cut' : 'raised'} to ${cb.rate}%`,
-        body: `The bank rate moved from ${was}% to ${cb.rate}%${cb.target !== cb.rate ? `, on its way to a target of ${cb.target}%` : ''}. Your business loans now cost ${mine}% a year.${owe} Manage your loans at bankofaurex.ab.` });
+        body: `The bank rate moved from ${was}% to ${cb.rate}%${cb.target !== cb.rate ? `, on its way to a target of ${cb.target}%` : ''}.${yours} Compare the banks at bankofaurex.ab/loans.` });
     }
     const cap = loanCap(city, p);
     if (p.cbCap != null && cap !== p.cbCap) {
       MAIL.send(p, { g: city.g, m, kind: cap > p.cbCap ? 'good' : 'bad', from: { ...BANK_FROM }, subj: `Your credit limit is now ${cap} M`,
-        body: `Your credit limit went ${cap > p.cbCap ? 'up' : 'down'} from ${p.cbCap} M to ${cap} M. It is half the value of your companies plus 10 M. ${d > cap ? `You owe ${r2(d)} M, more than the new limit, so you cannot borrow more until you repay or your companies grow.` : `You owe ${r2(d)} M, so you can borrow ${r2(cap - d)} M more.`} Manage your loans at bankofaurex.ab.` });
+        body: `Your credit limit went ${cap > p.cbCap ? 'up' : 'down'} from ${p.cbCap} M to ${cap} M. It is half the value of your companies plus 10 M. ${d > cap ? `You owe ${r2(d)} M, more than the new limit, so you cannot borrow more until you repay or your companies grow.` : `You owe ${r2(d)} M, so you can borrow ${r2(cap - d)} M more.`} Compare the banks at bankofaurex.ab/loans.` });
     }
     p.cbCap = cap;
   });
@@ -950,7 +972,7 @@ function notifyOwner(city, l, title, text, kind) {
 function solvency(city, p, m) {
   if (p.cash >= 0) return;
   const room = loanCap(city, p) - debt(p);
-  if (room > 0) { const amt = Math.min(room, Math.ceil(-p.cash / 5) * 5); p.loans.push({ amt, rate: 'bank', m }); p.cash += amt; feed(p, m, `The bank covered your overdraft with a ${amt} M loan`, 'Your account went negative. Keep an eye on costs.', 'bad'); }
+  if (room > 0) { const amt = Math.min(room, Math.ceil(-p.cash / 5) * 5), r = BK.borrow(city, p, amt, { force: true }, kx(city)); feed(p, m, `An overdraft loan of ${amt} M`, `${r.msg} Your account went negative. Keep an eye on costs.`, 'bad'); }
   if (p.cash < 0) { const l = ownedBy(city, 'p', p.id).sort((a, b) => listingValue(a) - listingValue(b))[0]; if (l) { const v = r2(listingValue(l) * 0.7); p.cash += v; releaseListing(city, l); feed(p, m, `Forced sale: ${TYPES[l.type].name} in ${l.district}`, `Sold for ${v} M to cover your debts.`, 'bad'); } }
 }
 function releaseListing(city, l) {
@@ -1043,8 +1065,10 @@ function botAct(city, p, m) {
     if (free.length) {
       const syn = free.filter((l) => SYNERGY.some(([a, b]) => (l.type === b && types.has(a)) || (l.type === a && types.has(b))));
       const l = BOT.chooseBuy(city, p, free, bx(city)) || (syn.length && rand() < 0.6 ? pick(syn) : pick(free)), price = listingPrice(l);
-      if (price > p.cash - 1) { const amt = Math.ceil((price - p.cash + 2) / 5) * 5; p.loans.push({ amt, rate: 'bank', m }); p.cash += amt; }
+      const amt = price > p.cash - 1 ? Math.ceil((price - p.cash + 2) / 5) * 5 : 0;
+      if (amt) BK.borrow(city, p, amt, { force: true }, kx(city));
       p.cash -= price; assignOwner(city, l, { k: 'p', id: p.id }, m);
+      if (amt) { const x = p.loans[p.loans.length - 1]; if (x && x.bank !== 'cb' && !BLD.unbuilt(l)) x.pledge = l.id; } // the company they bought is the bank's security
       news(city, m, `${p.name} buys ${TYPES[l.type].name}`, `${l.district} · ${price} M.`, 'info', { who: p.id });
     }
   }
@@ -1052,7 +1076,7 @@ function botAct(city, p, m) {
   if (city.talent) TAL.botStep(city, p, m, { ...TCTX, inactive: (x) => inactive(city, x) });
   if (rand() < st[2] && p.cash > 12) { const s = pick(STOCKS), q = 2 + Math.floor(rand() * 5); tradeStock(city, p, s.id, q); }
   else if (rand() < 0.05) { const k = Object.keys(p.shares)[0]; if (k) tradeStock(city, p, k, -p.shares[k]); }
-  if (debt(p) && p.cash > debt(p) + 8) { p.cash -= debt(p); p.loans = []; }
+  if (debt(p) && p.cash > debt(p) + 8) BK.repayAll(city, p);
   if (city.warehouses && rand() < 0.03 && mine.length >= 2 && !LOG.ownedWarehouses(city, p.id).length) { const w = city.warehouses.find((x) => !x.owner && !x.site && LOG.SITE[x.id].price < p.cash - 10); if (w) { LOG.buy(city, p, w.id); news(city, m, `${p.name} buys ${LOG.SITE[w.id].name}`, 'More trucks on the roads of Aurex Bay.', 'info', { who: p.id }); } }
 }
 function botHoldingsAct(city, m) {
@@ -1438,8 +1462,9 @@ function applyAs(city, pid, p, action, a, now) {
     case 'quoteList': return QT.setList(city, p, a, dctx(city));
     case 'cancelOffer': { const o = (city.book || []).find((x) => x.id === a.id && x.seller.k === 'p' && x.seller.id === pid); if (!o) return err('Offer not found.'); OPS.cancelOffer(city, o); return ok('Offer withdrawn. The goods are back in stock.'); }
     case 'approveAll': { let n = 0; ownedBy(city, 'p', pid).forEach((l) => { if (l.ops && l.ops.orders) l.ops.orders.filter((o) => o.status === 'new' && o.earning > 0).forEach((o) => { OPS.orderAction(city, CTX, l, 'accept', { oid: o.id }); n++; }); }); return n ? ok(`Accepted ${n} profitable orders. Remember to deliver them.`) : err('No profitable new orders.'); }
-    case 'loan': { const amt = Number(a.amt) || 5; if (debt(p) + amt > loanCap(city, p)) return err(`The bank lends up to ${loanCap(city, p)} M in total right now.`); p.loans.push({ amt, rate: 'bank', m }); p.cash += amt + (hasStaff(p, 'michael') ? 0.5 : 0); return ok(`Borrowed ${amt} M.`); }
-    case 'repay': { let amt = Math.min(Number(a.amt) || 5, debt(p), p.cash); if (amt <= 0) return err('Nothing to repay, or not enough cash.'); p.cash -= amt; for (const l of p.loans) { const x = Math.min(l.amt, amt); l.amt -= x; amt -= x; } p.loans = p.loans.filter((l) => l.amt > 0.01); return ok(); }
+    case 'loan': { const r = BK.act(city, p, 'loan', { ...a, amt: Number(a.amt) || 5 }, kx(city)); if (r.ok && !r.pending && hasStaff(p, 'michael')) p.cash += 0.5; return r; }
+    case 'bkDecide': case 'bkSet': return BK.act(city, p, action, a, kx(city));
+    case 'repay': return BK.act(city, p, 'repay', a, kx(city));
     case 'trade': return tradeStock(city, p, a.id, Math.trunc(Number(a.qty)));
     case 'policy': if (!['cautious', 'balanced', 'bold'].includes(a.policy)) return err('Unknown policy.'); p.policy = a.policy; return ok();
     case 'decide': return resolveDecisionFor(city, p, a.id, Number(a.opt), false);

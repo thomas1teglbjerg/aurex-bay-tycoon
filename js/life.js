@@ -4,6 +4,7 @@ import { HOMES, ROOMS, LIFESTYLES, SALARIES, TAX, LIFE as LC, RARITY, PRESTIGE_T
 import { city, me, meId, esc, M, P, lineChart, seg, shortDate, msUntilMonth, dur } from './util.js';
 import { cropLayer } from './util.js';
 import { profilePageHTML } from './profile.js';
+import { mortQuote } from './banks.js';
 
 const L = E.LIFE;
 const CATS = ['art', 'wine', 'watch', 'car'];
@@ -250,7 +251,7 @@ export function lifeModal(st, UI) {
 }
 function homeModal(st) {
   const c = city(), p = me(), def = L.HOME[st.hid], price = def.price * c.life.homes[def.id].ix, left = L.unitsLeft(c, def.id), down = st.down || 0.2;
-  const loan = price * (1 - down), r = L.mortgageRate(c) / 100 / 12, n = LC.mortgageYears * 12, pay = loan > 0 ? loan * r / (1 - Math.pow(1 + r, -n)) : 0;
+  const loan = price * (1 - down), mq = mortQuote(c, p, loan), r = mq.rate / 100 / 12, n = LC.mortgageYears * 12, pay = loan > 0 ? loan * r / (1 - Math.pow(1 + r, -n)) : 0;
   const yearly = def.charges + price * (LC.propTax + LC.upkeep), need = price * down + price * LC.closing, owned = p.life.homes.filter((h) => h.hid === def.id).length;
   const rooms = CATS.map((k) => { const x = def.rooms[k]; return `<div class="row"><span class="rt-ic sm">${ricon(x ? k : 'lock', 18)}</span><div class="grow"><b>${esc(ROOMS[k].name)}</b><span>${x ? (x.add ? `Can be installed for ${money(x.add)} · ${x.cap} ${ROOMS[k].unit}` : `Included · ${x.cap} ${ROOMS[k].unit}`) : esc(k === 'car' ? def.noCar || 'Not possible here' : def.noWine || 'Not possible here')}</span></div></div>`; }).join('');
   const hh = c.life.homes[def.id].h.slice(-36);
@@ -260,7 +261,7 @@ function homeModal(st) {
     ${lineChart([{ v: hh, c: '#d9ad45', fill: true }], hh.map((_, i) => shortDate(c.m - hh.length + 1 + i)), { fmt: (v) => v.toFixed(1), label: 'Price history', h: 140 })}
     <div class="rows">${rooms}</div>
     ${left > 0 ? `<div><span class="cap">Down payment</span>${seg('homeDown', `data-hid="${def.id}"`, [[0.2, '20%'], [0.5, '50%'], [1, 'Cash']], down)}</div>
-    <div class="ledger"><div class="lrow"><span>From your account now</span><b>${money(need)}</b></div><div class="lrow"><span>Mortgage at ${L.mortgageRate(c).toFixed(1)}%</span><b>${money(loan)}</b></div><div class="lrow"><span>Mortgage payment</span><b>${money(pay * 12)}/yr</b></div></div>
+    <div class="ledger"><div class="lrow"><span>From your account now</span><b>${money(need)}</b></div><div class="lrow"><span>Mortgage${mq.name ? ` from ${esc(mq.name)}` : ''} at ${mq.rate.toFixed(2)}%</span><b>${money(loan)}</b></div><div class="lrow"><span>Mortgage payment</span><b>${money(pay * 12)}/yr</b></div></div>
     <button class="btn gold" data-a="homeBuy" data-hid="${def.id}" data-v="${down}" ${p.life.wallet < need ? 'disabled' : ''}>Buy · ${money(need)} now</button>
     ${p.life.wallet < need ? `<p class="empty">Your account has ${money(p.life.wallet)}. Take a dividend from your empire at Harbor Trust first.</p>` : ''}` : '<p class="empty">Every unit in this building is taken. Check back when an owner sells.</p>'}
     ${owned ? `<p class="empty">You own ${owned} here.</p>` : ''}</article>`;

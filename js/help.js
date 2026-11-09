@@ -26,7 +26,7 @@ const TERMS = {
   'latest world card': h('Economy', 'The last World Card that hit the city. About once a quarter, at a moment nobody announces, a new card can switch the economy between boom, stable, recession and crisis and move share prices.', 'A Market Research Associate in your team mails you a research note with the signals before each card. Read them yourself, and forward the note to your network if you want.'),
   // Bank
   debt: h('Bank of Aurex', 'What you owe the bank in total.'),
-  rate: h('Bank of Aurex', 'Yearly interest on your loans. It starts from the bank rate set by the Bank of Aurex. A bank or finance company in your portfolio, prestige and some specialists lower it.'),
+  rate: h('Bank of Aurex', 'Yearly interest on your loans. The Bank of Aurex sets the market rate; each bank lends on top of it at its own margin, fixed when you borrow. Bank owners borrow at the market rate. Prestige and some specialists lower your rate.'),
   'interest / yr': h('Bank of Aurex', 'Interest you pay on your debt each year. It is taken from your cash continuously.'),
   'credit limit': h('Bank of Aurex', 'The most you can owe the bank. It grows with the value of the companies you own.'),
   // Coop
@@ -210,7 +210,7 @@ const ACTIONS = {
   dealDeliver: h('Deliver yourself', 'Drive the goods over yourself: a 10-second trip, then they are in the buyer\'s stock and you get the price plus the delivery fee.'),
   deliverOpen: h('Orders', 'Open the delivery map to send accepted orders to your clients.'),
   order: h('Orders', 'Answer the order: accept it, reject it or ask for a better price.'),
-  loan: h('Bank', 'Borrow money from the Bank of Aurex. Interest is charged every year on what you owe.'),
+  loan: h('Bank', 'Borrow from one of the banks in the city at its rate, fixed for the life of the loan. Only bank owners borrow from the Bank of Aurex at the market rate. Stay in the red for two months and the loan defaults.'),
   repay: h('Bank', 'Pay back part or all of your loans.'),
   trade: h('Stocks', 'Buy or sell shares at today\'s price.'),
   policy: h('Autopilot', 'How your managers decide when you don\'t answer in time.'),

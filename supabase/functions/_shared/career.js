@@ -14,7 +14,7 @@ export const FIELD_NAME = Object.fromEntries(DEPTS.map((d) => [d.id, d.name]));
 export const SECTORS = Object.keys(C.sectors);
 export const sectorOf = (l) => (l && TYPES[l.type] ? TYPES[l.type].group : null);
 // which field a company to-do trains
-export const TASK_FIELD = { overtime: 'ops', runShift: 'ops', restock: 'procurement', sellSurplus: 'procurement', findCustomers: 'sales', deliver: 'sales', postCampaign: 'social', teamMeeting: 'hr', reviewBooks: 'finance', runExperiment: 'rnd', reviewContracts: 'legal' };
+export const TASK_FIELD = { overtime: 'ops', runShift: 'ops', restock: 'procurement', sellSurplus: 'procurement', findCustomers: 'sales', deliver: 'sales', postCampaign: 'social', teamMeeting: 'hr', reviewBooks: 'finance', credit: 'finance', runExperiment: 'rnd', reviewContracts: 'legal' };
 export const SPEC = Object.fromEntries(SECTORS.flatMap((s) => C.sectors[s].specs.map((x) => [x.id, { ...x, sector: s }])));
 
 // ---------------------------------------------------------------- numbers

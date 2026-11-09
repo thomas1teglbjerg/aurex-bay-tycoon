@@ -2,7 +2,7 @@
 // Your own wallet (separate from the empire), homes as investments, and collections of art, wine,
 // watches and cars that gain or lose value over time. Collections and homes add up to Prestige,
 // which gives perks back in the business game. Pure functions over the city object, like the engine.
-import { HOMES, ROOMS, LIFESTYLES, SALARIES, TAX, LIFE, RARITY, PRESTIGE_TIERS, COLLECT_CATS, COLLECTIBLES, SETS, DINNER, VINTAGE, SIZES, CRAFT, CENTRAL } from './content.js';
+import { HOMES, ROOMS, LIFESTYLES, SALARIES, TAX, LIFE, RARITY, PRESTIGE_TIERS, COLLECT_CATS, COLLECTIBLES, SETS, DINNER, VINTAGE, SIZES, CRAFT, CENTRAL, BANKS } from './content.js';
 
 const r2 = (v) => Math.round(v * 100) / 100;
 const r4 = (v) => Math.round(v * 10000) / 10000;
@@ -100,6 +100,8 @@ export function incomeTax(gross) {
 const cbShift = (city, k) => (city.cb ? (city.cb.rate - CENTRAL.start) * CENTRAL[k] : 0);
 export function savingsRate(city) { return Math.max(0.25, ({ Boom: 3.5, Stable: 2.5, Recession: 1.5, Crisis: 1 }[city.econ] || 2.5) + cbShift(city, 'savings')); }
 export function mortgageRate(city) { return Math.max(0.5, LIFE.mortgageBase + ({ Boom: 0.5, Stable: 0, Recession: -0.5, Crisis: 1 }[city.econ] || 0) + cbShift(city, 'mortgage')); }
+// a home's mortgage rate: fixed by the bank that gave it, or (bank owners) the market mortgage rate
+export const homeRate = (city, h) => (typeof h.rate === 'number' ? h.rate : mortgageRate(city));
 function payment(bal, ratePct, monthsLeft) { const r = ratePct / 100 / 12; if (bal <= 0) return 0; if (monthsLeft <= 1) return bal * (1 + r); return bal * r / (1 - Math.pow(1 + r, -monthsLeft)); }
 export function monthly(city, p) {
   const L = p.life, rate = mortgageRate(city), sets = completeSets(p);
@@ -109,7 +111,7 @@ export function monthly(city, p) {
     const v = homeValue(city, h), def = HOME[h.hid];
     charges += def.charges / 12; propTax += v * LIFE.propTax / 12; upkeep += v * LIFE.upkeep / 12;
     if (h.rented) rent += v * LIFE.rentYield / 12;
-    if (h.bal > 0) { const left = Math.max(1, LIFE.mortgageYears * 12 - (city.m - h.boughtM)), pay = payment(h.bal, rate, left), i = h.bal * rate / 100 / 12; interest += i; principal += Math.min(h.bal, pay - i); }
+    if (h.bal > 0) { const hr = homeRate(city, h), left = Math.max(1, LIFE.mortgageYears * 12 - (city.m - h.boughtM)), pay = payment(h.bal, hr, left), i = h.bal * hr / 100 / 12; interest += i; principal += Math.min(h.bal, pay - i); }
   });
   const style = LIFESTYLES.find((s) => s.id === L.style) || LIFESTYLES[0];
   const lifestyle = L.res || L.homes.length ? style.cost / 12 : style.cost / 12 + 0.04 / 12; // no home: you rent a room
@@ -283,17 +285,30 @@ export function monthStep(city, m, ctx) {
     L.wallet -= b.lifestyle; tx(L, m, 'Living costs', -b.lifestyle);
     if (b.care) { L.wallet -= b.care; tx(L, m, 'Collection insurance and upkeep', -b.care); }
     if (b.overdraft) { L.wallet -= b.overdraft; tx(L, m, 'Overdraft interest', -b.overdraft); }
-    L.homes.forEach((h) => { if (h.bal > 0) { const left = Math.max(1, LIFE.mortgageYears * 12 - (m - h.boughtM)), pay = payment(h.bal, b.rate, left); h.bal = Math.max(0, r4(h.bal - (pay - h.bal * b.rate / 100 / 12))); } });
+    L.homes.forEach((h) => { if (h.bal > 0) { const hr = homeRate(city, h), left = Math.max(1, LIFE.mortgageYears * 12 - (m - h.boughtM)), pay = payment(h.bal, hr, left), i = h.bal * hr / 100 / 12; if (ctx.mortPaid) ctx.mortPaid(city, h, i); h.bal = Math.max(0, r4(h.bal - (pay - i))); } });
     if (L.offer && L.offer.until < m) L.offer = null;
     // a negative wallet is covered by a dividend from your empire, if it can afford it
     if (L.wallet < -0.25 && p.cash > 1) {
       const need = -L.wallet + 0.1, gross = Math.min(p.cash - 0.5, need / (1 - TAX.dividend));
       if (gross > 0) { p.cash -= gross; L.wallet += gross * (1 - TAX.dividend); tx(L, m, 'Automatic dividend from your empire (after tax)', gross * (1 - TAX.dividend)); ctx.feed(p, m, 'Your account went into overdraft', `${r2(gross)} M was paid out from your empire as a dividend (${Math.round(TAX.dividend * 100)}% tax) to cover it.`, 'bad'); }
     }
+    // months in the red with a mortgage: the bank forecloses on the home with the biggest loan and sells it at auction
+    L.arr = L.wallet < -0.25 && L.homes.some((h) => h.bal > 0) ? (L.arr || 0) + 1 : 0;
+    if (L.arr >= BANKS.arrears) { L.arr = 0; foreclose(city, p, L.homes.filter((h) => h.bal > 0).sort((a, c) => c.bal - a.bal)[0], ctx); }
     L.last = Object.fromEntries(Object.entries(b).map(([k, v]) => [k, r4(v)]));
     L.ledger.push({ m, in: r4(b.inflow), out: r4(b.outflow) }); if (L.ledger.length > 24) L.ledger.shift();
     L.hist.push([m, r2(L.wallet), r2(equity(city, p)), r2(collectionValue(city, p))]); if (L.hist.length > 130) L.hist.shift();
   });
+}
+
+// the bank sells a home whose owner stopped paying: it is paid first, the rest goes to the wallet
+function foreclose(city, p, h, ctx) {
+  const L = p.life, def = HOME[h.hid], got = r4(homeValue(city, h) * BANKS.foreclose), back = r4(Math.max(0, got - h.bal));
+  if (ctx.foreclosed) ctx.foreclosed(city, p, h, got);
+  L.wallet += back; tx(L, city.m, `Foreclosure auction · ${def.name}`, back);
+  L.homes = L.homes.filter((x) => x !== h); if (L.res === h.uid) L.res = (L.homes.find((x) => !x.rented) || {}).uid || null;
+  ctx.feed(p, city.m, `Your home at ${def.name} was sold at a foreclosure auction`, `You missed your mortgage payments for ${BANKS.arrears} months. It sold for ${r2(got)} M; after the ${r2(h.bal)} M loan, ${r2(back)} M went to your account.`, 'bad');
+  ctx.news(city, city.m, `Foreclosure auction in ${def.district}`, `${p.name}'s home at ${def.name} went under the hammer for ${r2(got)} M.`, 'bad');
 }
 
 // ---------------------------------------------------------------- actions
@@ -317,10 +332,11 @@ export function act(city, p, action, a, ctx) {
     case 'homeBuy': {
       const def = HOME[a.hid]; if (!def) return err('Unknown home.'); if (unitsLeft(city, a.hid) < 1) return err('No units left in this building.');
       const price = r2(def.price * city.life.homes[a.hid].ix), down = Math.min(1, Math.max(LIFE.downMin, Number(a.down) || LIFE.downMin));
-      const cash = r2(price * down + price * LIFE.closing);
+      const cash = r2(price * down + price * LIFE.closing), bal = r4(price * (1 - down));
       if (L.wallet < cash) return err(`You need ${cash} M on your account: ${Math.round(down * 100)}% down plus ${Math.round(LIFE.closing * 100)}% closing costs.`);
+      const mo = bal > 0 && ctx.mortgage ? ctx.mortgage(city, p, bal, a.bank || null) : { ok: true, bank: null, rate: null }; if (!mo.ok) return mo;
       L.wallet -= cash; tx(L, m, `${def.name} · down payment and fees`, -cash);
-      const h = { uid: uid('h'), hid: a.hid, boughtM: m, paid: price, bal: r4(price * (1 - down)), rented: false, rooms: {}, improve: 0 };
+      const h = { uid: uid('h'), hid: a.hid, boughtM: m, paid: price, bal, rented: false, rooms: {}, improve: 0, ...(mo.bank ? { bank: mo.bank } : {}), ...(typeof mo.rate === 'number' ? { rate: mo.rate } : {}) };
       L.homes.push(h); if (!L.res) L.res = h.uid;
       ctx.news(city, m, `${p.name} buys a home in ${def.district}`, `${def.name}, ${r2(price)} M.`, 'info');
       return ok(L.res === h.uid ? `Welcome home. You moved into ${def.name}.` : `You bought ${def.name}. Rent it out or make it your home.`, { uid: h.uid });

@@ -9,6 +9,7 @@ import { selfHeadHTML } from './profile.js';
 import { city, me, esc, lname, coImg, faceUrl, dollars, M, K, N, P, dateLabel, shortDate, deptIcon, spark, barChart, seg } from './util.js';
 
 import { siteHTML, builderBox, statusOf as siteStatus } from './build.js';
+import { lendingBox } from './banks.js';
 const O = E.OPS;
 const STAFF_BY = Object.fromEntries(STAFF.map((s) => [s.id, s]));
 export const DEPT_TINT = { ops: '#22344f', procurement: '#5c4220', sales: '#175c3b', social: '#7a2f5f', hr: '#24578f', finance: '#34502a', rnd: '#3f347e', legal: '#4d3f31' };
@@ -161,6 +162,7 @@ export function companyHTML(lid, ui = {}) {
       ${ro ? '' : `<div class="box"><h2>To-do<small>${tasks.length}</small></h2><div class="in">${taskHTML}<p class="empty" style="font-size:13px">Tasks appear when a department has no staff. Hire workers to hand the work over.</p></div></div>`}
       ${l.site ? `<div class="box"><h2>Building work<small>${esc(E.BLD.kindName(l.site).toUpperCase())}</small></h2><div class="in">${siteHTML(l)}</div></div>` : ''}
       ${builderBox(l, ro)}
+      ${lendingBox(c, l, ro)}
       ${cellarBox(c, l, ro)}
       ${yardBox(c, l, ro)}
       ${newsroomBox(c, l, ro)}

@@ -8,6 +8,7 @@ import { apexSite } from './team.js';
 import { freightSite, freightAlias } from './freight.js';
 import { concreteSite } from './concrete-site.js';
 import { buildSite, HOST as BUILD_HOST } from './build.js';
+import { bankSite, bankMeta, bankHosts, banksTable, mortQuote } from './banks.js';
 import { CENTRAL, CENTRAL_BANK, WORLD, TYPES, GOODS, HOUSE_PICS } from '../supabase/functions/_shared/content.js';
 
 const L = E.LIFE;
@@ -37,7 +38,9 @@ export const SITES = {
   'baysideconcrete.ab': { name: 'Bayside Concrete', tag: 'Ready-mix concrete · prices and quotes · Harbor Row', logo: ['BC', '#24272c', '#f28c28'] },
   'aurexbuild.ab': { name: 'Aurex Build', tag: 'Building plots, calls for bids and builders', logo: ['AB', '#2b2f24', '#f2c230'] }
 };
-const favicon = (host, s = 22) => { const [t, bg, fg] = SITES[host].logo; return `<span class="fav" style="width:${s}px;height:${s}px;background:${bg};color:${fg};font-size:${Math.round(s * (t.length > 2 ? 0.34 : 0.48))}px">${esc(t)}</span>`; };
+const siteOf = (host) => SITES[host] || bankMeta(host);
+const allHosts = () => Object.keys(SITES).concat(Object.keys(bankHosts()));
+const favicon = (host, s = 22) => { const [t, bg, fg] = siteOf(host).logo; return `<span class="fav" style="width:${s}px;height:${s}px;background:${bg};color:${fg};font-size:${Math.round(s * (t.length > 2 ? 0.34 : 0.48))}px">${esc(t)}</span>`; };
 const go = (u, inner, cls = '') => `<a href="#" class="${cls}" data-a="webGo" data-u="${esc(u)}">${inner}</a>`;
 const CARD_FALLBACK = { art: 'img/h1-art.jpg', wine: 'img/h1-wine.jpg', watch: 'img/h1-watch.jpg', car: 'img/ph-car.svg' };
 export function itemBg(cid) {
@@ -74,15 +77,15 @@ function adSlot(slot, cls = '') {
 // ---------------------------------------------------------------- browser chrome
 export function parseUrl(u) { const s = String(u || HOME_URL).trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, ''); const [host, ...rest] = s.split('/'), r = { host: host.toLowerCase(), path: rest, url: s || HOME_URL }; const alias = freightAlias(r); return alias ? parseUrl(alias) : r; }
 export function webHTML(st) {
-  const u = parseUrl(st.url), site = SITES[u.host];
-  const page = !site ? notFound(u) : u.host === 'baylink.ab' ? portal(st) : u.host === 'aurexauctions.ab' ? auctions(u, st) : SITES[u.host].cat ? dealer(SITES[u.host].cat, u) : u.host === 'bayhomes.ab' ? homes(u, st) : u.host === 'harbortrust.ab' ? bank(u) : u.host === 'bankofaurex.ab' ? boa(u) : u.host === 'apextalent.ab' ? apexSite(u, go) : SITES[u.host].freight ? freightSite(u, go) : u.host === 'baysideconcrete.ab' ? concreteSite(u, st, go) : u.host === BUILD_HOST ? buildSite(u, go) : gazette(u, st);
-  const bm = Object.keys(SITES).filter((h) => h !== 'baylink.ab').map((h) => `<button data-a="webGo" data-u="${h}" class="${u.host === h ? 'on' : ''}">${favicon(h, 18)}<span>${esc(SITES[h].name.replace(/^The /, ''))}</span></button>`).join('');
+  const u = parseUrl(st.url), site = siteOf(u.host);
+  const page = !site ? notFound(u) : site.bank ? bankSite(site.bank, u.path, u.host, go) : u.host === 'baylink.ab' ? portal(st) : u.host === 'aurexauctions.ab' ? auctions(u, st) : SITES[u.host].cat ? dealer(SITES[u.host].cat, u) : u.host === 'bayhomes.ab' ? homes(u, st) : u.host === 'harbortrust.ab' ? bank(u) : u.host === 'bankofaurex.ab' ? boa(u) : u.host === 'apextalent.ab' ? apexSite(u, go) : SITES[u.host].freight ? freightSite(u, go) : u.host === 'baysideconcrete.ab' ? concreteSite(u, st, go) : u.host === BUILD_HOST ? buildSite(u, go) : gazette(u, st);
+  const bm = allHosts().filter((h) => h !== 'baylink.ab').map((h) => `<button data-a="webGo" data-u="${h}" class="${u.host === h ? 'on' : ''}">${favicon(h, 18)}<span>${esc(siteOf(h).name.replace(/^The /, ''))}</span></button>`).join('');
   return `<div class="wwin"><div class="wchrome">
     <div class="wbar"><button data-a="webBack" aria-label="Back" ${st.back.length ? '' : 'disabled'}>‹</button><button data-a="webFwd" aria-label="Forward" ${st.fwd.length ? '' : 'disabled'}>›</button><button data-a="webHome" aria-label="Home" class="hm"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/></svg></button>
       <form class="waddr" data-form="addr"><span class="lock" aria-hidden="true"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><input name="u" value="${esc(u.url)}" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Address"></form>
       <button data-a="webClose" aria-label="Close browser" class="x">✕</button></div>
     <div class="wbm">${bm}</div></div>
-    <div class="wpage" id="wpage"><div class="site s-${site ? (SITES[u.host].cat ? DEALERS[SITES[u.host].cat].theme : u.host.split('.')[0]) : 'nf'}">${page}${site && u.host !== 'baylink.ab' && u.host !== 'aurexgazette.ab' ? `<div class="adrow">${adSlot(Object.keys(SITES).indexOf(u.host) + u.path.length, 'wide')}</div>` : ''}</div></div></div>`;
+    <div class="wpage" id="wpage"><div class="site s-${site ? (site.bank ? 'pbank' : site.cat ? DEALERS[site.cat].theme : u.host.split('.')[0]) : 'nf'}">${page}${site && u.host !== 'baylink.ab' && u.host !== 'aurexgazette.ab' ? `<div class="adrow">${adSlot(Object.keys(SITES).indexOf(u.host) + u.path.length, 'wide')}</div>` : ''}</div></div></div>`;
 }
 function notFound(u) {
   return `<div class="nf-in"><h1>This site can’t be reached</h1><p><b>${esc(u.host)}</b> does not exist in Aurex Bay.</p>${go(HOME_URL, 'Search on Baylink', 'nfbtn')}</div>`;
@@ -91,7 +94,7 @@ function notFound(u) {
 // ---------------------------------------------------------------- Baylink portal
 function portal(st) {
   const c = city(), q = (st.q || '').toLowerCase().trim();
-  const list = Object.entries(SITES).filter(([h]) => h !== 'baylink.ab').filter(([h, s]) => !q || (h + s.name + s.tag).toLowerCase().includes(q));
+  const list = allHosts().map((h) => [h, siteOf(h)]).filter(([h]) => h !== 'baylink.ab').filter(([h, s]) => !q || (h + s.name + s.tag).toLowerCase().includes(q));
   const movers = STOCKS.map((s) => { const h = c.stocks[s.id].h; return { s, p: c.stocks[s.id].p, ch: h.length > 1 ? (h[h.length - 1] / h[h.length - 2] - 1) * 100 : 0 }; }).sort((a, b) => Math.abs(b.ch) - Math.abs(a.ch)).slice(0, 5);
   const temp = 14 + Math.round(8 * Math.sin((c.m % 12 - 3) / 12 * Math.PI * 2)), sky = ['Sunny', 'Light clouds', 'Sea breeze', 'Clear skies'][c.wk % 4];
   const news = c.news.slice(0, 4);
@@ -173,14 +176,14 @@ function homes(u, st) {
   const roomsRow = (h) => ['art', 'wine', 'watch', 'car'].map((k) => { const r = h.rooms[k]; return `<span class="bh-r ${r ? (r.add ? 'opt' : 'yes') : 'no'}" title="${esc(ROOMS[k].name)}">${ricon(k, 15)}<em>${r ? (r.add ? 'Option' : r.cap) : '—'}</em></span>`; }).join('');
   if (u.path[0] === 'home') {
     const def = L.HOME[u.path[1]]; if (!def) return head + '<div class="bh-body"><h2>Listing removed</h2></div>';
-    const pr = price(def), left = L.unitsLeft(c, def.id), down = st.down || 0.2, loan = pr * (1 - down), r = L.mortgageRate(c) / 100 / 12, n = LC.mortgageYears * 12, pay = loan > 0 ? loan * r / (1 - Math.pow(1 + r, -n)) : 0, need = pr * down + pr * LC.closing, hh = c.life.homes[def.id].h.slice(-36);
+    const pr = price(def), left = L.unitsLeft(c, def.id), down = st.down || 0.2, loan = pr * (1 - down), mq = mortQuote(c, p, loan), r = mq.rate / 100 / 12, n = LC.mortgageYears * 12, pay = loan > 0 ? loan * r / (1 - Math.pow(1 + r, -n)) : 0, need = pr * down + pr * LC.closing, hh = c.life.homes[def.id].h.slice(-36);
     const rooms = ['living', 'art', 'wine', 'watch', 'car'].filter((k) => k === 'living' || def.rooms[k]);
     return head + `<div class="bh-gal"><div class="bh-main" style="${homeBg(def.id, 'ext')}"></div><div class="bh-thumbs">${rooms.map((k) => `<span style="${homeBg(def.id, k)}"><em>${esc(def.names && def.names[k] ? def.names[k][0] : ROOMS[k].name)}</em></span>`).join('')}</div></div>
       <div class="bh-body bh-listing"><div><span class="bh-kick">${esc(def.district)} · ${left} of ${def.units} units available</span><h1>${esc(def.name)}</h1><div class="bh-price">${money(pr)}</div><p>${esc(def.desc)}</p>
       <div class="bh-rooms">${roomsRow(def)}</div>${def.noCar && !def.rooms.car ? `<p class="bh-small">${esc(def.noCar)}</p>` : ''}
       <h3>Price history</h3>${lineChart([{ v: hh, c: '#0e8a7e', fill: true }], hh.map((_, i) => shortDate(c.m - hh.length + 1 + i)), { fmt: (v) => v.toFixed(1), label: 'Price history', h: 140 })}</div>
       <aside class="bh-calc"><h3>Mortgage calculator</h3><div class="bh-seg">${[[0.2, '20%'], [0.5, '50%'], [1, 'Cash']].map(([v, t]) => `<button data-a="webDown" data-v="${v}" aria-pressed="${down === v}">${t}</button>`).join('')}</div>
-        <div class="bh-l"><span>Down payment + fees</span><b>${money(need)}</b></div><div class="bh-l"><span>Mortgage at ${L.mortgageRate(c).toFixed(1)}%</span><b>${money(loan)}</b></div><div class="bh-l"><span>Payments</span><b>${money(pay * 12)}/yr</b></div><div class="bh-l"><span>Running costs</span><b>${money(def.charges + pr * (LC.propTax + LC.upkeep))}/yr</b></div><div class="bh-l"><span>Rent if you let it</span><b>${money(pr * LC.rentYield)}/yr</b></div>
+        <div class="bh-l"><span>Down payment + fees</span><b>${money(need)}</b></div><div class="bh-l"><span>Mortgage${mq.name ? ` from ${esc(mq.name)}` : ''} at ${mq.rate.toFixed(2)}%</span><b>${money(loan)}</b></div>${mq.none && loan > 0 ? `<p class="bh-small">${esc(mq.none)}</p>` : ''}<div class="bh-l"><span>Payments</span><b>${money(pay * 12)}/yr</b></div><div class="bh-l"><span>Running costs</span><b>${money(def.charges + pr * (LC.propTax + LC.upkeep))}/yr</b></div><div class="bh-l"><span>Rent if you let it</span><b>${money(pr * LC.rentYield)}/yr</b></div>
         ${left > 0 ? `<button class="bh-btn" data-a="homeBuy" data-hid="${def.id}" data-v="${down}" ${p.life.wallet < need ? 'disabled' : ''}>Buy now</button>${p.life.wallet < need ? `<p class="bh-small">Your account has ${money(p.life.wallet)}. Take a dividend at Harbor Trust.</p>` : ''}` : '<p class="bh-small">Sold out. Check back when an owner sells.</p>'}</aside></div>`;
   }
   return head + `<div class="bh-hero"><h1>Find your place in Aurex Bay</h1><p>Lofts, villas and penthouses. Prices follow the district and the economy.</p></div>
@@ -252,18 +255,21 @@ function boa(u) {
   const econ = `<span class="ba-econ e-${esc(c.econ.toLowerCase())}">${esc(c.econ)}</span>`;
   let body = '';
   if (page === 'loans') {
-    const parts = E.loanRateParts(c, p), steps = [5, 10, 20, 50];
+    const parts = E.loanRateParts(c, p), steps = [5, 10, 20, 50], own = E.BK.ownsBank(c, meId()), none = !E.BK.lenders(c).length;
+    const pb = (x) => `<span>${go(E.BK.host(x), esc(E.BK.name(x)), 'ba-more')}</span>`;
+    const lender = (x) => (x.bank && x.bank !== 'cb' ? E.listing(c, x.bank) : null);
+    const borrow = own || none ? `<div class="ba-card"><h3>Borrow <em>${M(room)} available</em></h3><div class="ba-bar"><i style="width:${cap ? Math.min(100, debt / cap * 100) : 0}%"></i></div><p class="ba-small">${own ? `You own a bank, so you borrow here at the market rate: ${rate}%.` : `No bank stands in the city right now, so the Bank of Aurex lends as last resort at the market rate + ${E.BK.B.lastResort}.`} Your limit is half the value of your companies plus 10 M.</p>
+        <div class="ba-btns">${steps.map((v) => `<button class="ba-btn" data-a="loan" data-v="${v}" data-bank="cb" ${v > room ? 'disabled' : ''}>Borrow ${M(v)}</button>`).join('')}</div></div>`
+      : `<div class="ba-card"><h3>The Bank of Aurex lends to banks <em>${M(room)} of credit left</em></h3><p class="ba-small">Companies borrow from the banks of Aurex Bay. Each bank sets its own rate on top of the market rate (${cbs.rate}%) and fixes it when you borrow. Only owners of a bank borrow here at the market rate.</p>${banksTable(c, p, go).replace(/pb-/g, 'ba-')}</div>`;
     body = `<h2>Business loans</h2><p class="ba-sub">Credit for ${esc(p.name)}'s companies. Interest is charged on what you owe and paid from your company cash.</p>
-      <div class="ba-stats">${stat('You owe', M(debt), debt ? 'down' : '')}${stat('Your rate', rate + '%')}${stat('Interest a year', M(r.interest))}${stat('Credit limit', M(cap))}</div>
-      <div class="ba-card"><h3>Borrow <em>${M(room)} available</em></h3><div class="ba-bar"><i style="width:${cap ? Math.min(100, debt / cap * 100) : 0}%"></i></div><p class="ba-small">Your limit is half the value of your companies plus 10 M.</p>
-        <div class="ba-btns">${steps.map((v) => `<button class="ba-btn" data-a="loan" data-v="${v}" ${v > room ? 'disabled' : ''}>Borrow ${M(v)}</button>`).join('')}</div></div>
-      <div class="ba-card"><h3>Repay <em>${M(p.cash)} in company cash</em></h3><div class="ba-btns">${[5, 20].filter((v) => !debt || v < debt).map((v) => `<button class="ba-btn ghost" data-a="repay" data-v="${v}" ${!debt || p.cash <= 0 ? 'disabled' : ''}>Repay ${M(v)}</button>`).join('')}<button class="ba-btn ghost" data-a="repay" data-v="999" ${!debt || p.cash < debt ? 'disabled' : ''}>Repay all</button></div></div>
-      <div class="ba-card"><h3>Your loans</h3>${p.loans.length ? p.loans.map((l, i) => `<div class="ba-l"><span>Loan ${i + 1} · taken ${esc(shortDate(l.m))}</span><b>${M(l.amt)}</b></div>`).join('') + `<div class="ba-l tot"><span>Total</span><b>${M(debt)}</b></div>` : '<p class="ba-small">You have no loans with us.</p>'}</div>
-      <div class="ba-card"><h3>How your rate is made</h3>${parts.map(([k, v], i) => `<div class="ba-l"><span>${esc(k)}</span><b>${i ? (v > 0 ? '+' : '−') + Math.abs(v) + ' pts' : v + '%'}</b></div>`).join('')}<div class="ba-l tot"><span>Your rate</span><b>${rate}%</b></div><p class="ba-small">Never below 1%.</p></div>`;
+      <div class="ba-stats">${stat('You owe', M(debt), debt ? 'down' : '')}${stat('Market rate', cbs.rate + '%')}${stat('Interest a year', M(r.interest))}${stat('Credit limit', M(cap))}</div>
+      ${borrow}
+      <div class="ba-card"><h3>Your loans <em>${M(p.cash)} in company cash</em></h3>${p.loans.length ? p.loans.map((x) => { const bl = lender(x); return `<div class="ba-l">${bl ? pb(bl) : '<span>Bank of Aurex</span>'}<span>${M(x.amt)} at ${x.rate === 'bank' ? `${rate}% (market)` : x.rate + '%'} · ${esc(shortDate(x.m))}</span><b><button class="ba-btn ghost" data-a="repay" data-id="${x.id || ''}" data-v="${x.amt}" ${p.cash < x.amt ? 'disabled' : ''}>Repay</button></b></div>`; }).join('') + `<div class="ba-l tot"><span>Total</span><b>${M(debt)}</b></div><div class="ba-btns"><button class="ba-btn ghost" data-a="repay" data-v="999" ${!debt || p.cash < debt ? 'disabled' : ''}>Repay all</button></div>` : '<p class="ba-small">You have no business loans.</p>'}</div>
+      ${own ? `<div class="ba-card"><h3>How your rate is made</h3>${parts.map(([k, v], i) => `<div class="ba-l"><span>${esc(k)}</span><b>${i ? (v > 0 ? '+' : '−') + Math.abs(v) + ' pts' : v + '%'}</b></div>`).join('')}<div class="ba-l tot"><span>Your rate</span><b>${rate}%</b></div><p class="ba-small">Never below 1%.</p></div>` : ''}`;
   } else if (page === 'policy' || (page === 'office' && !gov0)) {
     const h = (cbs.hist || []).slice(-24), lv = cbs.levy || {}, pend = cbs.pending;
     const levies = [lv.sector ? [`${TYPES[lv.sector].name} income`, lv.sp] : null, lv.supply ? [`${GOODS[lv.supply].name} purchases`, lv.gp] : null].filter(Boolean);
-    body = `<h2>Monetary policy</h2><p class="ba-sub">The Bank of Aurex sets the bank rate that every business loan in the city starts from.</p>
+    body = `<h2>Monetary policy</h2><p class="ba-sub">The Bank of Aurex sets the bank rate: the market rate every bank in the city lends on top of, and the rate bank owners borrow at.</p>
       <div class="ba-stats">${stat('Bank rate', cbs.rate + '%')}${stat('Target', cbs.target + '%')}${stat('Economy', econ)}${stat('Governor', esc(gov || 'Vacant'))}</div>
       ${pend ? `<div class="ba-card ba-note"><h3>Announced</h3><p class="ba-small">${pend.target != null ? `New target ${pend.target}% from next week. ` : ''}${pend.levy ? 'New levies from next week.' : ''}</p></div>` : ''}
       <div class="ba-card"><h3>Bank rate <em>last ${h.length} months</em></h3>${h.length > 1 ? lineChart([{ v: h.map((x) => x[1]), c: '#d9b45a', w: 2.4 }], h.map((x) => shortDate(x[0])), { fmt: (v) => v.toFixed(2) + '%', label: 'Bank rate', h: 150 }) : '<p class="ba-small">The chart fills in month by month.</p>'}</div>
@@ -284,7 +290,7 @@ function boa(u) {
     body = `<h2>Governor's office</h2><p class="ba-sub">You steer the bank, not the economy. Every decision is announced in the Gazette a week before it takes effect.</p>
       <div class="ba-stats">${stat('Bank rate', cbs.rate + '%')}${stat('Target', cbs.target + '%')}${stat('Pressure', esc(E.CB.tiltWords(c)))}</div>
       <div class="ba-card"><h3>Target rate <em>${rateWait > 0 ? `next decision in ${rateWait} month${rateWait === 1 ? '' : 's'}` : 'the board can decide now'}</em></h3>
-        <p class="ba-small">Lower rates make every loan cheaper, yours too. Higher rates earn the bank more: it keeps ${Math.round(CENTRAL.ownerCut * 100)}% of the interest other tycoons pay.</p>
+        <p class="ba-small">Lower rates make every loan cheaper, yours too. Every bank lends on top of it, and the bank owners borrow at it. Higher rates earn the national bank more: it keeps ${Math.round(CENTRAL.ownerCut * 100)}% of the interest the city pays it (the banks' funding and its own loans).</p>
         <div class="ba-btns">${steps.map((v) => `<button class="ba-btn ${v < cbs.target ? 'ghost' : ''}" data-a="cbRate" data-v="${v}" ${rateWait > 0 ? 'disabled' : ''}>${v < cbs.target ? 'Cut' : 'Raise'} to ${v}%</button>`).join('')}</div></div>
       <div class="ba-card"><h3>Levy on a crowded sector <em>${levyWait > 0 ? `next change in ${levyWait} month${levyWait === 1 ? '' : 's'}` : 'once a quarter'}</em></h3>
         <p class="ba-small">Up to ${CENTRAL.levyMax}% of passive income for companies in one of the most crowded sectors. Not on a sector you are in yourself. The money goes to the city.</p>
@@ -298,7 +304,7 @@ function boa(u) {
       ${cb ? `<div class="ba-btns"><button class="ba-btn" data-a="adCo" data-lid="${cb.id}">See the company ›</button></div>` : ''}</div>`;
   } else {
     body = `<div class="ba-hero" style="background-image:url(${BOA_IMG})"><div><small>Business banking</small><h1>Capital for the companies that build Aurex Bay</h1><p>Borrow for growth, repay when it suits you.</p>${go('bankofaurex.ab/loans', 'Manage your loans', 'ba-cta')}</div></div>
-      <div class="ba-stats">${stat('Bank rate', cbs.rate + '%')}${stat('Your rate', rate + '%')}${stat('You owe', M(debt), debt ? 'down' : '')}${stat('Economy', econ)}</div>
+      <div class="ba-stats">${stat('Market rate', cbs.rate + '%')}${stat(E.BK.ownsBank(c, meId()) ? 'Your rate' : 'Cheapest bank for you', (E.BK.ownsBank(c, meId()) || !E.BK.lenders(c).length ? rate : (E.BK.offers(c, p, E.kx(c))[0] || { rate }).rate) + '%')}${stat('You owe', M(debt), debt ? 'down' : '')}${stat('Economy', econ)}</div>
       <div class="ba-grid">${go('bankofaurex.ab/loans', `<b>Business loans</b><span>Borrow up to ${M(room)} more today.</span>`, 'ba-tile')}${go('bankofaurex.ab/policy', '<b>Monetary policy</b><span>The bank rate and the state of the economy.</span>', 'ba-tile')}${gov0 ? go('bankofaurex.ab/office', `<b>Governor's office</b><span>Set the target rate and the levies.</span>`, 'ba-tile') : go('bankofaurex.ab/about', '<b>About the bank</b><span>The national bank of Aurex Bay since 1902.</span>', 'ba-tile')}</div>`;
   }
   return `${head}<div class="ba-main">${body}</div>`;
@@ -307,7 +313,9 @@ function boa(u) {
 // ---------------------------------------------------------------- Harbor Trust online banking
 function bank(u) {
   const c = city(), p = me(), Lp = p.life, est = L.monthly(c, p), page = u.path[0] || '';
-  const tabs = [['', 'Overview'], ['accounts', 'Statement'], ['transfer', 'Transfers'], ['salary', 'Salary & tax'], ['mortgages', 'Mortgages'], ['budget', 'Budget']];
+  const ht = E.listing(c, 'L14');
+  if (page === 'business' && ht) return bankSite(ht.id, u.path.slice(1), 'harbortrust.ab/business', go);
+  const tabs = [['', 'Overview'], ['accounts', 'Statement'], ['transfer', 'Transfers'], ['salary', 'Salary & tax'], ['mortgages', 'Mortgages'], ['budget', 'Budget'], ...(ht && E.BK.isLender(ht) ? [['business', 'Business banking']] : [])];
   const nav = `<nav class="bk-nav">${tabs.map(([k, t]) => go('harbortrust.ab' + (k ? '/' + k : ''), t, page === k ? 'on' : '')).join('')}</nav>`;
   const head = `<div class="bk-head">${favicon('harbortrust.ab', 34)}<div><b>Harbor Trust</b><span>Private banking</span></div><span class="bk-user">${esc(p.name)}</span></div>`;
   const row = (t) => `<div class="bk-tx"><div><b>${esc(t.text)}</b><span>${esc(shortDate(t.m))}${t.sav ? ' · Savings' : ''}</span></div><div class="r"><b class="${t.amt >= 0 ? 'up' : 'down'}">${money(t.amt, true)}</b>${t.sav ? '' : `<span>${money(t.bal)}</span>`}</div></div>`;
@@ -334,7 +342,8 @@ function bank(u) {
         <div class="bk-l"><span>Dividends</span><b>${Math.round(TAX.dividend * 100)}%</b></div><div class="bk-l"><span>Tax credit on museum donations</span><b>${Math.round(TAX.donationCredit * 100)}% of value</b></div>
         <div class="bk-l tot"><span>Your income tax this year</span><b>${money(L.incomeTax(Lp.salary))}</b></div></div>`;
   } else if (page === 'mortgages') {
-    body = `<h2>Mortgages</h2><p class="bk-small">Variable rate, now ${L.mortgageRate(c).toFixed(1)}%. It follows the economy.</p>${Lp.homes.length ? Lp.homes.map((h) => { const def = L.HOME[h.hid], v = L.homeValue(c, h); return `<div class="bk-card bk-loan"><span class="bk-hthumb" style="${homeBg(h.hid, 'ext')}"></span><div><h3>${esc(def.name)}</h3>
+    const lender = (h) => (h.bank && h.bank !== 'cb' ? E.BK.name(E.listing(c, h.bank)) : 'Bank of Aurex');
+    body = `<h2>Mortgages</h2><p class="bk-small">Mortgages come from the banks of Aurex Bay at a rate fixed when you buy. Bank owners borrow at the market mortgage rate (now ${L.mortgageRate(c).toFixed(1)}%), which follows the economy. Miss your payments for ${E.BK.B.arrears} months and the bank sells the home at a foreclosure auction.</p>${Lp.homes.length ? Lp.homes.map((h) => { const def = L.HOME[h.hid], v = L.homeValue(c, h); return `<div class="bk-card bk-loan"><span class="bk-hthumb" style="${homeBg(h.hid, 'ext')}"></span><div><h3>${esc(def.name)}</h3>${h.bal > 0.0001 ? `<div class="bk-l"><span>Lender</span><b>${esc(lender(h))} · ${L.homeRate(c, h).toFixed(2)}%</b></div>` : ''}
       <div class="bk-l"><span>Home value</span><b>${money(v)}</b></div><div class="bk-l"><span>Loan balance</span><b>${h.bal > 0.0001 ? money(h.bal) : 'Paid off'}</b></div><div class="bk-l"><span>Loan to value</span><b>${Math.round(h.bal / v * 100)}%</b></div><div class="bk-l"><span>Equity</span><b>${money(v - h.bal)}</b></div>
       ${h.bal > 0.0001 ? `<div class="bk-btns">${[0.05, 0.25, 1].filter((x) => x < h.bal).map((x) => `<button class="bk-btn ghost" data-a="homeRepay" data-uid="${h.uid}" data-v="${x}" ${Lp.wallet < x ? 'disabled' : ''}>Repay ${money(x)}</button>`).join('')}<button class="bk-btn" data-a="homeRepay" data-uid="${h.uid}" data-v="${h.bal}" ${Lp.wallet < h.bal ? 'disabled' : ''}>Pay off ${money(h.bal)}</button></div>` : ''}</div></div>`; }).join('') : `<div class="bk-card"><p>You have no mortgages. Find a home on ${go('bayhomes.ab', 'BayHomes')}.</p></div>`}`;
   } else if (page === 'budget') {
@@ -344,7 +353,7 @@ function bank(u) {
       <div class="bk-card"><h3>Money in and out</h3>${hist.length > 1 ? lineChart([{ v: hist.map((x) => x.in), c: '#1e9c7c', w: 2.4 }, { v: hist.map((x) => x.out), c: '#d0644f', w: 2.4 }], hist.map((x) => shortDate(x.m)), { fmt: (v) => money(v), label: 'Money in and out', h: 160 }) : '<p class="bk-small">The chart fills in month by month.</p>'}<div class="bk-leg"><span><i style="background:#1e9c7c"></i>In</span><span><i style="background:#d0644f"></i>Out</span></div></div>`;
   } else {
     body = `<div class="bk-hello"><span>Good ${['morning', 'afternoon', 'evening'][c.wk % 3]}, ${esc(p.name.split(' ')[0])}</span><b>${money(net)}</b><small>Personal net worth: accounts, home equity and collections</small></div>
-      <div class="bk-accts">${acct('Current account', '•••• 4471', Lp.wallet, Lp.wallet < 0 ? `Overdraft at ${Math.round(LC.overdraft * 100)}%` : 'Available')}${acct('Savings', '•••• 9020', Lp.savings || 0, `${L.savingsRate(c).toFixed(1)}% a year`)}${acct('Mortgages', `${loans.length} loan${loans.length === 1 ? '' : 's'}`, -loanTot, `${L.mortgageRate(c).toFixed(1)}% variable`)}</div>
+      <div class="bk-accts">${acct('Current account', '•••• 4471', Lp.wallet, Lp.wallet < 0 ? `Overdraft at ${Math.round(LC.overdraft * 100)}%` : 'Available')}${acct('Savings', '•••• 9020', Lp.savings || 0, `${L.savingsRate(c).toFixed(1)}% a year`)}${acct('Mortgages', `${loans.length} loan${loans.length === 1 ? '' : 's'}`, -loanTot, loans.length ? `${(loans.reduce((a, h) => a + L.homeRate(c, h) * h.bal, 0) / Math.max(1e-9, loanTot)).toFixed(1)}% on average` : 'none')}</div>
       <div class="bk-quick">${go('harbortrust.ab/transfer', '<b>↓</b>Take dividend')}${go('harbortrust.ab/transfer', '<b>↑</b>Invest in empire')}${go('harbortrust.ab/salary', '<b>€</b>Salary')}${go('harbortrust.ab/budget', '<b>≡</b>Budget')}</div>
       <div class="bk-card"><h3>This month <em class="${est.net >= 0 ? 'up' : 'down'}">${money(est.net, true)} net</em></h3><div class="bk-bar"><i style="width:${Math.min(100, est.inflow / Math.max(est.inflow, est.outflow, 0.0001) * 100)}%;background:#1e9c7c"></i></div><div class="bk-l"><span>In</span><b>${money(est.inflow)}</b></div><div class="bk-bar"><i style="width:${Math.min(100, est.outflow / Math.max(est.inflow, est.outflow, 0.0001) * 100)}%;background:#d0644f"></i></div><div class="bk-l"><span>Out</span><b>${money(est.outflow)}</b></div></div>
       <div class="bk-card"><h3>Latest transactions ${go('harbortrust.ab/accounts', 'See all ›', 'bk-more')}</h3>${txs.slice(0, 6).map(row).join('') || '<p class="bk-small">No transactions yet.</p>'}</div>`;
