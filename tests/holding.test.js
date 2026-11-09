@@ -87,11 +87,9 @@ const ep2 = h.proposals.find((x) => x.kind === 'equalize' && x.status === 'open'
 assert(near(E.netWorth(city, 't'), E.netWorth(city, 'k'), 0.1), `equal net worth: ${E.netWorth(city, 't')} vs ${E.netWorth(city, 'k')}`);
 r = A('t', 'holdingGive', { hid: h.id, to: 'k', pct: 5 }); assert(r.ok, 'an owner gives part of their stake: ' + r.msg);
 
-// the mandate: a big purchase alone is refused, the owners vote on it
+// a CEO buys for their own division without a vote, however big
 const big = city.listings.filter((x) => !x.owner && !TYPES[x.type].starter && E.listingPrice(x) > HOLDING.buyPct * E.holdingNav(city, h)).sort((a, b) => E.listingPrice(a) - E.listingPrice(b))[0];
-if (big) { T.cash = Math.max(T.cash, E.listingPrice(big) + 1); r = A('t', 'buy', { lid: big.id }); assert(!r.ok && r.vote && !big.owner, 'a purchase above 25% of the holding needs a vote: ' + r.msg);
-  r = A('t', 'holdingPropose', { hid: h.id, kind: 'divBuy', lid: big.id }); const bp = h.proposals.find((x) => x.kind === 'divBuy' && x.status === 'open'); A('k', 'holdingVote', { hid: h.id, prid: bp.id, yes: true });
-  assert(big.owner && big.owner.id === 't', 'after the vote it joins the CEO\'s division'); }
+if (big) { T.cash = Math.max(T.cash, E.listingPrice(big) + 1); r = A('t', 'buy', { lid: big.id }); assert(r.ok && big.owner && big.owner.id === 't', 'a big purchase needs no vote: ' + r.msg); }
 
 // a month: each division pays its share of profit to the central account
 for (let i = 0; i < 3; i++) month();
