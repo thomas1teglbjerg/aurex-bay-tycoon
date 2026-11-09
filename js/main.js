@@ -16,6 +16,7 @@ import { logoMark, logoFull, symbolIcon } from './brand.js';
 import { initChat, openChat, unreadFrom, inboxOf } from './chat.js';
 import { openMixer } from './mixer.js';
 import { openCrane } from './crane.js';
+import { openCredit, UIB } from './banks.js';
 import { siteHTML, statusOf as siteStatus } from './build.js';
 import { dealsToDo, dealsNeedingMe, newDealHTML, deliveryRun, DUI, RUN_S } from './deals.js';
 import { mailBoxHTML, mailPageHTML, mails, isRead as mailRead, markRead } from './mail.js';
@@ -957,8 +958,10 @@ async function onClick(e) {
     case 'tOffer': await act('tOffer', { tid: d.tid, fee: Number(d.f), salary: Number(d.v), years: Number(d.y), coop: d.coop }); return;
     case 'tOfferAccept': case 'tOfferDecline': await act(a, { oid: d.oid, coop: d.coop }); return;
     case 'hostileBid': await act('hostileBid', { lid: d.lid, amt: Number(d.v) }); return;
-    case 'loan': await act('loan', { amt: Number(d.v) }); return;
-    case 'repay': await act('repay', { amt: Number(d.v) }, 'Repaid.'); return;
+    case 'loan': await act('loan', { amt: Number(d.v), bank: d.bank || '', pledge: d.pledge || null }); return;
+    case 'repay': await act('repay', { amt: Number(d.v), id: d.id || null }, 'Repaid.'); return;
+    case 'bkSet': await act('bkSet', { lid: d.lid, k: d.k, v: d.v }); return;
+    case 'bkCredit': if (!openCredit(d.app, act)) toast('This application is closed.', 'bad'); return;
     case 'qty': UI.qty = Number(d.v); renderPanel(); return;
     case 'trade': await act('trade', { id: d.id, qty: Number(d.q) }); return;
     case 'policy': await act('policy', { policy: d.v }, 'Autopilot updated.'); return;
@@ -1164,6 +1167,7 @@ async function boot(hot) {
     const t = e.target, d = t.dataset;
     if (d.a === 'whTarget') { UI.whTarget[d.g] = t.value; refreshModal(); }
     if (d.a === 'whSupply') await act('whAuto', { wid: d.wid, supply: t.checked });
+    if (d.a === 'bkPledge') { UIB.pledge = t.value; renderWeb(); }
     if (d.a === 'adSubj') { adUI(d.lid).subj = t.value; adUI(d.lid).n = 0; renderPanel(); }
     if (d.a === 'tradeTo') { UI.modal.to = t.value; UI.modal.get = []; openLife(UI.modal); }
     if (t.id === 'ob-end') { UI.found.end = t.value; foundPreview(UI.found); }

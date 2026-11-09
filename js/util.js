@@ -29,7 +29,7 @@ export function M(v, sign) {
   // under a million: show thousands
   if (a < 0.9995) { const k = Math.round(a * 1000); if (!k) return '0'; return (v < 0 ? '−' : sign && v > 0 ? '+' : '') + k + ' k'; }
   let s = a >= 100 ? a.toFixed(0) : a >= 10 ? a.toFixed(1) : a.toFixed(2);
-  s = s.replace(/\.?0+$/, '') || '0';
+  if (s.includes('.')) s = s.replace(/\.?0+$/, '') || '0'; // 100 M stays 100 M
   return (v < -0.0049 ? '−' : sign && v > 0.0049 ? '+' : '') + s + ' M';
 }
 export const K = (v) => (v * 1000).toFixed(v * 1000 >= 10 ? 1 : 2) + ' k'; // unit prices of supplies, in thousands
