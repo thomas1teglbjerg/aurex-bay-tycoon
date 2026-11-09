@@ -13,6 +13,7 @@ const sign = (v) => (Math.abs(v) < 0.005 ? '0' : `${v < 0 ? '−' : '+'}${M(Math
 function accountRows(f, cls) {
   const row = (a, b, k = '') => `<div class="${cls} ${k}"><span>${a}</span><b>${b}</b></div>`;
   return row(`Interest from customers${f.line ? ` <small>avg ${pct(f.avg)}</small>` : ''}`, sign(f.inc))
+    + (f.own ? row(`Paid for by your equity <small>${M(f.own)}, no funding cost</small>`, '0') : '')
     + row(`Funding line at the Bank of Aurex <small>${f.line ? `${M(f.line)} at ${pct(f.fr)}` : 'nothing drawn'}</small>`, sign(-f.cost))
     + row('Losses on bad loans this year', f.loss ? sign(-f.loss) : '0')
     + row('<b>Net</b>', `<span class="${f.net < 0 ? 'down' : 'up'}">${sign(f.net)}</span>`, 'net');
@@ -45,7 +46,7 @@ export function bankSite(lid, path, base, go) {
     const pledges = E.ownedBy(c, 'p', meId()).filter((y) => !E.BLD.unbuilt(y) && !p.loans.some((z) => z.pledge === y.id));
     const pl = (UIB.pledge && pledges.some((y) => y.id === UIB.pledge)) ? UIB.pledge : '';
     body = `<h2>Business loans</h2><p class="pb-sub">${run ? 'You run this bank. Its owners borrow from the Bank of Aurex at the market rate.' : `Credit for your companies at ${pct(rate)} a year, fixed for the life of the loan. Repay whenever you like.`}</p>
-      <div class="pb-stats">${stat('Our rate for you', pct(rate), `market ${pct(mk)} ${pts(rate - mk)}`)}${stat('Your credit limit', M(cap), `you owe ${M(d)} in all`)}${stat('You can borrow here', M(room), cfg.hand && offer && offer.run ? 'the credit committee decides' : 'paid out at once')}</div>
+      <div class="pb-stats">${stat('Our rate for you', pct(rate), run ? `market ${pct(mk)} ${pts(rate - mk)}` : 'fixed for the life of the loan')}${stat('Your credit limit', M(cap), `you owe ${M(d)} in all`)}${stat('You can borrow here', M(room), cfg.hand && offer && offer.run ? 'the credit committee decides' : 'paid out at once')}</div>
       ${run ? '' : own ? `<div class="pb-card"><p class="pb-small">You own a bank, so the Bank of Aurex lends to you at the market rate. ${go('bankofaurex.ab/loans', 'Borrow there ›', 'pb-more')}</p></div>` : ''}
       ${pend ? `<div class="pb-card pb-note"><h3>Your application</h3><p class="pb-small">${pend.status === 'counter' ? `The bank made you a counter-offer: ${M(pend.amt)} at ${pct(pend.terms.rate)}. Answer it in your mail.` : `${M(pend.amt)} at ${pct(pend.rate)}: waiting for the credit committee.`}</p></div>` : ''}
       ${!run && offer && !offer.closed && !pend ? `<div class="pb-card"><h3>Borrow</h3>
@@ -62,7 +63,7 @@ export function bankSite(lid, path, base, go) {
     body = officeHTML(c, l, x);
   } else {
     body = `<div class="pb-hero" style="background-image:url(${coImg(l)})"><div><small>${esc(l.district)}</small><h1>${esc(BK.name(l))}</h1><p>${war ? 'Our rates are under pressure from a rival bank.' : 'Loans for companies, mortgages for homes.'}</p>${go(base + '/loans', 'Borrow from us', 'pb-cta')}</div></div>
-      <div class="pb-stats">${stat('Business loans', pct(BK.rateOf(c, l, x)), `market ${pct(mk)} ${pts(BK.rateOf(c, l, x) - mk)}`)}${stat('Mortgages', pct(mrate), `market ${pct(E.LIFE.mortgageRate(c))} ${pts(mrate - E.LIFE.mortgageRate(c))}`)}${stat('Lent out', `${M(bk.total)}`, `of ${M(max)}`)}${stat('Run by', esc(ownerName(c, l) || 'the loan officers'), l.owner ? '' : 'no owner yet')}</div>
+      <div class="pb-stats">${stat('Business loans', pct(BK.rateOf(c, l, x)), run ? `market ${pct(mk)} ${pts(BK.rateOf(c, l, x) - mk)}` : 'fixed for the life of the loan')}${stat('Mortgages', pct(mrate), run ? `market ${pct(E.LIFE.mortgageRate(c))} ${pts(mrate - E.LIFE.mortgageRate(c))}` : 'fixed rate')}${stat('Lent out', `${M(bk.total)}`, `of ${M(max)}`)}${stat('Run by', esc(ownerName(c, l) || 'the loan officers'), l.owner ? '' : 'no owner yet')}</div>
       <div class="pb-card"><h3>Every bank in the city ${go('bankofaurex.ab/loans', 'Compare ›', 'pb-more')}</h3>${banksTable(c, p, go)}</div>`;
   }
   return `<div class="pb">${head}<div class="pb-main">${body}</div></div>`;
@@ -70,6 +71,21 @@ export function bankSite(lid, path, base, go) {
 export const UIB = { pledge: '' };
 // the mortgage a tycoon would get for a home now: the cheapest bank with room (bank owners: the market mortgage rate)
 export function mortQuote(c, p, amt) { const r = BK.mortgage(c, p, Math.max(0.01, amt), null, E.kx(c)); return r.ok ? { rate: r.rate ?? E.LIFE.mortgageRate(c), name: r.name } : { rate: E.LIFE.mortgageRate(c), name: null, none: r.msg }; }
+function capRow(c, l, x) {
+  const k = BK.capital(c, l, x); if (!k.on) return '';
+  return `<div class="row"><div class="grow"><b class="${k.short ? 'down' : ''}">Equity ${M(k.cap)}${k.short ? ` · needs ${M(k.need)}` : ''}</b><span>${k.short ? 'No new loans until you put in more' : `room for ${M(Math.min(k.room, Math.max(0, BK.bookMax(l) - BK.book(c, l.id).total)))} more in loans`}</span></div></div>`;
+}
+// equity: 8% of the risk-weighted loans, put in or taken out by the owner
+function capCard(c, l, x) {
+  const k = BK.capital(c, l, x), R = Math.round(B.capital.ratio * 100), cash = E.kx(c).cashOf(l.owner);
+  const btn = (v) => `<button class="pb-btn ${v > 0 ? '' : 'ghost'} sm" data-a="bkCap" data-lid="${l.id}" data-v="${v}" ${v > 0 ? (cash < v ? 'disabled' : '') : (-v > k.free + 1e-9 ? 'disabled' : '')}>${v > 0 ? 'Put in' : 'Take out'} ${M(Math.abs(v))}</button>`;
+  return `<div class="pb-card ${k.short ? 'pb-warn' : ''}"><h3>Equity <em>${R}% of loans, mortgages count half</em></h3>
+    <div class="pb-l"><span>Your equity in the bank</span><b>${M(k.cap)}</b></div>
+    <div class="pb-l"><span>Needed for today's loans <small>${R}% of ${M(k.w)}</small></span><b class="${k.short ? 'down' : ''}">${M(k.need)}</b></div>
+    <div class="pb-l"><span>The bank can lend more</span><b>${M(k.room === Infinity ? 0 : Math.min(k.room, Math.max(0, BK.bookMax(l) - BK.book(c, l.id).total)))}</b></div>
+    <div class="pb-btns">${[1, 5, 10].map(btn).join('')}${[-1, -5].map(btn).join('')}</div>
+    <p class="pb-small">${k.short ? `Below ${R}%: the bank makes no new loans until you put in ${M(r2(k.need - k.cap))} more.` : `Equity funds part of the loans itself, so the funding line is smaller. Losses come off the equity first. You can take out ${M(k.free)}.`}</p></div>`;
+}
 // the owner's office: rates, limits, the committee's applications and the loan book
 function officeHTML(c, l, x) {
   const cfg = BK.cfg(c, l), mk = BK.market(c), mm = E.LIFE.mortgageRate(c), bk = BK.book(c, l.id), max = BK.bookMax(l), f = BK.funding(c, l, x);
@@ -81,6 +97,7 @@ function officeHTML(c, l, x) {
   return `<h2>Bank office</h2><p class="pb-sub">You set the margin over the market rate (${pct(mk)}, set by the Bank of Aurex). Loans keep the rate they were made at. What the bank lends it draws on its funding line at the Bank of Aurex, which follows the market rate.</p>
     ${war ? `<div class="pb-card pb-warn"><h3>Rate war</h3><p class="pb-small">${esc((c.players[war.bid] || {}).name || 'A rival')}'s bank lends at market ${pts(war.sp)} and takes over loans from tycoons who bank with you. Cut your margin, or wait it out.</p></div>` : ''}
     <div class="pb-stats"><div class="pb-stat"><small>Net a year</small><b class="${f.net < 0 ? 'down' : 'up'}">${f.net < 0 ? '−' : '+'}${M(Math.abs(f.net))}</b><span>${f.line ? `${pts(r2(f.avg - f.fr))} pts margin` : 'nothing lent out yet'}</span></div><div class="pb-stat"><small>Lent out</small><b>${M(bk.total)}</b><span>of ${M(max)}</span></div><div class="pb-stat"><small>Customers</small><b>${bk.n}</b><span>loans and mortgages</span></div></div>
+    ${capCard(c, l, x)}
     <div class="pb-card"><h3>What the bank earns <em>a year, at today's rates</em></h3>${accountRows(f, 'pb-l')}
       <p class="pb-small">${f.line ? `If the market rate rises 1 point, the net falls by ${M(f.shock)} to ${sign(r4(f.net - f.shock))}: your loans keep their rate, the funding line does not.` : 'Nothing lent out yet: the funding line is empty and costs nothing.'}${f.lossLast ? ` Losses last year: ${M(f.lossLast)}.` : ''}</p></div>
     <div class="pb-card"><h3>Business loans <em>${pct(BK.rateOf(c, l, x))}</em></h3><div class="pb-l"><span>Market ${pct(mk)} + your margin</span><b>${pts(cfg.sp)} pts</b></div>
@@ -111,7 +128,8 @@ export function lendingBox(c, l, ro) {
   const x = E.kx(c), bk = BK.book(c, l.id), apps = (c.bk ? c.bk.apps : []).filter((a) => a.lid === l.id && a.status === 'open'), f = BK.funding(c, l, x);
   return `<div class="box" id="lending-box"><h2>Lending<small>${apps.length ? `${apps.length} WAITING` : 'BANK'}</small></h2><div class="in">
     <div class="rows"><div class="row"><div class="grow"><b>Business loans at ${pct(BK.rateOf(c, l, x))}</b><span>market ${pct(BK.market(c))} ${pts(BK.spreadOf(c, l, x))} · mortgages ${pct(BK.mRateOf(c, l, x))}</span></div></div>
-    <div class="row"><div class="grow"><b>${M(bk.total)} lent out of ${M(BK.bookMax(l))}</b><span>${bk.n} loan${bk.n === 1 ? '' : 's'} · drawn on the funding line at the Bank of Aurex</span></div></div></div>
+    <div class="row"><div class="grow"><b>${M(bk.total)} lent out of ${M(BK.bookMax(l))}</b><span>${bk.n} loan${bk.n === 1 ? '' : 's'} · ${f.own ? `${M(f.own)} from equity, ` : ''}${M(f.line)} on the funding line at the Bank of Aurex</span></div></div>
+    ${capRow(c, l, x)}</div>
     <div class="pb-acct">${accountRows(f, 'pb-al')}</div>
     ${f.line ? `<p class="small" style="margin:6px 0 0">If the market rate rises 1 point: net ${sign(r4(f.net - f.shock))} a year.</p>` : ''}
     ${ro ? '' : apps.map((a) => appRow(c, a)).join('')}

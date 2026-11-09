@@ -47,6 +47,20 @@ const cr0 = city.cb.rate; city.cb.rate = cr0 + 1;
 assert(near(BK.funding(city, bank, E.kx(city)).net, f0.net - f0.shock, 1e-3) && near(BK.margin(city, bank), mar - 0.1, 1e-3), 'a higher market rate squeezes the margin: the loans are fixed, the funding is not');
 city.cb.rate = cr0;
 
+// capital: a bank its owner runs needs equity of 8% of its loans (mortgages count half) before it lends more
+const k0 = BK.capital(city, bank, E.kx(city));
+assert(k0.on && k0.cap === 0 && k0.short && near(k0.need, 10 * B.capital.ratio), `the 10 M loan needs ${k0.need} M of equity; the bank has none`);
+assert(!A('c', 'loan', { amt: 5, bank: bank.id }).ok, 'no new loans without equity');
+assert(!A('c', 'bkCap', { lid: bank.id, v: 5 }).ok, 'only the owner puts in equity');
+const oc0 = O.cash;
+assert(A('o', 'bkCap', { lid: bank.id, v: 4 }).ok && near(oc0 - O.cash, 4), 'Thomas puts 4 M of equity in the bank');
+const k1 = BK.capital(city, bank, E.kx(city));
+assert(near(k1.room, 4 / B.capital.ratio - 10) && near(k1.mroom, k1.room / B.capital.mortW), `it may now lend ${k1.room} M more (mortgages ${k1.mroom} M)`);
+const f1 = BK.funding(city, bank, E.kx(city));
+assert(near(f1.line, 6) && near(f1.own, 4) && near(BK.margin(city, bank), mar + 4 * mk() / 100, 1e-3), 'equity funds 4 M of the loan: the funding line is 6 M, the margin higher');
+assert(!A('o', 'bkCap', { lid: bank.id, v: -4 }).ok && A('o', 'bkCap', { lid: bank.id, v: -3 }).ok, `he can take out what the loans do not need (${k1.free} M)`);
+A('o', 'bkCap', { lid: bank.id, v: 9 });
+
 // the owner sets the margin: new loans follow, old loans keep their rate
 assert(!A('c', 'bkSet', { lid: bank.id, k: 'sp', v: 4 }).ok, 'only the owner sets the rate');
 assert(A('o', 'bkSet', { lid: bank.id, k: 'sp', v: 4 }).ok, 'Thomas sets market + 4');
@@ -90,7 +104,7 @@ A('o', 'bkSet', { lid: bank.id, k: 'max', v: 25 });
 // a default with a pledge: the bank takes the company
 const bot = Object.values(city.players).find((p) => p.bot && !(B.bots[p.id] || {}).never);
 const co = city.listings.find((l) => !l.owner && l.type === 'restaurant');
-E.botCtx(city).assign(co, bot); bot.cash = 5; bot.loans = [];
+E.botCtx(city).assign(co, bot); bot.cash = 5; bot.loans = []; delete city.bk.rec[bot.id];
 r = BK.borrow(city, bot, 10, { bank: bank.id, pledge: co.id }, E.kx(city));
 const bl = bot.loans.find((x) => x.bank === bank.id);
 assert(r.ok && bl && bl.pledge === co.id && bl.risk > 0, 'a rival borrows with a company as pledge: ' + r.msg);
@@ -101,9 +115,10 @@ assert(O.cash < cash0 && !bot.loans.includes(bl) && BK.badRecord(city, bot.id), 
 assert(!BK.borrow(city, bot, 5, { bank: bank.id }, E.kx(city)).ok, 'the loan officers turn down someone who just defaulted');
 // unsecured: the bank loses most of it
 bot.loans = []; city.bk.rec[bot.id].bad = null; bot.cash = 50;
-BK.borrow(city, bot, 10, { bank: bank.id }, E.kx(city)); const c1 = O.cash;
+BK.borrow(city, bot, 10, { bank: bank.id }, E.kx(city)); const c1 = O.cash, q1 = BK.capOf(city, bank);
 BK.fail(city, bot, bot.loans[0], E.kx(city));
-assert(near(c1 - O.cash, 10 * (1 - B.recovery)), `an unsecured default costs the bank ${Math.round((1 - B.recovery) * 100)}%`);
+assert(near(c1 + q1 - O.cash - BK.capOf(city, bank), 10 * (1 - B.recovery)), `an unsecured default costs the bank ${Math.round((1 - B.recovery) * 100)}%`);
+assert(BK.capOf(city, bank) < q1, 'the loss comes off the equity first');
 assert(BK.funding(city, bank, E.kx(city)).loss >= 10 * (1 - B.recovery) - 1e-6, 'the loss shows in the bank\'s account this year');
 
 // rivals ask for loans; the committee or the officers answer

@@ -128,7 +128,7 @@ export const dctx = (city) => ({ listing: (id) => listing(city, id), canRun: (pi
   book: (l, o) => CTX.book(city, l, o), mail: (pid, x) => MAIL.send(city.players[pid], { g: city.g, m: city.m, ...x }), runners: (l) => runners(city, l) });
 // what banks.js needs: owners, money, mail, the borrower's numbers and the rival tycoons
 export const kx = (city) => ({ listing: (id) => listing(city, id), canRun: (pid, l) => canRun(city, pid, l), runners: (l) => runners(city, l),
-  run: (l) => runners(city, l).some((p) => !inactive(city, p)), credit: (o, v) => credit(city, o, v), loanCap: (p) => loanCap(city, p), debt, loanRate: (p) => loanRate(city, p),
+  run: (l) => runners(city, l).some((p) => !inactive(city, p)), credit: (o, v) => credit(city, o, v), cashOf: (o) => cashOf(city, o), loanCap: (p) => loanCap(city, p), debt, loanRate: (p) => loanRate(city, p),
   netWorth: (id) => netWorth(city, id), value: (l) => listingValue(l), ownedBy: (k, id) => ownedBy(city, k, id), net: (p) => rates(city, 'p', p.id).net,
   personal: (p) => personalParts(city, p).reduce((a, [, v]) => a + v, 0), mortRate: () => LIFE.mortgageRate(city), pers: (id) => BOT.pers(id),
   seize: (l, owner) => { city.contracts = city.contracts.filter((c) => c.a !== l.id && c.b !== l.id); l.upgrade = null; if (owner.k === 'p' && city.players[owner.id] && !city.players[owner.id].bot) { assignOwner(city, l, owner, city.m); BOT.onBuy(city, city.players[owner.id], l, bx(city)); } else assignOwner(city, l, owner, city.m); },
@@ -1490,7 +1490,7 @@ function applyAs(city, pid, p, action, a, now) {
     case 'cancelOffer': { const o = (city.book || []).find((x) => x.id === a.id && x.seller.k === 'p' && x.seller.id === pid); if (!o) return err('Offer not found.'); OPS.cancelOffer(city, o); return ok('Offer withdrawn. The goods are back in stock.'); }
     case 'approveAll': { let n = 0; ownedBy(city, 'p', pid).forEach((l) => { if (l.ops && l.ops.orders) l.ops.orders.filter((o) => o.status === 'new' && o.earning > 0).forEach((o) => { OPS.orderAction(city, CTX, l, 'accept', { oid: o.id }); n++; }); }); return n ? ok(`Accepted ${n} profitable orders. Remember to deliver them.`) : err('No profitable new orders.'); }
     case 'loan': { const r = BK.act(city, p, 'loan', { ...a, amt: Number(a.amt) || 5 }, kx(city)); if (r.ok && !r.pending && hasStaff(p, 'michael')) p.cash += 0.5; return r; }
-    case 'bkDecide': case 'bkSet': return BK.act(city, p, action, a, kx(city));
+    case 'bkDecide': case 'bkSet': case 'bkCap': return BK.act(city, p, action, a, kx(city));
     case 'repay': return BK.act(city, p, 'repay', a, kx(city));
     case 'trade': return tradeStock(city, p, a.id, Math.trunc(Number(a.qty)));
     case 'policy': if (!['cautious', 'balanced', 'bold'].includes(a.policy)) return err('Unknown policy.'); p.policy = a.policy; return ok();
