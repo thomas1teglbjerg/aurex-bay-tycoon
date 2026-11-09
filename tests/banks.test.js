@@ -39,6 +39,13 @@ A('o', 'repay', { amt: 10 });
 const mar = BK.margin(city, bank);
 assert(near(mar, 10 * B.spread / 100, 1e-3), `the bank earns ${mar} M a year on the 10 M loan`);
 assert(near(E.rates(city, 'p', 'o').lending, mar, 1e-3), 'the margin is part of the owner\'s income');
+// the funding line: what the bank lent is drawn at the Bank of Aurex at the market rate; the net is easy to read
+const f0 = BK.funding(city, bank, E.kx(city));
+assert(near(f0.biz, 10, 1e-3) && near(f0.cost, 10 * mk() / 100, 1e-3) && near(f0.inc - f0.cost, mar, 1e-3), `funding line ${f0.line} M costs ${f0.cost} M; customers pay ${f0.inc} M`);
+assert(near(f0.net, f0.inc - f0.cost - f0.loss, 1e-3) && near(f0.shock, f0.line / 100, 1e-3), 'net = interest − funding − losses; one point more costs 1% of the line');
+const cr0 = city.cb.rate; city.cb.rate = cr0 + 1;
+assert(near(BK.funding(city, bank, E.kx(city)).net, f0.net - f0.shock, 1e-3) && near(BK.margin(city, bank), mar - 0.1, 1e-3), 'a higher market rate squeezes the margin: the loans are fixed, the funding is not');
+city.cb.rate = cr0;
 
 // the owner sets the margin: new loans follow, old loans keep their rate
 assert(!A('c', 'bkSet', { lid: bank.id, k: 'sp', v: 4 }).ok, 'only the owner sets the rate');
@@ -97,6 +104,7 @@ bot.loans = []; city.bk.rec[bot.id].bad = null; bot.cash = 50;
 BK.borrow(city, bot, 10, { bank: bank.id }, E.kx(city)); const c1 = O.cash;
 BK.fail(city, bot, bot.loans[0], E.kx(city));
 assert(near(c1 - O.cash, 10 * (1 - B.recovery)), `an unsecured default costs the bank ${Math.round((1 - B.recovery) * 100)}%`);
+assert(BK.funding(city, bank, E.kx(city)).loss >= 10 * (1 - B.recovery) - 1e-6, 'the loss shows in the bank\'s account this year');
 
 // rivals ask for loans; the committee or the officers answer
 city.bk.rec[bot.id].bad = null; A('o', 'bkSet', { lid: bank.id, k: 'hand', v: true });
