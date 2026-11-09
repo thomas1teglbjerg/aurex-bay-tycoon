@@ -307,8 +307,9 @@ export function label(city, pr, X) {
   }
   return pr.kind;
 }
-// a CEO buying or selling alone stays within the mandate; above it the owners vote
+// a CEO buys for their own division alone; selling alone stays within the mandate, above it the owners vote
 export function mandate(city, p, kind, v, X) {
+  if (kind === 'buy') return null;
   const h = divOf(city, p); if (!h || divs(city, h).length < 2) return null;
   const cap = (kind === 'buy' ? H.buyPct : H.sellPct) * nav(city, h, X);
   return v > cap ? { ok: false, vote: true, msg: `That is more than ${Math.round((kind === 'buy' ? H.buyPct : H.sellPct) * 100)}% of ${h.name}'s value (${r2(cap)} M). Propose it to your co-owners.` } : null;

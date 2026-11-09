@@ -228,6 +228,7 @@ export function createCity(now, opts = {}) {
 // A level start: every bot lets go of what it gathered (companies, warehouses, shares, loans, specialists, homes and
 // collectibles) and holds exactly `cash`; human tycoons get `topUp` on top of what they have. The administrator is left alone.
 export function equalStart(city, cash, topUp = 0) {
+  city.m0 = city.m; // the level start: bots rush to buy in the first months after it (CONFIG.BOT_RUSH)
   Object.values(city.players).forEach((p) => {
     if (AS_IDS.includes(p.id)) return;
     if (!p.bot) { if (topUp) { p.cash = r2(p.cash + topUp); feed(p, city.m, 'A level start', `Every tycoon in Aurex Bay starts with ${cash} M. You got ${topUp} M more.`, 'good'); } return; }
@@ -578,7 +579,7 @@ export function moveListing(city, lid, p) {
   Object.assign(l, { p: q, ...placeOn(l.d, q) });
   return { ok: true, msg: `${l.title || TYPES[l.type].name} moved.` };
 }
-function migrateLife(city) { migrateMap(city); BLD.migrate(city, bctx(city)); LIFE.register(city); if (city.over) city.over = false; if (!city.talent) TAL.ensure(city); if (city.wk == null) city.wk = city.m * 4; if (city.migratedLife === 1) return; LIFE.ensure(city); city.migratedLife = 1; }
+function migrateLife(city) { migrateMap(city); BLD.migrate(city, bctx(city)); LIFE.register(city); if (city.over) city.over = false; if (!city.talent) TAL.ensure(city); if (city.wk == null) city.wk = city.m * 4; if (city.m0 == null) city.m0 = Math.max(0, city.m - 2); if (city.migratedLife === 1) return; LIFE.ensure(city); city.migratedLife = 1; }
 // small companies lost HR, Finance, R&D and Legal: whoever led them steps down (specialists stay on the team),
 // workers move to Operations where there is room, the rest leave without severance, and the opening fee is paid back
 function trimSmall(city) {
@@ -1086,7 +1087,8 @@ function botAct(city, p, m) {
   const st = { aggressive: [0.15, 0.13, 0.12], balanced: [0.12, 0.1, 0.08], cautious: [0.08, 0.07, 0.05] }[p.style || 'balanced'];
   const mine = ownedBy(city, 'p', p.id), types = new Set(mine.map((l) => l.type));
   const room = p.style === 'aggressive' && debt(p) < 20 ? Math.max(0, Math.min(15, loanCap(city, p) - debt(p))) : 0;
-  if (rand() < st[0]) {
+  const age = city.m - (city.m0 ?? -99), rush = age >= CONFIG.BOT_RUSH.from && age <= CONFIG.BOT_RUSH.to ? CONFIG.BOT_RUSH.x : 1;
+  if (rand() < st[0] * rush) {
     const free = city.listings.filter((l) => !l.owner && !TYPES[l.type].starter && !CB.isBank(l) && !GZ.isPaper(l) && !BLD.idle(l) && listingPrice(l) <= p.cash - 1 + room);
     if (free.length) {
       const syn = free.filter((l) => SYNERGY.some(([a, b]) => (l.type === b && types.has(a)) || (l.type === a && types.has(b))));
