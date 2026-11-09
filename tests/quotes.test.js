@@ -94,7 +94,7 @@ r = E.apply(city, 'a', 'quoteOffer', { id: rq.id }, now); const rd = city.deals.
 assert(r.ok && rd && rd.npc && rd.status === 'deliver' && rd.stock, 'the plant takes the order: ' + r.msg);
 plant.ops.inv.concrete = rq.qty + 5; const ca = A.cash;
 r = E.apply(city, 'a', 'dealDeliver', { id: rd.id }, now);
-assert(r.ok && near(A.cash - ca, rq.qty * rq.price + rd.fee) && near(plant.ops.inv.concrete, 5), 'delivered: the city pays price + delivery: ' + r.msg);
+assert(r.ok && Math.abs(A.cash - ca - (rq.qty * rq.price + rd.fee)) < 1e-4 && near(plant.ops.inv.concrete, 5), 'delivered: the city pays price + delivery: ' + r.msg);
 const rq2 = E.QT.roadsWeek(city, ctx(), HOST, true); E.apply(city, 'a', 'quoteOffer', { id: rq2.id }, now); const rd2 = city.deals.find((x) => x.id === rq2.deal), ca2 = A.cash;
 city.g = rd2.due + 0.001; E.DEAL.weekStep(city, ctx());
 assert(rd2.status === 'lapsed' && near(A.cash, ca2) && A.mail.some((x) => /Order cancelled/.test(x.subj)), 'a missed city order just lapses, nothing paid');

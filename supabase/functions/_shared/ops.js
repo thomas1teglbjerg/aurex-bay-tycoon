@@ -432,6 +432,29 @@ export function closeMonth(l, m, x = {}) {
   o.cur = { b2c: 0, goods: 0, sup: 0, fr: 0, sold: 0, orders: 0 };
 }
 
+// a company a human takes over (or opens) mid-month starts at once instead of waiting for the next month:
+// a share of the month's output for the time left (spread over the weeks left, like produce) and the same share of orders.
+// g = game time now, wk = the last weekly step that ran
+export function startMid(city, ctx, l, g, wk) {
+  const o = l.ops; if (!o || o.managed || isManual(l) || o.curM === city.m) return false;
+  const m = city.m, f = Math.max(0, Math.min(1, m + 1 - g * 12)); if (f < 0.05) return false;
+  ensureClients(l);
+  o.curM = m;
+  const rec = RECIPES[l.type], cap = capacity(l) * f, dem = demand(city, l) * f, hasOut = Object.keys(rec.out).length > 0, guests = hosts(l);
+  const left = Math.max(0, Math.min(3, (m + 1) * 4 - 1 - wk)), n = left + 1; // weekly steps still to come this month, plus now
+  if (hasOut) { o.pl = { per: cap / n, left }; makeWeek(city, ctx, l, cap / n); if (city.market) autoSell(city, ctx, l); }
+  else if (!guests) {
+    let units = Math.max(0, Math.min(cap, dem * 1.1 - (o.fg || 0) * 0.6));
+    stocked(l).forEach(([gd, q]) => { units = Math.min(units, (o.inv[gd] || 0) / q); });
+    stocked(l).forEach(([gd, q]) => { o.inv[gd] = Math.max(0, (o.inv[gd] || 0) - q * units); });
+    payMains(city, ctx, l, units);
+    o.fg = (o.fg || 0) + units / n; o.line = left ? { per: units / n, left } : null; if (!left) o.fg += units - units / n;
+  }
+  const price = unitPrice(l, Math.max(0, ctx.listingYield(city, l, l.owner).trade));
+  orderMonth(city, ctx, l, m, dem, price, { from: g, to: (m + 1) / 12 });
+  return true;
+}
+
 // ---------------------------------------------------------------- clients and orders
 const kindOf = (l) => MARKET_KIND[l.type];
 export const clientById = (o, id) => (o.clients || []).find((c) => c.id === id);
@@ -454,7 +477,7 @@ export function ensureClients(l) {
 }
 function recalc(city, l, od) { od.value = r2(od.units * od.unit); od.cost = r2(od.units * costUnit(city, l) * (od.need || 1)); od.earning = r2(od.value - od.cost); }
 export const activeClients = (o) => (o.clients || []).filter((c) => c.status === 'active');
-function orderMonth(city, ctx, l, m, dem, price) {
+function orderMonth(city, ctx, l, m, dem, price, span = null) {
   ensureClients(l);
   const o = l.ops, R = CLIENT_RULES[kindOf(l)], name = TYPES[l.type].name;
   // answers to counter-offers from last month
@@ -498,7 +521,8 @@ function orderMonth(city, ctx, l, m, dem, price) {
     // orders trickle in through the month: the first arrives now, the rest in the coming weeks
     const wait = fresh.length ? Math.floor(rand() * 4) : 0;
     // each one lands at its own moment inside its week, not on the week boundary
-    if (wait && !o.managed) { (o.queue = o.queue || []).push({ od, wk: m * 4 + wait, at: (m * 4 + wait - 0.9 + rand() * 0.85) / 48 }); } else { o.orders.push(od); fresh.push(od); }
+    if (span && fresh.length) { const at = span.from + (span.to - span.from) * (0.05 + rand() * 0.9); (o.queue = o.queue || []).push({ od, wk: Math.floor(at * 48), at }); } // a company that starts mid-month: the rest of the orders land over the weeks left
+    else if (wait && !o.managed) { (o.queue = o.queue || []).push({ od, wk: m * 4 + wait, at: (m * 4 + wait - 0.9 + rand() * 0.85) / 48 }); } else { o.orders.push(od); fresh.push(od); }
   });
   // a staffed sales team answers and ships orders by itself
   const a = automation(l, 'sales');
