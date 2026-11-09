@@ -243,6 +243,14 @@ export function gazetteBox() {
 
 // ---------------------------------------------------------------- Bank of Aurex: the national bank, business loans
 const BOA_IMG = 'img/c-bankofaurex.jpg';
+// the private banks' funding lines: what each bank has drawn to lend on, and what it pays the national bank a year
+function fundingCard(c) {
+  const x = E.kx(c), rows = E.BK.lenders(c).map((l) => ({ l, f: E.BK.funding(c, l, x) })).filter((r) => r.f.line > 0);
+  const tot = rows.reduce((a, r) => a + r.f.cost, 0);
+  return `<div class="ba-card"><h3>Funding lines <em>${M(tot)} a year in interest</em></h3>
+    <p class="ba-small">The private banks fund what they lend here, at the bank rate (mortgages at the mortgage rate). Their loans are fixed, their funding is not: a higher rate squeezes their margins.</p>
+    ${rows.length ? rows.map((r) => `<div class="ba-l"><span>${esc(E.BK.name(r.l))} · ${M(r.f.line)} drawn</span><b>${M(r.f.cost)} a year</b></div>`).join('') : '<p class="ba-small">No bank has drawn on its line yet.</p>'}</div>`;
+}
 function boa(u) {
   const c = city(), p = me(), page = u.path[0] || '', debt = E.debt(p), cap = E.loanCap(c, p), room = Math.max(0, cap - debt), rate = E.loanRate(c, p);
   const r = E.rates(c, 'p', p.id), cb = E.listing(c, CENTRAL_BANK), last = c.lastCard && WORLD.find((w) => w.id === c.lastCard.id);
@@ -292,6 +300,7 @@ function boa(u) {
       <div class="ba-card"><h3>Target rate <em>${rateWait > 0 ? `next decision in ${rateWait} month${rateWait === 1 ? '' : 's'}` : 'the board can decide now'}</em></h3>
         <p class="ba-small">Lower rates make every loan cheaper, yours too. Every bank lends on top of it, and the bank owners borrow at it. Higher rates earn the national bank more: it keeps ${Math.round(CENTRAL.ownerCut * 100)}% of the interest the city pays it (the banks' funding and its own loans).</p>
         <div class="ba-btns">${steps.map((v) => `<button class="ba-btn ${v < cbs.target ? 'ghost' : ''}" data-a="cbRate" data-v="${v}" ${rateWait > 0 ? 'disabled' : ''}>${v < cbs.target ? 'Cut' : 'Raise'} to ${v}%</button>`).join('')}</div></div>
+      ${fundingCard(c)}
       <div class="ba-card"><h3>Levy on a crowded sector <em>${levyWait > 0 ? `next change in ${levyWait} month${levyWait === 1 ? '' : 's'}` : 'once a quarter'}</em></h3>
         <p class="ba-small">Up to ${CENTRAL.levyMax}% of passive income for companies in one of the most crowded sectors. Not on a sector you are in yourself. The money goes to the city.</p>
         ${crowd.length ? crowd.map((x) => `<div class="ba-l"><span>${esc(TYPES[x.type].name)} · ${x.n} companies${mine.has(x.type) ? ' · you are in it' : ''}</span><b>${lv.sector === x.type ? lv.sp + '%' : '0%'}</b></div><div class="ba-btns">${pcts.map((v) => levyBtn({ sector: v ? x.type : '', sp: v, ...keepG }, (lv.sector === x.type ? lv.sp : 0) === v, v + '%', mine.has(x.type) && v > 0)).join('')}</div>`).join('') : '<p class="ba-small">No sector is crowded yet.</p>'}</div>

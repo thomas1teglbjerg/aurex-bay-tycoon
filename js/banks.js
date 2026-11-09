@@ -7,6 +7,16 @@ import { city, me, meId, esc, M, coImg, shortDate } from './util.js';
 
 const BK = E.BK;
 const pct = (v) => `${Math.round(v * 100) / 100}%`;
+const r2 = (v) => Math.round(v * 100) / 100, r4 = (v) => Math.round(v * 1e4) / 1e4;
+const sign = (v) => (Math.abs(v) < 0.005 ? '0' : `${v < 0 ? '−' : '+'}${M(Math.abs(v))}`);
+// the bank's account: interest in, funding out, losses, net (shared by the bank office and the Lending box)
+function accountRows(f, cls) {
+  const row = (a, b, k = '') => `<div class="${cls} ${k}"><span>${a}</span><b>${b}</b></div>`;
+  return row(`Interest from customers${f.line ? ` <small>avg ${pct(f.avg)}</small>` : ''}`, sign(f.inc))
+    + row(`Funding line at the Bank of Aurex <small>${f.line ? `${M(f.line)} at ${pct(f.fr)}` : 'nothing drawn'}</small>`, sign(-f.cost))
+    + row('Losses on bad loans this year', f.loss ? sign(-f.loss) : '0')
+    + row('<b>Net</b>', `<span class="${f.net < 0 ? 'down' : 'up'}">${sign(f.net)}</span>`, 'net');
+}
 const pts = (v) => `${v >= 0 ? '+' : '−'}${Math.abs(Math.round(v * 100) / 100)}`;
 const ownerName = (c, l) => (!l.owner ? null : l.owner.k === 'p' ? (c.players[l.owner.id] || {}).name : (c.holdings[l.owner.id] || {}).name);
 
@@ -62,15 +72,17 @@ export const UIB = { pledge: '' };
 export function mortQuote(c, p, amt) { const r = BK.mortgage(c, p, Math.max(0.01, amt), null, E.kx(c)); return r.ok ? { rate: r.rate ?? E.LIFE.mortgageRate(c), name: r.name } : { rate: E.LIFE.mortgageRate(c), name: null, none: r.msg }; }
 // the owner's office: rates, limits, the committee's applications and the loan book
 function officeHTML(c, l, x) {
-  const cfg = BK.cfg(c, l), mk = BK.market(c), mm = E.LIFE.mortgageRate(c), bk = BK.book(c, l.id), max = BK.bookMax(l), mar = BK.margin(c, l);
+  const cfg = BK.cfg(c, l), mk = BK.market(c), mm = E.LIFE.mortgageRate(c), bk = BK.book(c, l.id), max = BK.bookMax(l), f = BK.funding(c, l, x);
   const apps = (c.bk ? c.bk.apps : []).filter((a) => a.lid === l.id && a.status === 'open');
   const war = c.bk && Object.values(c.bk.war || {}).find((w) => w.vs === l.id && w.until > c.g);
   const step = (k, cur, d, lo, hi) => `<button class="pb-btn ghost sm" data-a="bkSet" data-lid="${l.id}" data-k="${k}" data-v="${Math.round((cur + d) * 100) / 100}" ${cur + d < lo - 1e-9 || cur + d > hi + 1e-9 ? 'disabled' : ''}>${d > 0 ? '+' : '−'}${Math.abs(d)}</button>`;
   const loans = Object.values(c.players).flatMap((p) => p.loans.filter((y) => y.bank === l.id).map((y) => ({ p, y }))).sort((a, b) => b.y.amt - a.y.amt);
   const homes = Object.values(c.players).flatMap((p) => ((p.life && p.life.homes) || []).filter((h) => h.bank === l.id && h.bal > 0).map((h) => ({ p, h })));
-  return `<h2>Bank office</h2><p class="pb-sub">You set the margin over the market rate (${pct(mk)}, set by the Bank of Aurex). Loans keep the rate they were made at; your bank pays the market rate on what it has lent.</p>
+  return `<h2>Bank office</h2><p class="pb-sub">You set the margin over the market rate (${pct(mk)}, set by the Bank of Aurex). Loans keep the rate they were made at. What the bank lends it draws on its funding line at the Bank of Aurex, which follows the market rate.</p>
     ${war ? `<div class="pb-card pb-warn"><h3>Rate war</h3><p class="pb-small">${esc((c.players[war.bid] || {}).name || 'A rival')}'s bank lends at market ${pts(war.sp)} and takes over loans from tycoons who bank with you. Cut your margin, or wait it out.</p></div>` : ''}
-    <div class="pb-stats"><div class="pb-stat"><small>Margin a year</small><b class="${mar < 0 ? 'down' : ''}">${M(mar)}</b><span>on business loans</span></div><div class="pb-stat"><small>Lent out</small><b>${M(bk.total)}</b><span>of ${M(max)}</span></div><div class="pb-stat"><small>Customers</small><b>${bk.n}</b><span>loans and mortgages</span></div></div>
+    <div class="pb-stats"><div class="pb-stat"><small>Net a year</small><b class="${f.net < 0 ? 'down' : 'up'}">${f.net < 0 ? '−' : '+'}${M(Math.abs(f.net))}</b><span>${f.line ? `${pts(r2(f.avg - f.fr))} pts margin` : 'nothing lent out yet'}</span></div><div class="pb-stat"><small>Lent out</small><b>${M(bk.total)}</b><span>of ${M(max)}</span></div><div class="pb-stat"><small>Customers</small><b>${bk.n}</b><span>loans and mortgages</span></div></div>
+    <div class="pb-card"><h3>What the bank earns <em>a year, at today's rates</em></h3>${accountRows(f, 'pb-l')}
+      <p class="pb-small">${f.line ? `If the market rate rises 1 point, the net falls by ${M(f.shock)} to ${sign(r4(f.net - f.shock))}: your loans keep their rate, the funding line does not.` : 'Nothing lent out yet: the funding line is empty and costs nothing.'}${f.lossLast ? ` Losses last year: ${M(f.lossLast)}.` : ''}</p></div>
     <div class="pb-card"><h3>Business loans <em>${pct(BK.rateOf(c, l, x))}</em></h3><div class="pb-l"><span>Market ${pct(mk)} + your margin</span><b>${pts(cfg.sp)} pts</b></div>
       <div class="pb-btns">${step('sp', cfg.sp, -0.5, B.range[0], B.range[1])}${step('sp', cfg.sp, -0.25, B.range[0], B.range[1])}${step('sp', cfg.sp, 0.25, B.range[0], B.range[1])}${step('sp', cfg.sp, 0.5, B.range[0], B.range[1])}</div></div>
     <div class="pb-card"><h3>Mortgages <em>${pct(BK.mRateOf(c, l, x))}</em></h3><div class="pb-l"><span>Market mortgage rate ${pct(mm)} + your margin</span><b>${pts(cfg.msp)} pts</b></div>
@@ -96,10 +108,12 @@ export function banksTable(c, p, go) {
 // ---------------------------------------------------------------- the Lending box on a bank's company page
 export function lendingBox(c, l, ro) {
   if (!BK.isLender(l)) return '';
-  const x = E.kx(c), bk = BK.book(c, l.id), apps = (c.bk ? c.bk.apps : []).filter((a) => a.lid === l.id && a.status === 'open'), mar = BK.margin(c, l);
+  const x = E.kx(c), bk = BK.book(c, l.id), apps = (c.bk ? c.bk.apps : []).filter((a) => a.lid === l.id && a.status === 'open'), f = BK.funding(c, l, x);
   return `<div class="box" id="lending-box"><h2>Lending<small>${apps.length ? `${apps.length} WAITING` : 'BANK'}</small></h2><div class="in">
     <div class="rows"><div class="row"><div class="grow"><b>Business loans at ${pct(BK.rateOf(c, l, x))}</b><span>market ${pct(BK.market(c))} ${pts(BK.spreadOf(c, l, x))} · mortgages ${pct(BK.mRateOf(c, l, x))}</span></div></div>
-    <div class="row"><div class="grow"><b>${M(bk.total)} lent out of ${M(BK.bookMax(l))}</b><span>${bk.n} loan${bk.n === 1 ? '' : 's'} · margin ${M(mar)} a year</span></div></div></div>
+    <div class="row"><div class="grow"><b>${M(bk.total)} lent out of ${M(BK.bookMax(l))}</b><span>${bk.n} loan${bk.n === 1 ? '' : 's'} · drawn on the funding line at the Bank of Aurex</span></div></div></div>
+    <div class="pb-acct">${accountRows(f, 'pb-al')}</div>
+    ${f.line ? `<p class="small" style="margin:6px 0 0">If the market rate rises 1 point: net ${sign(r4(f.net - f.shock))} a year.</p>` : ''}
     ${ro ? '' : apps.map((a) => appRow(c, a)).join('')}
     ${ro ? '' : `<div class="btns"><button class="btn sm gold" data-a="webGo" data-u="${esc(BK.host(l))}/office">Open the bank office</button></div>`}</div></div>`;
 }

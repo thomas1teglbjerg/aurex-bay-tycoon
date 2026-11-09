@@ -6,7 +6,9 @@
 // Only owners of a bank (or of the national bank) borrow straight from the Bank of Aurex at the market rate; everyone else
 // borrows from a bank at that bank's rate, fixed when the loan is made. A bank earns the margin over the market rate it
 // refinances at; when a borrower defaults it takes the pledged company or loses most of the loan.
-// city.bk = { cfg: { lid: { by, sp, msp, max, hand, open } }, apps: [], rec: { pid: { bad, def, paid } }, war: { lid: { bid, vs, sp, until } }, v }
+// Every bank draws what it lends on a funding line at the Bank of Aurex (business loans at the market rate, mortgages at the
+// market mortgage rate). The line floats while the bank's loans are fixed: when the governor raises the rate, the margin shrinks.
+// city.bk = { cfg: { lid: { by, sp, msp, max, hand, open } }, apps: [], rec: { pid: { bad, def, paid } }, war: { lid: { bid, vs, sp, until } }, loss: { lid: { by, y, v, last } }, v }
 // p.loans[] = { id, amt, rate: % fixed | 'bank' (the market rate, floating), m, bank: lid | 'cb', pledge?, risk? }
 // homes: h.bank = lid | 'cb', h.rate = % fixed (none: the market mortgage rate, floating; bank owners only)
 // The engine hands in what it needs through ctx (kx in engine.js).
@@ -23,8 +25,8 @@ const sum = (a) => a.reduce((x, y) => x + y, 0);
 export { B };
 
 export function ensure(city) {
-  if (!city.bk) city.bk = { cfg: {}, apps: [], rec: {}, war: {} };
-  const k = city.bk; k.cfg = k.cfg || {}; k.apps = k.apps || []; k.rec = k.rec || {}; k.war = k.war || {};
+  if (!city.bk) city.bk = { cfg: {}, apps: [], rec: {}, war: {}, loss: {} };
+  const k = city.bk; k.cfg = k.cfg || {}; k.apps = k.apps || []; k.rec = k.rec || {}; k.war = k.war || {}; k.loss = k.loss || {};
   return k;
 }
 export const name = (l) => (l ? l.title || `${TYPES[l.type].name}, ${l.district}` : 'the bank');
@@ -75,6 +77,30 @@ export function book(city, lid) {
 export function margin(city, l) {
   const mk = market(city);
   return r4(sum(Object.values(city.players).map((p) => sum((p.loans || []).filter((x) => x.bank === l.id && typeof x.rate === 'number').map((x) => x.amt * (x.rate - mk) / 100)))));
+}
+// losses on bad loans, this game year and the one before
+export function lossOf(city, lid) {
+  const y = Math.floor((city.m || 0) / 12), x = ensure(city).loss[lid], l = city.listings.find((z) => z.id === lid);
+  if (!x || x.by !== ownKey(l && l.owner)) return { year: 0, last: 0 }; // a new owner starts with a clean account
+  return x.y === y ? { year: x.v, last: x.last || 0 } : { year: 0, last: x.y === y - 1 ? x.v : 0 };
+}
+function lose(city, lid, v) {
+  if (!(v > 0)) return;
+  const k = ensure(city).loss, y = Math.floor((city.m || 0) / 12), l = city.listings.find((z) => z.id === lid), by = ownKey(l && l.owner);
+  let x = k[lid]; if (x && x.by !== by) x = null;
+  if (!x || x.y !== y) k[lid] = { by, y, v: r2(v), last: x && x.y === y - 1 ? x.v : 0 }; else x.v = r2(x.v + v);
+}
+// the bank's account in a year: interest its customers pay, what its funding line at the Bank of Aurex costs, losses, net.
+// shock = what one point more on the market rate takes off the net (the loans are fixed, the funding line is not).
+export function funding(city, l, ctx) {
+  const mk = market(city), mr = ctx.mortRate();
+  let biz = 0, mort = 0, inc = 0, cost = 0, n = 0;
+  Object.values(city.players).forEach((p) => {
+    (p.loans || []).forEach((x) => { if (x.bank !== l.id) return; const r = typeof x.rate === 'number' ? x.rate : mk; biz += x.amt; inc += x.amt * r / 100; cost += x.amt * mk / 100; n++; });
+    ((p.life && p.life.homes) || []).forEach((h) => { if (h.bank !== l.id || !(h.bal > 0)) return; const r = h.rate ?? mr; mort += h.bal; inc += h.bal * r / 100; cost += h.bal * mr / 100; n++; });
+  });
+  const line = biz + mort, loss = lossOf(city, l.id);
+  return { biz: r2(biz), mort: r2(mort), line: r2(line), n, mk, mr, inc: r4(inc), cost: r4(cost), avg: line ? r2(inc / line * 100) : 0, fr: line ? r2(cost / line * 100) : 0, spread: r4(inc - cost), loss: loss.year, lossLast: loss.last, net: r4(inc - cost - loss.year), shock: r4(line / 100) };
 }
 // the interest the Bank of Aurex is paid in a year: the market rate on what every bank has lent out, and its own loans
 export function cbInterest(city, skip, loanRate) {
@@ -170,7 +196,7 @@ export function foreclosed(city, p, h, got, ctx) {
   const l = h.bank && h.bank !== 'cb' ? ctx.listing(h.bank) : null, short = r2(Math.max(0, h.bal - got));
   rec(city, p.id).bad = city.m; rec(city, p.id).def++;
   if (l && l.owner) {
-    if (short > 0) ctx.credit(l.owner, -short);
+    if (short > 0) { ctx.credit(l.owner, -short); lose(city, l.id, short); }
     ctx.mailTo(l, { kind: short ? 'bad' : 'info', from: officer(l), subj: `Foreclosure: ${p.name}`, body: `${p.name} stopped paying the mortgage, so the home was sold at auction for ${r2(got)} M. The loan was ${r2(h.bal)} M.${short ? ` The bank lost ${short} M.` : ' The bank got all its money back.'}`, web: `${host(l)}/office` });
   }
 }
@@ -361,10 +387,10 @@ export function fail(city, p, x, ctx) {
   let words;
   if (canSeize) {
     const v = ctx.value(pl), pay = r2(Math.max(0, v * B.seizeAt - x.amt));
-    ctx.seize(pl, l.owner); ctx.credit(l.owner, -(x.amt + pay)); if (pay) p.cash += pay;
+    ctx.seize(pl, l.owner); ctx.credit(l.owner, -(x.amt + pay)); if (pay) p.cash += pay; lose(city, l.id, x.amt + pay - v);
     words = `${name(l)} took ${name(pl)} (worth ${r2(v)} M) for the ${r2(x.amt)} M loan.${pay ? ` ${pay} M above the loan went back to ${p.name}.` : ''}`;
   } else {
-    const lost = r2(x.amt * (1 - B.recovery)); if (l && l.owner) ctx.credit(l.owner, -lost);
+    const lost = r2(x.amt * (1 - B.recovery)); if (l && l.owner) { ctx.credit(l.owner, -lost); lose(city, l.id, lost); }
     words = `${name(l)} collected ${Math.round(B.recovery * 100)}% of the ${r2(x.amt)} M and lost ${lost} M.`;
   }
   if (!p.bot) ctx.feed(p, `Your loan from ${name(l)} is in default`, `${words} Banks remember a default for ${B.bad} months.`, 'bad');
