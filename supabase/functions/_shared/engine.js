@@ -156,6 +156,7 @@ function assignOwner(city, l, owner, m) {
   if (BLD.unbuilt(l)) { l.ops = null; return; } // a building site runs nothing until it opens
   if (isManaged(city, l)) { l.ops = prevOps || OPS.newOps(l, true); l.ops.managed = true; Object.values(l.ops.depts).forEach((d) => (d.head = null)); }
   else if (prevOps) OPS.takeOverOps(l); else l.ops = OPS.newOps(l, false);
+  if (l.ops && !l.ops.managed && city.clock) OPS.startMid(city, CTX, l, city.g ?? 0, city.wk ?? m * 4); // no waiting for the next month
 }
 export const monthName = (m) => ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][((m % 12) + 12) % 12];
 
@@ -984,7 +985,7 @@ export const bctx = (city) => ({ listing: (id) => siteOf(city, id), canRun: (pid
   // an owned warehouse that becomes a plot: the city pays what the owner paid (with its expansions) and its stock at market price
   whBuyOut: (w) => { const p = city.players[w.owner]; const v = r2(whWorth(city, w)); if (p) { p.cash += v; if (!p.bot) feed(p, city.m, `${LOG.SITE[w.id].name} was bought out`, `The city paid ${v} M for the warehouse and its stock. It is a building plot now: whoever buys it builds it.`, 'good'); } w.owner = null; w.since = null; city.shipments = (city.shipments || []).filter((s) => !(s.to.k === 'w' && s.to.id === w.id)); },
   buyOut: (l) => { const v = r2(listingValue(l) + (l.upgrade ? upgradeCost(l) : 0)); payOwner(city, l, v); notifyOwner(city, l, `Your ${TYPES[l.type].name} in ${l.district} was bought out`, `The city paid ${v} M, its full value. The site is a building plot now: whoever buys it builds a new ${TYPES[l.type].name.toLowerCase()}.`, 'good'); releaseListing(city, l); },
-  opened: (l) => { if (!BLD.isWh(l)) l.ops = l.owner ? OPS.newOps(l, isManaged(city, l)) : null; },
+  opened: (l) => { if (!BLD.isWh(l)) l.ops = l.owner ? OPS.newOps(l, isManaged(city, l)) : null; if (l.ops && !l.ops.managed) OPS.startMid(city, CTX, l, city.g ?? 0, city.wk ?? city.m * 4); },
   fullPrice: (l) => (BLD.isWh(l) ? LOG.SITE[l.id].price : fullPrice(l)), priceOf: (g) => (city.market && city.market[g] ? city.market[g].p : GOODS[g].base),
   quote: (g, qty) => OPS.quote(city, { owner: null }, g, qty, 'cheapest').cost,
   buy: (owner, g, qty) => OPS.buyGoods(city, CTX, { owner: ownO(owner), ops: { inv: {}, cur: { sup: 0 }, managed: true } }, g, qty, 'cheapest') });
