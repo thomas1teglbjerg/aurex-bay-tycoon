@@ -144,8 +144,8 @@ export function offers(city, p, ctx) {
   return lenders(city).filter((l) => !ctx.canRun(p.id, l)).map((l) => {
     const c = cfg(city, l), run = ctx.run(l), max = run ? c.max : B.max;
     const left = bookMax(l) - book(city, l.id).total, k = capital(city, l, ctx);
-    const room = r2(Math.max(0, Math.min(left, max - owes(p, l.id), k.room)));
-    return { l, rate: quote(city, p, l, ctx), mrate: mRateOf(city, l, ctx), room: run && !c.open ? 0 : room, mroom: r2(Math.max(0, Math.min(left, k.mroom))), hand: run && c.hand, closed: run && !c.open, run };
+    const room = r2(Math.max(0, Math.min(left, max - owes(p, l.id)))); // what the bank may lend you; croom = what its equity allows today
+    return { l, rate: quote(city, p, l, ctx), mrate: mRateOf(city, l, ctx), room: run && !c.open ? 0 : room, croom: k.room, mroom: r2(Math.max(0, Math.min(left, k.mroom))), hand: run && c.hand, closed: run && !c.open, run };
   }).sort((a, b) => a.rate - b.rate);
 }
 
@@ -168,7 +168,7 @@ export function borrow(city, p, amt, o, ctx) {
     if (own) { made(city, p, { amt, rate: 'bank', bank: 'cb' }, ctx); return ok(`Borrowed ${amt} M from the Bank of Aurex at the market rate.`, { bank: 'cb' }); }
     if (lenders(city).length && !o.force) return err('The Bank of Aurex lends only to banks. Borrow from a bank in the city.');
   }
-  const all = offers(city, p, ctx), fits = all.filter((x) => x.room >= amt - 1e-9 && !(badRecord(city, p.id) && !x.hand));
+  const all = offers(city, p, ctx), fits = all.filter((x) => x.room >= amt - 1e-9 && (!o.force || x.croom >= amt - 1e-9) && !(badRecord(city, p.id) && !x.hand));
   let pick = null;
   if (o.bank && o.bank !== 'cb') {
     const x = all.find((y) => y.l.id === o.bank); if (!x) return err('That bank does not lend to you.');
@@ -182,7 +182,9 @@ export function borrow(city, p, amt, o, ctx) {
     return err(badRecord(city, p.id) ? `The loan officers turn you down: you defaulted on a loan in the last ${B.bad} months. A bank whose owner reviews applications may still say yes.` : 'No bank can lend you that much right now.');
   }
   const pledge = validPledge(city, p, o.pledge, ctx);
-  if (pick.hand && !o.force) return ask(city, p, pick.l, amt, pick.rate, pledge, ctx);
+  // the committee reviews it, or the bank lacks the equity to lend it today: it becomes an application the owner can approve
+  // once there is equity enough (the loan officers decline it in B.wait weeks otherwise)
+  if ((pick.hand || pick.croom < amt - 1e-9) && !o.force) return ask(city, p, pick.l, amt, pick.rate, pledge, ctx, pick.croom < amt - 1e-9);
   const loan = made(city, p, { amt, rate: pick.rate, bank: pick.l.id, pledge }, ctx);
   if (pick.run && !p.bot) ctx.notify(pick.l, `${p.name} borrowed ${amt} M`, `At ${loan.rate}% from ${name(pick.l)}. Your margin: ${r2(loan.rate - market(city))} points.`, 'good');
   return ok(`Borrowed ${amt} M from ${name(pick.l)} at ${loan.rate}%.`, { bank: pick.l.id, rate: loan.rate });
@@ -232,13 +234,13 @@ export function foreclosed(city, p, h, got, ctx) {
 }
 
 // ---------------------------------------------------------------- the credit committee
-function ask(city, p, l, amt, rate, pledge, ctx) {
+function ask(city, p, l, amt, rate, pledge, ctx, short) {
   const bk = ensure(city);
   if (bk.apps.some((a) => a.status === 'open' && a.pid === p.id && a.lid === l.id)) return err(`You already have an application waiting at ${name(l)}.`);
   const a = { id: uid('ap'), lid: l.id, pid: p.id, amt, rate, pledge: pledge || null, g: city.g, m: city.m, due: r4(city.g + B.wait * WEEK), status: 'open' };
   bk.apps.push(a);
   const pl = pledge && ctx.listing(pledge);
-  ctx.mailTo(l, { kind: 'info', from: officer(l), subj: `Loan application: ${p.name}, ${amt} M`, body: `${p.name} asks ${name(l)} for ${amt} M at ${rate}%${pl ? `, with ${name(pl)} as pledge` : ', unsecured'}. The credit committee meets in the bank office. If nobody decides within ${B.wait} weeks, the loan officers do.`, web: `${host(l)}/office` });
+  ctx.mailTo(l, { kind: 'info', from: officer(l), subj: `Loan application: ${p.name}, ${amt} M`, body: `${p.name} asks ${name(l)} for ${amt} M at ${rate}%${pl ? `, with ${name(pl)} as pledge` : ', unsecured'}. ${short ? ` The bank lacks the equity to lend it today: put in ${r2(Math.max(0, amt * CAP.ratio - capital(city, l, ctx).cap + capital(city, l, ctx).need))} M in the bank office first.` : ''} The credit committee meets in the bank office. If nobody decides within ${B.wait} weeks, the loan officers do.`, web: `${host(l)}/office` });
   return ok(`Application sent to ${name(l)}. The credit committee answers within ${B.wait} weeks.`, { app: a.id, pending: true });
 }
 // everything the committee sees about an applicant (rival tycoons show their character; their real risk stays hidden)
