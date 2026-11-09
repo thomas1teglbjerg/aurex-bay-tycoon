@@ -967,6 +967,7 @@ async function onClick(e) {
     case 'loan': await act('loan', { amt: Number(d.v), bank: d.bank || '', pledge: d.pledge || null }); return;
     case 'repay': await act('repay', { amt: Number(d.v), id: d.id || null }, 'Repaid.'); return;
     case 'bkSet': await act('bkSet', { lid: d.lid, k: d.k, v: d.v }); return;
+    case 'bkCap': await act('bkCap', { lid: d.lid, v: Number(d.v) }); return;
     case 'bkCredit': if (!openCredit(d.app, act)) toast('This application is closed.', 'bad'); return;
     case 'qty': UI.qty = Number(d.v); renderPanel(); return;
     case 'trade': await act('trade', { id: d.id, qty: Number(d.q) }); return;

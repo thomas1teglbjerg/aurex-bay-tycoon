@@ -133,6 +133,7 @@ export const BANKS = {
   types: ['bank', 'finance'],
   spread: 2, mSpread: 1,          // autopilot: business loans at the market rate + 2 points, mortgages at the market mortgage rate + 1
   range: [-1, 8], mRange: [-1, 5], // an owner sets the margin between these (points over the market rate)
+  capital: { ratio: 0.08, mortW: 0.5 }, // a player-run bank holds equity of 8% of what it lends (mortgages count half)
   lastResort: 3, mLastResort: 2,  // with no bank standing in the city the Bank of Aurex lends at the market rate + 3 (mortgages + 2)
   book: { S: 60, M: 150, L: 300 }, // most a bank can have lent out (business loans and mortgages), +30% per level
   max: 25, maxRange: [5, 100],    // what one customer may owe one bank (the owner sets it)
