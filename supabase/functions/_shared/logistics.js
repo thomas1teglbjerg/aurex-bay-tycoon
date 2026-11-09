@@ -121,6 +121,9 @@ export function upgrade(city, p, w) {
   const c = upgradeCost(w); if (p.cash < c) return { ok: false, msg: `Expanding costs ${c} M.` };
   p.cash -= c; w.level++; return { ok: true, msg: `Expanded to level ${w.level}: room for ${capacityOf(w)} units.` };
 }
+// your own truck between two of your companies, or a company and your warehouse (stock moves, no money)
+export function truckMove(city, o) { return ship(city, { g: o.g, qty: o.qty, from: o.from, to: o.to, owner: o.owner, by: o.by, departG: o.gNow, arriveG: o.gNow + o.days * DAY, mode: 'truck', move: true }); }
+export const roomIn = (city, w) => Math.max(0, capacityOf(w) - stored(w) - inbound(city, w));
 // supplies a company needs that are not already on a truck to it
 export function onTheWay(city, l, g) { return city.shipments.filter((s) => s.to.k === 'l' && s.to.id === l.id && s.g === g).reduce((a, s) => a + s.qty, 0); }
 // procurement and automation: send what companies need from the owner's warehouses, nearest first

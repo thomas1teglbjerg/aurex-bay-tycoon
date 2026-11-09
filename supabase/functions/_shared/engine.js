@@ -1,7 +1,7 @@
 // Aurex Bay Tycoon — game engine.
 // Pure functions over one plain "city" object, so the exact same rules run in the browser demo
 // and server-side in the Supabase Edge Function. Time is real time: 1 game year = 1 real week (speed 1).
-import { DISTRICTS, TYPES, SYNERGY, SIZES, LISTINGS, STAFF, STOCKS, WORLD, DECISIONS, HAPPENINGS, BOTS, CONFIG, VINTAGE, VIP, DEPT_DEFAULTS, WORKER, GOODS, TAKEOVER, SOMMELIER, CRAFT, BOT_REL, MAIL_HAP, DEC_FROM, GAZETTE, PRESTIGE_TIERS, MAINT, placeOn, LIFE as LIFE_CFG } from './content.js';
+import { RECIPES, DISTRICTS, TYPES, SYNERGY, SIZES, LISTINGS, STAFF, STOCKS, WORLD, DECISIONS, HAPPENINGS, BOTS, CONFIG, VINTAGE, VIP, DEPT_DEFAULTS, WORKER, GOODS, TAKEOVER, SOMMELIER, CRAFT, BOT_REL, MAIL_HAP, DEC_FROM, GAZETTE, PRESTIGE_TIERS, MAINT, placeOn, LIFE as LIFE_CFG } from './content.js';
 import * as OPS from './ops.js';
 import * as LOG from './logistics.js';
 import * as LIFE from './life.js';
@@ -147,6 +147,32 @@ const humanCoop = (city, h) => !!h && !h.bot && Object.keys(h.members).some((pid
 // who may run a company's departments, orders and supplies: its owner, or any owner of the coop that holds it
 export function canRun(city, pid, l) { if (!l || !l.owner) return false; if (l.owner.k === 'p') return l.owner.id === pid; const h = city.holdings[l.owner.id]; if (h && h.div) return HD.ceo(city, h) === pid; // the joint division of a holding is run by its CEO
   return !!(h && h.members[pid] && humanCoop(city, h)); }
+// moving supplies between your own companies: same owner (you, or the same coop/holding division), own trucks, no charge.
+// A company you own yourself can also send to (and get from) your warehouses. Fresh goods (concrete) never go to a warehouse.
+const lname = (l) => MAIL.coName(l);
+const sameOwner = (a, b) => !!(a.owner && b.owner && a.owner.k === b.owner.k && a.owner.id === b.owner.id);
+export function moveTargets(city, pid, l, g) {
+  if (!l || !l.ops || !canRun(city, pid, l) || !GOODS[g] || GOODS[g].mains) return [];
+  const out = city.listings.filter((x) => x !== l && x.ops && sameOwner(x, l) && g in RECIPES[x.type].in)
+    .map((x) => ({ k: 'l', id: x.id, room: Math.floor(OPS.yardRoom(city, { onTheWay: LOG.onTheWay }, x, g)), days: LOG.truckDays(l, x) }));
+  if (l.owner.k === 'p' && !GOODS[g].fresh) (city.warehouses || []).filter((w) => w.owner === pid && !BLD.unbuilt(w))
+    .forEach((w) => out.push({ k: 'w', id: w.id, room: Math.floor(LOG.roomIn(city, w)), days: LOG.truckDays(LOG.SITE[w.id], l) }));
+  return out;
+}
+export function moveStock(city, pid, a) {
+  const l = listing(city, a.from), g = a.g;
+  if (!l || !l.ops || !canRun(city, pid, l)) return { ok: false, msg: 'Send from a company you run.' };
+  if (!GOODS[g] || GOODS[g].mains) return { ok: false, msg: 'Unknown supply.' };
+  const to = String(a.to || ''), t = moveTargets(city, pid, l, g).find((x) => (x.k === 'w' ? 'w:' + x.id : x.id) === to);
+  if (!t) return { ok: false, msg: `Pick one of your own companies that uses ${GOODS[g].name.toLowerCase()}${l.owner.k === 'p' && !GOODS[g].fresh ? ', or your warehouse' : ''}.` };
+  const have = Math.floor(l.ops.inv[g] || 0); if (have < 1) return { ok: false, msg: `${lname(l)} has no ${GOODS[g].name.toLowerCase()} in stock.` };
+  if (t.room < 1) return { ok: false, msg: t.k === 'w' ? 'The warehouse is full, counting trucks on the way.' : `${lname(listing(city, t.id))} has no room for more ${GOODS[g].name.toLowerCase()}.` };
+  const qty = Math.min(have, t.room, Math.max(1, Math.round(Number(a.qty) || 0)));
+  l.ops.inv[g] = Math.max(0, (l.ops.inv[g] || 0) - qty);
+  const dest = t.k === 'w' ? null : listing(city, t.id);
+  LOG.truckMove(city, { g, qty, from: { k: 'l', id: l.id }, to: { k: t.k, id: t.id }, owner: dest ? dest.owner.id : pid, by: pid, gNow: city.g, days: t.days });
+  return { ok: true, msg: `Your truck takes ${qty} ${GOODS[g].unit} of ${GOODS[g].name.toLowerCase()} from ${lname(l)} to ${dest ? lname(dest) : LOG.SITE[t.id].name}: about ${t.days} game days.` };
+}
 export function canSeeCompany(city, pid, l) { return !!(l.owner && (l.owner.k === 'p' ? (l.owner.id === pid || coopPartners(city, pid, l.owner.id)) : canRun(city, pid, l))); }
 const isManaged = (city, l) => !l.owner || (l.owner.k === 'h' ? !humanCoop(city, city.holdings[l.owner.id]) : !!(city.players[l.owner.id] && city.players[l.owner.id].bot));
 // a coop company on autopilot whose coop now has human owners: the owners take over and build their own team
@@ -596,7 +622,7 @@ export function advance(city, now) {
   refillAdmin(city);
 }
 function shipmentArrived(city, sh) {
-  const p = city.players[sh.owner]; if (!p || p.bot) return;
+  const p = city.players[sh.by || sh.owner]; if (!p || p.bot) return;
   const c = sh.carrier ? LOG.CARRIER[sh.carrier] : null, late = sh.etaG != null && sh.arriveG - sh.etaG > 1e-6 ? Math.round((sh.arriveG - sh.etaG) * 365) : 0;
   const where = sh.to.k === 'export' ? 'its buyer abroad' : sh.to.k === 'w' ? LOG.SITE[sh.to.id].name : (() => { const l = listing(city, sh.to.id); return l ? `${TYPES[l.type].name}, ${l.district}` : 'your company'; })();
   const lost = sh.dmg ? ` ${Math.round(sh.dmg * 100)}% was damaged on the way.` : '';
@@ -1438,6 +1464,7 @@ function applyAs(city, pid, p, action, a, now) {
     }
     case 'unassignHead': { if (a.coop) { const h = city.holdings[a.coop]; if (!h || !h.members[pid]) return err('Not your coop.'); unassign(city, TAL.coopEmp(city, h), a.spec); } else unassign(city, p, a.spec); return ok(); }
     case 'post': { const l = listing(city, a.lid); if (!l || !canSeeCompany(city, pid, l)) return err('Only the owner and their coop partners can post here.'); if (!l.ops) return err('This company is not running yet.'); return OPS.post(l, p, a.text, now); }
+    case 'stockMove': return moveStock(city, pid, a);
     case 'whBuy': { LOG.ensureWarehouses(city); return LOG.buy(city, p, a.wid); }
     case 'whSell': case 'whImport': case 'whDispatch': case 'whExport': case 'whUpgrade': case 'whAuto': {
       LOG.ensureWarehouses(city); const w = LOG.warehouse(city, a.wid); if (!w || w.owner !== pid) return err('Not your warehouse.');
