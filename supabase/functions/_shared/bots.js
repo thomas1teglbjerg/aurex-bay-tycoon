@@ -155,7 +155,7 @@ export function answer(city, p, x, o, ctx) {
       const of = (city.offers || []).find((y) => y.id === a.oid && y.status === 'open'); if (!of) return ok('The offer is closed.');
       const l = ctx.listing(of.lid);
       if (a.yes) { ctx.offerAccept(of); if (of.status === 'accepted') { event(city, b.id, p.id, 'sold', { x: co(l) }, ctx); return ok(`Sold to ${b.name} for ${of.amount} M.`); } return ok('The sale fell through.'); }
-      of.status = 'declined'; if (pers(b.id) && pers(b.id).dream === of.lid) event(city, b.id, p.id, 'keep', { x: co(l) }, ctx);
+      of.status = 'declined'; if ((pers(b.id) && pers(b.id).dream === of.lid) || a.keep) event(city, b.id, p.id, 'keep', { x: co(l) }, ctx);
       return ok('You keep it.');
     }
     default: return ok('Noted.');

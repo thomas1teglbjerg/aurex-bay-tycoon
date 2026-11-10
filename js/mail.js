@@ -1,7 +1,7 @@
 // Mail (Empire › Mail): staff, specialists, rivals and the Gazette write to you; many mails ask for an answer.
 // The mails live in the city (p.mail, see _shared/mail.js). Which ones you have read is kept in this browser.
 import * as E from '../supabase/functions/_shared/engine.js';
-import { TALENT } from '../supabase/functions/_shared/content.js';
+import { TALENT, CHANCE } from '../supabase/functions/_shared/content.js';
 import { city, me, meId, esc, faceUrl, dateLabel, coImg, lname } from './util.js';
 import { adHTML, houseAd } from './web.js';
 import { dealCard } from './deals.js';
@@ -24,8 +24,8 @@ export const mails = (p = me()) => (p && p.mail) || [];
 export const unread = (p = me()) => mails(p).filter((x) => !isRead(x)).length;
 export const toAnswer = (p = me()) => mails(p).filter(ML.isOpen).length;
 
-const FOLDERS = [['all', 'Inbox'], ['open', 'To answer'], ['staff', 'Staff'], ['spec', 'Specialists'], ['bots', 'Tycoons'], ['news', 'Gazette']];
-const inFolder = (x, f) => f === 'open' ? ML.isOpen(x) : f === 'staff' ? !x.from.tid && x.kind !== 'news' && !x.from.k : f === 'spec' ? !!x.from.tid : f === 'bots' ? x.from.k === 'bot' : f === 'news' ? x.kind === 'news' : true;
+const FOLDERS = [['all', 'Inbox'], ['open', 'To answer'], ['chance', 'Chance'], ['staff', 'Staff'], ['spec', 'Specialists'], ['bots', 'Tycoons'], ['news', 'Gazette']];
+const inFolder = (x, f) => f === 'open' ? ML.isOpen(x) : f === 'chance' ? !!x.ch : f === 'staff' ? !x.ch && !x.from.tid && x.kind !== 'news' && !x.from.k : f === 'spec' ? !!x.from.tid : f === 'bots' ? x.from.k === 'bot' : f === 'news' ? x.kind === 'news' : true;
 
 const COLS = ['#2f6fb0', '#23905a', '#8e44ad', '#c0392b', '#b7950b', '#16a085', '#d35400', '#5d6d7e'];
 const hue = (s) => { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return COLS[h % COLS.length]; };
@@ -45,7 +45,7 @@ const snippet = (x) => x.kind === 'news' ? (x.news || []).map((n) => n.t).join('
 function rowHTML(x, sel) {
   const open = ML.isOpen(x), rd = isRead(x);
   return `<button class="mrow ${rd ? '' : 'unread'} ${sel ? 'sel' : ''}" data-a="mailOpen" data-id="${x.id}">${face(x)}<span class="mrow-t"><span class="mrow-h"><b>${esc(x.from.n)}</b><time>${esc(when(x))}</time></span>
-    <span class="mrow-s">${open ? '<i class="mtag">Reply needed</i>' : ''}${esc(x.subj)}</span><span class="mrow-x">${esc(snippet(x))}</span></span></button>`;
+    <span class="mrow-s">${x.ch ? '<i class="mtag ch">Chance</i>' : ''}${open && !x.ch ? '<i class="mtag">Reply needed</i>' : ''}${esc(x.subj)}</span><span class="mrow-x">${esc(snippet(x))}</span></span></button>`;
 }
 
 // the box at the top of Empire: the latest mails and a way into the mailbox
@@ -66,6 +66,11 @@ function answerHTML(x) {
   return `<div class="mopts">${due != null ? `<span class="cap">Autopilot answers in <span data-live="until:${due}">…</span></span>` : '<span class="cap">Your answer</span>'}
     ${x.opts.map((o, i) => `<button class="opt" data-a="mailAnswer" data-id="${x.id}" data-opt="${i}"><b>${esc(o.l)}</b>${o.d ? `<span>${esc(o.d)}</span>` : ''}</button>`).join('')}</div>`;
 }
+// a chance card: the card itself, like the board game's, with why it came now
+function chanceCard(x) {
+  const k = CHANCE.cards[x.ch.id]; if (!k) return '';
+  return `<div class="chcard"><span class="chk-k"><span>Chance card</span><span>${esc(k.classic)}</span></span><h4>${esc(k.title)}</h4><p>${esc(k.tag)}</p>${x.ch.why ? `<p class="chwhy"><b>Why this card now:</b> ${esc(x.ch.why)}</p>` : ''}</div>`;
+}
 function newsHTML(x) {
   const c = city(), ad = x.ad && E.listing(c, x.ad.lid) ? adHTML(x.ad) : '';
   return `<div class="mnews"><div class="mnews-mast"><b>The Aurex Bay Gazette</b><span>Business briefing · ${esc(dateLabel(Math.max(0, x.m - 1)))}</span></div>
@@ -79,7 +84,7 @@ function readerHTML(x) {
   const body = x.kind === 'news' ? newsHTML(x)
     : `<div class="mbody"><p>Hi ${esc(first)},</p>${String(x.body || '').split('\n').map((t) => `<p>${esc(t)}</p>`).join('')}${x.fxt ? `<p class="mfx">${esc(x.fxt.charAt(0).toUpperCase() + x.fxt.slice(1))}.</p>` : ''}<p class="msign">${x.from.k === 'city' ? 'Kind regards,' : 'Best,'}<br>${esc(sign)}</p>${x.hAd ? `<div class="mhouse">${houseAd('wide', x.hAd)}</div>` : ''}</div>`;
   return `<article class="mread"><header>${face(x, 'lg')}<div><h3>${esc(x.subj)}</h3><span><b>${esc(x.from.n)}</b> · ${esc(x.from.r)}</span><time>${esc(when(x))}</time></div></header>
-    ${body}${x.opts ? answerHTML(x) : ''}${x.deal ? (() => { const d = (c.deals || []).find((y) => y.id === x.deal); return d ? `<div class="mdeal">${dealCard(d)}</div>` : ''; })() : ''}${x.web ? `<p><button class="btn sm" data-a="web" data-u="${esc(x.web)}">Open ${esc(x.web.split('/')[0])} ›</button></p>` : ''}${x.go ? `<p><button class="btn sm" ${x.go.startsWith('report:') ? `data-a="report" data-v="${esc(x.go.slice(7))}:0"` : `data-a="tab" data-v="${esc(x.go)}"`}>${x.go.startsWith('report:') ? 'Open the annual report' : 'Open'} ›</button></p>` : ''}
+    ${x.ch ? chanceCard(x) : ''}${body}${x.opts ? answerHTML(x) : ''}${x.deal ? (() => { const d = (c.deals || []).find((y) => y.id === x.deal); return d ? `<div class="mdeal">${dealCard(d)}</div>` : ''; })() : ''}${x.web ? `<p><button class="btn sm" data-a="web" data-u="${esc(x.web)}">Open ${esc(x.web.split('/')[0])} ›</button></p>` : ''}${x.go ? `<p><button class="btn sm" ${x.go.startsWith('report:') ? `data-a="report" data-v="${esc(x.go.slice(7))}:0"` : `data-a="tab" data-v="${esc(x.go)}"`}>${x.go.startsWith('report:') ? 'Open the annual report' : 'Open'} ›</button></p>` : ''}
     ${mine ? `<button class="row mco" data-a="company" data-lid="${l.id}"><span class="thumb" style="background-image:url(${coImg(l)})"></span><div class="grow"><b>Open ${esc(lname(l))}</b><span>${esc(l.district)} · company dashboard</span></div><span aria-hidden="true">›</span></button>` : ''}</article>`;
 }
 // the mailbox page (Empire › Mail). ui.company is 'mail' or 'mail:<id>', ui.mailF the folder
