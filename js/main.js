@@ -889,6 +889,7 @@ async function onClick(e) {
     case 'deptOpen': await act('deptOpen', { lid: d.lid, dept: d.dept }); return;
     case 'deptClose': await act('deptClose', { lid: d.lid, dept: d.dept }); return;
     case 'workers': await act('workers', { lid: d.lid, dept: d.dept, delta: Number(d.v) }); return;
+    case 'wMove': { const sel = document.getElementById(`wmv-${d.lid}-${d.dept}`), [to, td] = String(sel && sel.value || '').split('|'); if (to) await act('workersMove', { from: d.lid, fd: d.dept, to, td, n: 1 }); return; }
     case 'deptSet': await act('deptSet', { lid: d.lid, dept: d.dept, k: d.k, v: d.v }); return;
     case 'task': await act('task', { lid: d.lid, task: d.task }); return;
     case 'restock': await act('task', { lid: d.lid, task: 'restock', months: Number(d.v) }); return;

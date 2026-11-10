@@ -183,7 +183,7 @@ export function runningCosts(l) {
   if (!l.ops) return { salaries: 0, budgets: 0, total: 0 };
   const s = SIZES[l.size].mult;
   if (l.ops.managed) { const t = r2(0.6 * scale(l)); return { salaries: t, budgets: 0, total: t, workers: 0 }; }
-  const wageMult = { low: 0.85, market: 1, high: 1.2 }[setting(l, 'hr', 'wages')];
+  const wageMult = { low: 0.85, market: 1, high: 1.2 }[setting(l, 'hr', 'wages')] * (l.cx && l.cx.wage ? l.cx.wage.x : 1); // a chance card's raise
   let salaries = 0, workers = 0;
   Object.entries(l.ops.depts).forEach(([k, d]) => { const shift = k === 'ops' ? [1, 1, 1.3, 1.6][setting(l, 'ops', 'shifts')] : 1; salaries += d.w * WORKER.salary * wageMult * shift; workers += d.w; });
   let budgets = 0;
@@ -207,7 +207,7 @@ export function capacity(l) {
   const training = !o.managed && o.depts.hr && setting(l, 'hr', 'training') === 'on' ? 1.08 : 1;
   const overtime = o.boost && o.boost.m === o.curM ? o.boost.mult : (o.overtimeM === o.curM ? 1.2 : 1);
   const chief = !o.managed && roleOn(o.depts.ops) ? 1.1 : 1, own = selfLv(l, 'ops') >= 6 ? 1.04 : 1, plant = hasSp(l, 'factory') ? 1.06 : 1;
-  return baseCap(l) * staff * shift * morale * training * overtime * chief * own * plant * BLD.condMult(l);
+  return baseCap(l) * staff * shift * morale * training * overtime * chief * own * plant * BLD.condMult(l) * (l.cx ? (l.cx.strike ? 0 : 1) * (l.cx.cap ? l.cx.cap.x : 1) : 1); // chance cards: a strike, a contract, a consultant
 }
 export function demand(city, l) {
   const o = l.ops; const price = PRICE[o.managed ? 'standard' : setting(l, 'sales', 'price')];

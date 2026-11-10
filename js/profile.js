@@ -2,7 +2,7 @@
 // and your statistics. Players in your network can open your profile too (right-click their icon, or the Network tab).
 // The rules live in _shared/career.js; this file only draws them.
 import * as E from '../supabase/functions/_shared/engine.js';
-import { CAREER, PORTRAITS, TYPES } from '../supabase/functions/_shared/content.js';
+import { CAREER, PORTRAITS, TYPES, CHANCE } from '../supabase/functions/_shared/content.js';
 import { city, me, meId, esc, M, N, lname, coImg, dateLabel, lineChart } from './util.js';
 import { logoMark } from './brand.js';
 import { cardHTML, homeBg, ricon, money } from './life.js';
@@ -92,10 +92,16 @@ export function profilePageHTML(UI, ownPid) {
         <div class="pf-box"><h3>Perks unlocked</h3>${perks.length ? `<div class="pf-perks">${perks.map((x) => `<div><b>${esc(C.FIELD_NAME[x.f])} ${x.lv}</b>${esc(x.t)}</div>`).join('')}</div><p class="pf-note">Perks work in the departments ${own ? 'you lead' : 'they lead'} personally.</p>` : `<p class="pf-note">Level 3 in a field brings the role's own effect when ${own ? 'you lead' : 'they lead'} that department, more at 6 and 9.</p>`}
           ${partnerHTML ? `<h3 style="margin-top:14px">Co-owners</h3>${partnerHTML}` : ''}</div></div>
       ${ownsHTML(c, p, own)}
+      ${chanceHTML(p, own)}
       ${own ? `<div class="pf-box"><h3>How you grow</h3><p class="pf-note">Leading a department: +${CAREER.xp.lead} field XP a month (more in large companies, half in a month with a loss, +25% with a top specialist beside you). To-dos +${CAREER.xp.task} (max ${CAREER.caps.task} a month), orders delivered +${CAREER.xp.order} Sales (max ${CAREER.caps.order}), stock profit +${CAREER.xp.stock} Finance per M (max ${CAREER.caps.stockYear} a year), a new prestige tier +${CAREER.xp.tier} in every field, a crisis with every company in profit +${CAREER.xp.crisis} per sector. Running companies trains their sector. Fields you leave alone for two years slowly rust, but you never lose a level.${next ? ` ${next.min - tl} more level${next.min - tl > 1 ? 's' : ''} to ${esc(next.name)}.` : ''}</p></div>` : ''}
     </div></div></div>`;
 }
 
+// the chance cards a tycoon has drawn and what they picked (newest first)
+function chanceHTML(p, own) {
+  const log = ((p.chance && p.chance.log) || []).filter((x) => CHANCE.cards[x.id]); if (!log.length) return '';
+  return `<div class="pf-box"><h3>Chance cards<small>${log.length}</small></h3><div class="chlog">${log.map((x) => `<div class="row"><b>${esc(CHANCE.cards[x.id].title)}</b><span class="muted">${esc(x.pick || (own ? 'Waiting for you' : 'Open'))} · ${esc(dateLabel(x.m))}</span></div>`).join('')}</div></div>`;
+}
 // homes and collection at a glance, so the network can see what a tycoon owns (the wallet stays private)
 const CATS = [['art', 'Art'], ['wine', 'Wine'], ['watch', 'Watches'], ['car', 'Cars']];
 function ownsHTML(c, p, own) {

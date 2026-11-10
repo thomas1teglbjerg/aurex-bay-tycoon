@@ -76,7 +76,7 @@ export function willAccept(city, tid, salary, moving) { const s = st(city, tid),
 // ---------------------------------------------------------------- moves
 function sign(city, p, tid, salary, years, m, quiet) {
   const t = PERSON[tid], s = st(city, tid);
-  Object.assign(s, { owner: p.id, salary: r2(salary), since: m, until: m + Math.round(years * 12), stress: Math.min(s.stress, 30), boredom: 10, chal: m, leave: null, notice: null, listed: null, sat: clamp(60 + (salary / ask(city, tid) - 1) * 80) });
+  Object.assign(s, { lock: null, owner: p.id, salary: r2(salary), since: m, until: m + Math.round(years * 12), stress: Math.min(s.stress, 30), boredom: 10, chal: m, leave: null, notice: null, listed: null, sat: clamp(60 + (salary / ask(city, tid) - 1) * 80) });
   p.team = p.team || {}; p.team[t.kind] = tid; if (!p.staff.includes(t.kind)) p.staff.push(t.kind);
   city.tOffers = (city.tOffers || []).filter((o) => o.tid !== tid || o.status !== 'open');
 }
@@ -102,6 +102,16 @@ export function hand(city, tid, to, keep, ctx) {
   if (a && keep) { to.assign = to.assign || {}; to.assign[t.kind] = a; }
   return true;
 }
+// a chance card (Executive Headhunt): a free agent signs without a fee on a contract nobody can break for `years`
+export const locked = (city, tid) => { const s = city.talent && city.talent[tid]; return !!(s && s.lock != null && s.lock > city.m); };
+export function signLocked(city, p, tid, years, ctx) {
+  const t = PERSON[tid], s = st(city, tid); if (s.owner) return err('Someone else signed them first.');
+  if (p.team && p.team[t.kind]) return err(`You already have a ${ROLE[t.kind].role}.`);
+  sign(city, p, tid, ask(city, tid), years, city.m); s.lock = city.m + years * 12;
+  if (ctx && ctx.news) ctx.news(city, city.m, `${p.name} signs ${t.name}`, `${title(city, tid)} · a ${years}-year contract, no signing fee.`, 'info');
+  return ok(`${t.name} signed for ${years} years at ${r2(s.salary)} M a year, no signing fee.`);
+}
+export const sell = (city, tid, buyer, fee, salary, years, ctx) => transfer(city, tid, buyer, fee, salary, years, ctx);
 export const TALENT_IDS = (city, owner) => TALENT.filter((t) => city.talent[t.id] && city.talent[t.id].owner === owner).map((t) => t.id);
 export const releaseOne = (city, tid, ctx, why) => release(city, tid, ctx, why);
 // every specialist of an employer becomes a free agent (a coop that is dissolved)
@@ -164,7 +174,7 @@ export function monthStep(city, m, ctx) {
     if (s.notice != null) {
       if (s.sat >= 42) { s.notice = null; if (human) tell(city, ctx, p, t, 'good', 'I am staying', 'Things are better now, so I withdraw my notice. Thank you for listening.', null, `${t.name} withdrew their notice`, 'They are happier now and will stay.'); }
       else if (m >= s.notice) { release(city, t.id, ctx, 'They served their notice and are now a free agent. Other tycoons can sign them.'); return; }
-    } else if (s.sat < R.quitBelow && rand() < (p.bot ? 0.15 : 0.45)) {
+    } else if (s.sat < R.quitBelow && !(s.lock > m) && rand() < (p.bot ? 0.15 : 0.45)) {
       s.notice = m + R.notice; if (human) tell(city, ctx, p, t, 'bad', 'My notice', `I am handing in my notice. I am not happy here (satisfaction ${Math.round(s.sat)}), and I will leave in ${R.notice} months unless something changes: better pay, less work or a real challenge.`,
         [{ l: 'Pay a bonus', d: `${r2(s.salary * 0.25)} M. Satisfaction +10.`, act: ['tBonus', { tid: t.id }] }, { l: 'Raise their salary 15%', d: `${r2(s.salary * 1.15)} M a year from now on.`, act: ['tSalary', { tid: t.id, salary: r2(s.salary * 1.15) }] }, { l: 'Let them go', d: 'They leave when the notice runs out.', safe: true }], `${t.name} handed in their notice`, `Satisfaction ${Math.round(s.sat)}. They leave in ${R.notice} months unless things improve: raise their pay, cut their workload or give them a challenge.`);
     }
@@ -205,7 +215,7 @@ export function botStep(city, p, m, ctx) {
   if (rand() < 0.2) TALENT.forEach((t) => { const s = st(city, t.id); if (s.listed != null && s.owner !== p.id && !p.team[t.kind] && s.listed <= value(city, t.id) * 1.15 && p.cash > s.listed + 5 && rand() < 0.4) transfer(city, t.id, p, s.listed, Math.max(ask(city, t.id), s.salary), 2, ctx); });
   // poach: bid for a human's specialist when it is unhappy or the owner is away
   if (rand() < 0.05) {
-    const targets = TALENT.filter((t) => { const s = st(city, t.id), o = s.owner && who(city, s.owner); return o && !o.bot && !p.team[t.kind] && (s.sat < 50 || ctx.inactive(o)) && !city.tOffers.some((x) => x.tid === t.id && x.status === 'open'); });
+    const targets = TALENT.filter((t) => { const s = st(city, t.id), o = s.owner && who(city, s.owner); return o && !o.bot && !p.team[t.kind] && !(s.lock > m) && (s.sat < 50 || ctx.inactive(o)) && !city.tOffers.some((x) => x.tid === t.id && x.status === 'open'); });
     if (targets.length) { const t = pick(targets), fee = r2(value(city, t.id) * (0.85 + rand() * 0.3)), salary = r2(ask(city, t.id) * 1.1); if (p.cash > fee + 5) offer(city, p, t.id, fee, salary, 2, ctx); }
   }
 }
@@ -217,6 +227,7 @@ function offer(city, p, tid, fee, salary, years, ctx) {
   const t = PERSON[tid], s = st(city, tid), owner = who(city, s.owner);
   if (!owner) return err('This specialist is a free agent. Sign them directly.');
   if (owner.id === p.id) return err('They already work for you.');
+  if (locked(city, tid)) return err(`${t.name} is on a fixed contract and cannot move.`);
   if (p.team[t.kind]) return err(`You already have a ${ROLE[t.kind].role}. Release or sell them first.`);
   const wa = willAccept(city, tid, salary, true); if (!wa.ok) return err(`${t.name} wants at least ${wa.need} M a year to move.`);
   if (p.cash < fee) return err(`You need ${fee} M in cash for the fee.`);
@@ -252,7 +263,7 @@ export function act(city, p, action, a, ctx) {
       return ok(`${t.name} signed for ${years} year${years > 1 ? 's' : ''} at ${salary} M a year.`);
     }
     case 'fire': {
-      if (!mine) return err('Not on your team.');
+      if (!mine) return err('Not on your team.'); if (locked(city, tid)) return err(`${t.name} is on a fixed contract until ${Math.ceil((s.lock - m) / 12 * 10) / 10} years from now.`);
       const sev = r2(s.salary * Math.min(1, yearsLeft(city, tid)) * 0.5); p.cash -= sev; release(city, tid, ctx, null);
       return ok(`${t.name} released. Severance ${sev} M.`);
     }
@@ -283,7 +294,7 @@ export function act(city, p, action, a, ctx) {
       s.salary = salary; s.until = m + years * 12; s.notice = null; s.sat = clamp(s.sat + 8);
       return ok(`${t.name} renewed for ${years} year${years > 1 ? 's' : ''} at ${salary} M a year.`);
     }
-    case 'tList': { if (!mine) return err('Not on your team.'); const price = r2(Number(a.price) || 0); s.listed = price > 0 ? price : null; return ok(s.listed ? `${t.name} is on the transfer list at ${price} M.` : 'Taken off the transfer list.'); }
+    case 'tList': { if (!mine) return err('Not on your team.'); if (locked(city, tid)) return err(`${t.name} is on a fixed contract and cannot be sold.`); const price = r2(Number(a.price) || 0); s.listed = price > 0 ? price : null; return ok(s.listed ? `${t.name} is on the transfer list at ${price} M.` : 'Taken off the transfer list.'); }
     case 'tScout': {
       if (mine) return err('They work for you.'); if (scouted(city, p, tid)) return err('You already have a fresh report.');
       if (p.cash < R.scoutFee) return err('Scouting costs ' + R.scoutFee + ' M.'); p.cash -= R.scoutFee; s.scout[p.id] = m + R.scoutMonths;

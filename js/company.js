@@ -139,7 +139,7 @@ export function companyHTML(lid, ui = {}) {
 
   return `<div class="crumbs"><button class="btn sm" data-a="back">‹ ${ro ? 'Coop' : 'Empire'}</button><span class="muted">${coop ? `${esc(coop.name)} · co-owned · costs come out of the coop treasury` : ro ? `${esc(owner.name)}'s company` : 'Company dashboard'}</span></div>
   <section class="chero" style="background-image:linear-gradient(180deg, rgba(10,20,35,0.05) 30%, rgba(10,20,35,0.88)), url(${coImg(l)})">
-    <div class="chero-in"><span class="chip ${st.cls}">${esc(st.label)}</span><h2>${esc(lname(l))}</h2><p>${l.title ? esc(def.name) + ' · ' : ''}${esc(l.district)} · ${SIZES[l.size].label} · Level ${l.level}${l.upgrade ? ` (upgrading to ${l.upgrade.to})` : ''} · Tech ${o.tech} · ${kind === 'b2b' ? 'B2B' : 'B2C'}</p></div>
+    <div class="chero-in"><span class="chip ${st.cls}">${esc(st.label)}</span>${chanceFx(l)}<h2>${esc(lname(l))}</h2><p>${l.title ? esc(def.name) + ' · ' : ''}${esc(l.district)} · ${SIZES[l.size].label} · Level ${l.level}${l.upgrade ? ` (upgrading to ${l.upgrade.to})` : ''} · Tech ${o.tech} · ${kind === 'b2b' ? 'B2B' : 'B2C'}</p></div>
     <div class="chero-act"><button class="btn sm" data-a="open" data-lid="${l.id}">Company card</button></div>
   </section>
   ${boardHTML(l, ro)}
@@ -325,6 +325,25 @@ function deptCardRO(l, d) {
   const state = O.deptState(l, d.id), dd = l.ops.depts[d.id];
   return `<article class="dept">${deptHeader(l, d, state, true)}<div class="dept-in"><p class="muted" style="font-size:13.5px">${dd ? `${dd.w} workers · ${Math.round(O.automation(l, d.id) * 100)}% automated${dd.head ? ` · has a head` : ''}` : 'Not opened'}</p></div></article>`;
 }
+// what a chance card is doing to this company right now (Lean Week, a settled claim, a contract, a strike …)
+function chanceFx(l) {
+  const c = city(), p = me(); if (!p) return '';
+  const fx = E.CH.effects(c, p, l), cx = l.cx || {}, g = c.g;
+  if (cx.ypi && cx.ypi.until > g) fx.push({ t: cx.ypi.note, until: cx.ypi.until });
+  if (cx.cap && cx.cap.until > g) fx.push({ t: `Capacity ${cx.cap.x > 1 ? '+' : '−'}${Math.round(Math.abs(cx.cap.x - 1) * 100)}%`, until: cx.cap.until, bad: cx.cap.x < 1 });
+  if (cx.up && cx.up.until > g) fx.push({ t: `Next upgrade −${Math.round((1 - cx.up.x) * 100)}%`, until: cx.up.until });
+  if (cx.wage && cx.wage.until > g) fx.push({ t: `Wages +${Math.round((cx.wage.x - 1) * 100)}%`, until: cx.wage.until, bad: true });
+  if (cx.strike && cx.strike.until > g) fx.push({ t: 'On strike: no production', until: cx.strike.until, bad: true });
+  if (cx.fwd && cx.fwd.until > g) fx.push({ t: `Forward contract: ${cx.fwd.q} ${GOODS[cx.fwd.g].unit} a month`, until: cx.fwd.until });
+  if (cx.sup && cx.sup.until > g) fx.push({ t: `Prepaid ${GOODS[cx.sup.g].name.toLowerCase()}: ${cx.sup.q} ${GOODS[cx.sup.g].unit} a month`, until: cx.sup.until });
+  return fx.map((x) => `<span class="chfx${x.bad ? ' bad' : ''}">${esc(x.t)}${x.until ? ` · <span data-live="until:${x.until * 12}">…</span>` : ''}</span>`).join(' ');
+}
+// Boardroom Vote: move a department's workers to another company you run, for free
+function moveRow(l, d, dd) {
+  const c = city(), p = me(); if (!p || !E.CH.moving(c, p) || !dd.w) return '';
+  const ts = E.CH.moveTargets(c, p, l, d.id, E.chx(c)); if (!ts.length) return '';
+  return `<div class="chmove"><b>Boardroom Vote</b><select id="wmv-${l.id}-${d.id}" aria-label="Move workers to">${ts.map((t) => `<option value="${t.lid}|${t.d}">${esc(t.name)} · ${esc(t.dn)} (${t.w}/${t.need})</option>`).join('')}</select><button class="btn sm" data-a="wMove" data-lid="${l.id}" data-dept="${d.id}">Move 1 worker</button></div>`;
+}
 function deptCard(l, d, ui) {
   const o = l.ops, state = O.deptState(l, d.id), dd = o.depts[d.id], p = me();
   if (!dd) return `<article class="dept fold">${deptHeader(l, d, 'closed', true).replace('<header ', `<header data-k="dept:${d.id}" `)}<div class="dept-in"><p>${esc(d.desc)}</p><p class="muted" style="font-size:13px">Without it: ${esc(d.without)}</p><button class="btn navy" data-a="deptOpen" data-lid="${l.id}" data-dept="${d.id}" ${(l.owner.k === 'h' ? city().holdings[l.owner.id].treasury : p.cash) < O.deptOpenCost(l, d.id) ? 'disabled' : ''}>Open department · ${M(O.deptOpenCost(l, d.id))}</button></div></article>`;
@@ -347,7 +366,7 @@ function deptCard(l, d, ui) {
   return `<article class="dept">${deptHeader(l, d, state, true)}<div class="dept-in">
     <div class="wk"><div><span class="cap">Workers</span><div class="stepper"><button data-a="workers" data-lid="${l.id}" data-dept="${d.id}" data-v="-1" aria-label="Lay off one" ${dd.w ? '' : 'disabled'}>−</button><output class="num">${dd.w} / ${need}</output><button data-a="workers" data-lid="${l.id}" data-dept="${d.id}" data-v="1" aria-label="Hire one">+</button></div></div>
       <div style="flex:1;min-width:120px"><span class="cap">Automation ${Math.round(a * 100)}%</span><div class="bar"><i style="width:${a * 100}%;background:${a >= 1 ? 'var(--good)' : 'var(--gold)'}"></i></div></div></div>
-    <p class="muted" style="font-size:13px">${esc(a >= 1 ? d.auto : d.without)} Hiring costs ${M(WORKER.hireFee)} per worker, wages ${M(WORKER.salary)} a year each.</p>
+    <p class="muted" style="font-size:13px">${esc(a >= 1 ? d.auto : d.without)} Hiring costs ${M(WORKER.hireFee * E.CH.hireX(city(), p))} per worker, wages ${M(WORKER.salary)} a year each.${E.CH.freeFire(city(), p) ? ' Lean Week: layoffs cost nothing right now.' : ''}</p>${moveRow(l, d, dd)}
     ${heads}${dd.head !== 'self' ? selfHeadHTML(l, d, dd) : ''}${settings}
     ${manualAvail ? `<button class="btn${manualDone ? ' done' : ''}" data-a="${d.manual.id === 'restock' ? 'gotoSupplies' : 'scene'}" data-lid="${l.id}" data-task="${d.manual.id}">${esc(d.manual.label)}<span class="muted" style="font-weight:600"> · ${esc(manualDone ? 'Done for this month' : d.manual.note)}</span></button>` : ''}
     ${d.id === 'social' ? adBox(city(), l, false, ui || {}, true) + pressBox(city(), l, false, true) : ''}
