@@ -21,7 +21,9 @@ for (let i = 0; i < 48; i++) { now += weekMs; E.advance(city, now); E.apply(city
 assert(worlds >= 3 && worlds <= 5, `about four world cards a year (${worlds})`);
 const happenTitles = HAPPENINGS.map((h) => (MAIL_HAP[h.id] || h).subj || h.title);
 assert([...titles].some((t) => happenTitles.some((h) => t.includes(h))), 'companies have small happenings during the year');
-assert([...titles].some((t) => t.startsWith('decision:')), 'decisions arrive during the year');
+// decisions are rarer (about two or three a year, MAIL_PACE): give them a second year
+for (let i = 0; i < 48 && ![...titles].some((t) => t.startsWith('decision:')); i++) { now += weekMs; E.advance(city, now); E.apply(city, 'u', 'ping', {}, now); (p.mail || []).forEach((x) => { if (x.dec) titles.add('decision:' + x.subj); }); }
+assert([...titles].some((t) => t.startsWith('decision:')), 'decisions arrive during the year or two');
 assert(city.agenda.every((e) => e.at >= city.g - 1e-9), 'nothing overdue is left on the agenda');
 // the next card is always planned, in the quarter after the last one, and it is the card market insight shows
 { let ok = true, seen = 0, want = city.deck[0], lastM = city.lastCard && city.lastCard.m;
