@@ -1,7 +1,7 @@
 // Aurex Bay Tycoon — game engine.
 // Pure functions over one plain "city" object, so the exact same rules run in the browser demo
 // and server-side in the Supabase Edge Function. Time is real time: 1 game year = 1 real week (speed 1).
-import { RECIPES, DISTRICTS, TYPES, SYNERGY, SIZES, LISTINGS, STAFF, STOCKS, WORLD, DECISIONS, HAPPENINGS, BOTS, CONFIG, VINTAGE, VIP, DEPT_DEFAULTS, WORKER, GOODS, TAKEOVER, SOMMELIER, CRAFT, BOT_REL, MAIL_HAP, DEC_FROM, GAZETTE, PRESTIGE_TIERS, MAINT, placeOn, LIFE as LIFE_CFG } from './content.js';
+import { RECIPES, DISTRICTS, TYPES, SYNERGY, SIZES, LISTINGS, STAFF, STOCKS, WORLD, DECISIONS, HAPPENINGS, BOTS, CONFIG, VINTAGE, VIP, DEPT_DEFAULTS, WORKER, GOODS, TAKEOVER, SOMMELIER, CRAFT, BOT_REL, MAIL_HAP, DEC_FROM, MAIL_PACE, GAZETTE, PRESTIGE_TIERS, MAINT, placeOn, LIFE as LIFE_CFG } from './content.js';
 import * as OPS from './ops.js';
 import * as LOG from './logistics.js';
 import * as LIFE from './life.js';
@@ -682,11 +682,11 @@ function planWeek(city, wk) {
   Object.values(city.players).forEach((p) => {
     if (p.bot) { if (rand() < 0.27) plan(city, inWeek(wk), 'bot', { pid: p.id }); return; }
     const waiting = (city.agenda || []).filter((e) => e.k === 'decision' && e.pid === p.id).length;
-    if (p.inbox.length + waiting < 3 && rand() < 0.12) plan(city, inWeek(wk), 'decision', { pid: p.id });
+    if (p.inbox.length + waiting < MAIL_PACE.decOpen && rand() < MAIL_PACE.dec) plan(city, inWeek(wk), 'decision', { pid: p.id });
   });
   city.listings.forEach((l) => {
     if (!l.ops || l.ops.managed || !humanOwned(city, l) || BLD.idle(l)) return;
-    if (rand() < 0.33) plan(city, inWeek(wk), 'happening', { lid: l.id });
+    if (rand() < MAIL_PACE.hap) plan(city, inWeek(wk), 'happening', { lid: l.id });
     if ((l.type === 'film' || l.type === 'music') && rand() < (OPS.hasSp(l, 'hit') ? 1.5 : 1) / 130) plan(city, inWeek(wk), 'hit', { lid: l.id });
     // a rare VIP guest books a hotel; a better reputation draws them more often
     if (OPS.hosts(l) && rand() < VIP.week * (0.5 + l.ops.rep / 100)) plan(city, inWeek(wk), 'vip', { lid: l.id });
@@ -738,17 +738,27 @@ const AGENDA = {
   bot: (city, e) => { const p = city.players[e.pid]; if (p && p.bot) botAct(city, p, city.m); },
   chance: (city, e) => { const p = city.players[e.pid]; if (p) CH.draw(city, p, chx(city), rand); },
   decision: (city, e) => {
-    const p = city.players[e.pid]; if (!p || p.bot || p.inbox.length >= 3) return;
-    const types = new Set(ownedBy(city, 'p', p.id).map((l) => l.type)), m = city.m;
-    const pool = DECISIONS.filter((d) => (!d.needs || types.has(d.needs)) && !p.inbox.some((x) => x.def === d.id)); if (!pool.length) return;
-    const d = pick(pool), x = { id: uid('d'), def: d.id, m, dueM: m + 2 }; p.inbox.push(x);
-    decisionMail(city, p, x);
+    const p = city.players[e.pid]; if (!p || p.bot || p.inbox.length >= MAIL_PACE.decOpen) return;
+    if (mailedLately(city, [p])) { plan(city, e.at + 1 / 48, 'decision', { pid: p.id }); return; } // a company mail just came: the decision waits a week
+    const types = new Set(ownedBy(city, 'p', p.id).map((l) => l.type)), m = city.m, seen = p.decLog || [];
+    const fits = DECISIONS.filter((d) => (!d.needs || types.has(d.needs)) && !p.inbox.some((x) => x.def === d.id)); if (!fits.length) return;
+    // the least recently seen ones first, and the same decision never twice in a row
+    const fresh = fits.filter((d) => !seen.includes(d.id)), pool = fresh.length ? fresh : fits.filter((d) => d.id !== seen[0]).length ? fits.filter((d) => d.id !== seen[0]) : fits;
+    const d = pick(pool), v = d.alt ? Math.floor(rand() * (d.alt.length + 1)) : 0, x = { id: uid('d'), def: d.id, m, dueM: m + 2, ...(v ? { v } : {}) }; p.inbox.push(x);
+    p.decLog = [d.id, ...seen.filter((k) => k !== d.id)].slice(0, Math.max(2, Math.floor(fits.length / 2)));
+    decisionMail(city, p, x); p.coMailG = city.g;
   },
   vip: (city, e) => { const l = listing(city, e.lid); if (l && l.ops && !l.ops.managed && humanOwned(city, l)) OPS.vipBooking(city, CTX, l); },
   happening: (city, e) => {
     const l = listing(city, e.lid); if (!l || !l.ops || l.ops.managed || !humanOwned(city, l)) return;
     if (mailWaiting(city, l)) return; // one open question per company at a time: the staff wait for your answer
-    happening(city, l, pick(HAPPENINGS));
+    const ps = mailOwners(city, l); if (mailedLately(city, ps)) return; // no more than one company mail every week and a half
+    const grp = TYPES[l.type].group, log = l.ops.hapLog || [];
+    const fits = HAPPENINGS.filter((h) => !h.grp || h.grp.includes(grp)), fresh = fits.filter((h) => !log.includes(h.id));
+    const h = pick(fresh.length ? fresh : fits), alt = (MAIL_HAP[h.id] || {}).alt;
+    if (!happening(city, l, h, alt ? Math.floor(rand() * (alt.length + 1)) : 0)) return;
+    l.ops.hapLog = [h.id, ...log.filter((k) => k !== h.id)].slice(0, MAIL_PACE.recent);
+    ps.forEach((q) => { q.coMailG = city.g; });
   },
   vintage: (city, e) => {
     // the yearly collectible: a vintage at a vineyard, a tuner car at an auto repair shop (CRAFT)
@@ -773,26 +783,28 @@ const AGENDA = {
     else { feed(p, m, `${l.title || TYPES[l.type].name} has a hit single`, `+${v} M and +1 Influence.`, 'good'); if (!p.bot) news(city, m, `${p.name}'s studio has a hit`, `${l.title || TYPES[l.type].name} is on every playlist in Aurex Bay.`, 'good'); }
   }
 };
-function happening(city, l, h) {
+// v: which way of writing it (0 = the main text, 1… = MAIL_HAP alt); true when a mail went out
+function happening(city, l, h, v = 0) {
   const o = l.ops, co = MAIL.coName(l), s = SIZES[l.size].mult; let mh = MAIL_HAP[h.id] || {};
+  if (v && mh.alt && mh.alt[v - 1]) mh = { ...mh, ...mh.alt[v - 1] };
   const dept = mh.dept || h.guard || 'ops', g = h.guard && o.depts[h.guard];
   const fill = (t) => t.replace(/\{co\}/g, co);
   const base = { from: staffFrom(city, l, dept), lid: l.id, kind: h.kind };
   if (h.kind === 'bad' && g && (OPS.roleOn(g) || OPS.automation(l, h.guard) >= 0.5)) {
-    mailTo(city, l, { ...base, from: staffFrom(city, l, h.guard), subj: mh.subj || h.title, body: fill(mh.saved || `${h.text} ${h.saved}`), kind: 'good' }); return;
+    mailTo(city, l, { ...base, from: staffFrom(city, l, h.guard), subj: mh.subj || h.title, body: fill(mh.saved || `${h.text} ${h.saved}`), kind: 'good' }); return true;
   }
   // a chance card left its mark: a settled claim takes the hit, an open one doubles it
   const cx = h.kind === 'bad' ? CH.onBad(city, l) : null;
-  if (cx === 'shield') { mailTo(city, l, { ...base, from: { n: CH.CARDS.legal.from[0], r: CH.CARDS.legal.from[1], k: 'law' }, subj: mh.subj || h.title, body: `${fill(h.text)} The settlement you paid for covered it. Nothing for you to do.`, kind: 'good' }); return; }
+  if (cx === 'shield') { mailTo(city, l, { ...base, from: { n: CH.CARDS.legal.from[0], r: CH.CARDS.legal.from[1], k: 'law' }, subj: mh.subj || h.title, body: `${fill(h.text)} The settlement you paid for covered it. Nothing for you to do.`, kind: 'good' }); return true; }
   if (cx === 'dbl') { h = { ...h, fx: CH.twice(h.fx) }; mh = { ...mh, body: mh.body && `${mh.body} The old claim against us comes back on top of it, so it costs twice as much.`, opts: mh.opts && mh.opts.map((x) => ({ ...x, d: x.d && `${x.d} Twice as hard this time.`, fx: CH.twice(x.fx) })) }; }
   if (mh.opts) {
     const opts = mh.opts.map((x) => { const fx = MAIL.scaleFx(x.fx, s); return { l: x.l, d: x.d ? x.d.replace(/(\d+(?:\.\d+)?) M/g, (_, v) => `${Math.round(v * s * 100) / 100} M`) : MAIL.fxText(fx), fx, ...(x.safe ? { safe: true } : {}) }; });
-    mailTo(city, l, { ...base, subj: mh.subj, body: fill(mh.body), opts, due: Math.round((city.g + MAIL.WAIT) * 1e5) / 1e5, own: ownKey(l) }); return;
+    mailTo(city, l, { ...base, subj: mh.subj, body: fill(mh.body), opts, due: Math.round((city.g + MAIL.WAIT) * 1e5) / 1e5, own: ownKey(l) }); return true;
   }
-  const bits = companyFx(city, l, MAIL.scaleFx(h.fx, s)); if (bits === null) return;
-  mailTo(city, l, { ...base, subj: mh.subj || h.title, body: fill(mh.body || h.text), fxt: bits.join(', ') });
+  const bits = companyFx(city, l, MAIL.scaleFx(h.fx, s)); if (bits === null) return false;
+  mailTo(city, l, { ...base, subj: mh.subj || h.title, body: fill(mh.body || h.text), fxt: bits.join(', ') }); return true;
 }
-export const _happening = (city, l, h) => happening(city, l, h); // tests
+export const _happening = (city, l, h, v) => happening(city, l, h, v); // tests
 // what a happening or an answer does to a company; null when there is nothing it can hit (no stock to lose)
 function companyFx(city, l, fx) {
   const o = l.ops, bits = []; if (!fx) return bits;
@@ -816,10 +828,11 @@ function staffFrom(city, l, dept) {
   if (tid) return { n: TAL.PERSON[tid].name, r: `Head of ${dn}, ${co}`, tid };
   return { n: MAIL.staffer(l, dept), r: `${dn}, ${co}` };
 }
-function mailWaiting(city, l) {
-  const ps = l.owner.k === 'p' ? [city.players[l.owner.id]] : Object.keys((city.holdings[l.owner.id] || { members: {} }).members).map((id) => city.players[id]);
-  return ps.some((q) => q && (q.mail || []).some((x) => x.lid === l.id && !x.dec && MAIL.isOpen(x)));
-}
+// the humans who get a company's mail: its owner, or every co-owner
+const mailOwners = (city, l) => (l.owner.k === 'p' ? [city.players[l.owner.id]] : Object.keys((city.holdings[l.owner.id] || { members: {} }).members).map((id) => city.players[id])).filter((q) => q && !q.bot);
+function mailWaiting(city, l) { return mailOwners(city, l).some((q) => (q.mail || []).some((x) => x.lid === l.id && !x.dec && MAIL.isOpen(x))); }
+// a happening or a decision reached one of them less than MAIL_PACE.gap ago
+const mailedLately = (city, ps) => ps.some((q) => q.coMailG != null && city.g - q.coMailG < MAIL_PACE.gap - 1e-9);
 // a company's mail goes to its owner, or to every human co-owner (answering one answers them all)
 function mailTo(city, l, x) {
   if (!l.owner) return;
@@ -838,7 +851,8 @@ function decisionMail(city, p, x) {
   const def = DECISIONS.find((d) => d.id === x.def), f = DEC_FROM[def.id] || {};
   const l = def.needs ? ownedBy(city, 'p', p.id).find((k) => k.type === def.needs) : null;
   const from = f.ext ? { n: f.ext[0], r: f.ext[1], k: f.k } : l ? staffFrom(city, l, f.dept || 'ops') : { n: 'Your office', r: 'Harbor Row' };
-  MAIL.send(p, { g: city.g, m: city.m, from, subj: def.title, body: def.text, kind: 'info', dec: x.id, dueM: x.dueM, ...(l ? { lid: l.id } : {}), opts: def.options.map((o) => ({ l: o.l, d: o.d, ...(o.safe ? { safe: true } : {}) })) });
+  const v = (x.v && def.alt && def.alt[x.v - 1]) || {};
+  MAIL.send(p, { g: city.g, m: city.m, from, subj: v.title || def.title, body: v.text || def.text, kind: 'info', dec: x.id, dueM: x.dueM, ...(l ? { lid: l.id } : {}), opts: def.options.map((o) => ({ l: o.l, d: o.d, ...(o.safe ? { safe: true } : {}) })) });
 }
 function closeMail(city, p, x, ix, auto, out, by) {
   const done = { ix, auto: !!auto, out: out || '', by: by || null, g: city.g };

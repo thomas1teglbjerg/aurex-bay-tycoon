@@ -1,7 +1,7 @@
 // Mail: staff write about happenings and ask for an answer, specialists write when they are unhappy,
 // decisions arrive as mail, the autopilot answers what is left, and the Gazette sends a monthly briefing with an ad
 import * as E from '../supabase/functions/_shared/engine.js';
-import { HAPPENINGS } from '../supabase/functions/_shared/content.js';
+import { HAPPENINGS, MAIL_HAP, DECISIONS, MAIL_PACE } from '../supabase/functions/_shared/content.js';
 const T = E.TAL, ML = E.MAIL;
 const assert = (c, m) => { if (!c) { console.error('FAIL', m); process.exit(1); } console.log('ok ', m); };
 let now = 1_700_000_000_000;
@@ -82,4 +82,20 @@ assert(!x.hAd, 'no house ad unless asked');
 E.mailAll(city, { subj: 'With ad', body: 'Hello.', house: true });
 x = city.players.v.mail[0];
 assert(x.hAd && x.hAd.head === E.GZ.houseAd(city).head && x.hAd.img, 'the house ad rides at the bottom of the changelog');
+// the same happening can be written in several ways, and every happening has a mail
+assert(HAPPENINGS.every((h) => MAIL_HAP[h.id]), 'every happening has its mail text');
+E._happening(city, l, HAPPENINGS.find((h) => h.id === 'complaint'), 1); x = p.mail[0];
+assert(x.subj === MAIL_HAP.complaint.alt[0].subj && x.opts.length === 3, 'a happening can arrive in another wording with the same answers');
+assert(HAPPENINGS.length >= 20 && DECISIONS.length >= 20, `plenty of happenings (${HAPPENINGS.length}) and decisions (${DECISIONS.length})`);
+
+// pace: a tycoon gets at most one company mail every week and a half, a company does not repeat itself, decisions are spaced too
+{ let t = 1_700_000_000_000; const c = E.createCity(t, { speed: 2016 }); E.addPlayer(c, 'w', 'Pace', t); const q = c.players.w; q.cash = 500;
+  c.listings.filter((y) => !y.owner && !y.site).slice(0, 6).forEach((y) => E.apply(c, 'w', 'buy', { lid: y.id }, t));
+  const wk = E.realMsPerMonth(c) / 4, got = [], seen = new Set();
+  for (let i = 0; i < 96; i++) { t += wk; E.advance(c, t); E.apply(c, 'w', 'ping', {}, t);
+    (q.mail || []).forEach((y) => { if (seen.has(y.id)) return; seen.add(y.id); if ((y.lid && HAPPENINGS.some((h) => { const mh = MAIL_HAP[h.id]; return [mh, ...(mh.alt || [])].some((a) => a.subj === y.subj); })) || y.dec) got.push(y); }); }
+  const gs = got.map((y) => y.g).sort((a, b) => a - b), close = gs.filter((g, i) => i && g - gs[i - 1] < MAIL_PACE.gap - 1e-6).length;
+  assert(close === 0, `company mails and decisions are spaced (${got.length} in two years with six companies)`);
+  assert(got.length < 70, 'far fewer than one a week per company');
+  assert(new Set(got.map((y) => y.subj)).size >= Math.min(got.length, 15), `they vary (${new Set(got.map((y) => y.subj)).size} different subjects)`); }
 console.log('ALL OK');
