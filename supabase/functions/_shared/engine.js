@@ -526,6 +526,7 @@ export function liveTreasury(city, hid, now) {
 
 // ---------------------------------------------------------------- progression of time
 function settleAll(city, g) {
+  BK.accrue(city, Math.max(0, g - (city.g || 0))); // the banks' loan books: margin earned per loan, closed loans
   Object.values(city.players).forEach((p) => { const dt = g - p.settledG; if (dt > 0) { p.cash += rates(city, 'p', p.id).net * dt; p.settledG = g; } });
   Object.values(city.holdings).forEach((h) => { const dt = g - h.settledG; if (dt > 0) { const r = rates(city, 'h', h.id); h.treasury += r.net * dt; h.accrued += Math.max(0, r.net) * dt; h.settledG = g; } });
   city.g = g;

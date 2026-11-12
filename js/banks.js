@@ -109,7 +109,27 @@ function officeHTML(c, l, x) {
       <div class="pb-l"><span>Applications</span><b>${cfg.hand ? 'The credit committee decides' : 'Loan officers approve at once'}</b></div><div class="pb-btns"><button class="pb-btn ${cfg.hand ? '' : 'ghost'} sm" data-a="bkSet" data-lid="${l.id}" data-k="hand" data-v="${!cfg.hand}">${cfg.hand ? 'Let the loan officers decide' : 'Review every application yourself'}</button><button class="pb-btn ghost sm" data-a="bkSet" data-lid="${l.id}" data-k="open" data-v="${!cfg.open}">${cfg.open ? 'Stop new loans' : 'Take new loans again'}</button></div>
       <p class="pb-small">Loan officers approve a credit score of ${Math.round(B.auto * 100)} or more within your limits. Rival tycoons ask for loans more often when you review them yourself.</p></div>
     <div class="pb-card"><h3>Credit committee <em>${apps.length} waiting</em></h3>${apps.length ? apps.map((a) => appRow(c, a)).join('') : '<p class="pb-small">No applications right now.</p>'}</div>
-    <div class="pb-card"><h3>Loan book</h3>${loans.length || homes.length ? loans.map(({ p, y }) => { const pl = y.pledge && E.listing(c, y.pledge); return `<div class="pb-l"><span>${esc(p.name)} · ${pct(y.rate)}${pl ? ` · pledge ${esc(BK.name(pl))}` : ''}${BK.badRecord(c, p.id) ? ' · <i class="down">late before</i>' : ''}</span><b class="${y.rate < mk ? 'down' : ''}">${M(y.amt)}</b></div>`; }).join('') + homes.map(({ p, h }) => `<div class="pb-l"><span>${esc(p.name)} · mortgage ${esc(E.LIFE.HOME[h.hid].name)} · ${pct(h.rate)}</span><b>${M(h.bal)}</b></div>`).join('') : '<p class="pb-small">Nobody owes the bank anything yet.</p>'}</div>`;
+    ${loanBook(c, l, mk, loans, homes)}`;
+}
+// the loan book: what the bank's loans have earned the owner in all, the loans it holds now and the ones that are closed
+const HOW = { repaid: 'paid off', default: 'defaulted', seized: 'defaulted, pledge taken', foreclosed: 'foreclosed', moved: 'moved to another bank' };
+const pl = (v, cls = true) => `<b class="${cls ? (v < -0.0005 ? 'down' : v > 0.0005 ? 'up' : '') : ''}">${Math.abs(v) < 0.0005 ? '0' : sign(v)}</b>`;
+function loanBook(c, l, mk, loans, homes) {
+  const e = BK.earned(c, l) || { total: 0, earn: 0, eq: 0, loss: 0, m0: c.m, open: [], past: [] };
+  const got = (key) => (e.open.find((z) => z.key === key) || { earn: 0, loss: 0 });
+  const sub = (v) => `<small class="${v < -0.0005 ? 'down' : 'up'}">${Math.abs(v) < 0.0005 ? 'earned 0' : `earned ${sign(v)}`}</small>`;
+  const nowRows = loans.map(({ p, y }) => { const pg = y.pledge && E.listing(c, y.pledge), g = got(y.id); return `<div class="pb-l"><span>${esc(p.name)} · ${pct(y.rate)} · since ${esc(shortDate(y.m ?? c.m))}${pg ? ` · pledge ${esc(BK.name(pg))}` : ''}${BK.badRecord(c, p.id) ? ' · <i class="down">late before</i>' : ''}<br>${sub(g.earn - g.loss)}</span><b class="${y.rate < mk ? 'down' : ''}">${M(y.amt)}</b></div>`; }).join('')
+    + homes.map(({ p, h }) => { const g = got(`h:${h.uid}`); return `<div class="pb-l"><span>${esc(p.name)} · mortgage ${esc(E.LIFE.HOME[h.hid].name)} · ${pct(h.rate)}<br>${sub(g.earn - g.loss)}</span><b>${M(h.bal)}</b></div>`; }).join('');
+  const pastRows = e.past.map((z) => `<div class="pb-l"><span>${esc(z.name)} · ${z.k === 'home' ? `mortgage ${esc((E.LIFE.HOME[z.hid] || {}).name || 'home')}` : 'loan'} ${M(z.amt)}${z.rate != null ? ` at ${pct(z.rate)}` : ''}<br><small>${esc(shortDate(z.m0))} – ${esc(shortDate(z.m1))} · ${HOW[z.how] || z.how}${z.loss > 0.0005 ? ` · lost ${M(z.loss)}` : z.loss < -0.0005 ? ` · pledge worth ${M(-z.loss)} more than the loan` : ''}</small></span>${pl(z.earn - z.loss)}</div>`).join('');
+  const pastSum = e.past.reduce((a, z) => a + z.earn - z.loss, 0);
+  return `<div class="pb-card"><h3>Loan book <em>since ${esc(shortDate(e.m0))}</em></h3>
+    <div class="pb-stats"><div class="pb-stat"><small>Earned in all</small><b class="${e.total < -0.0005 ? 'down' : 'up'}">${Math.abs(e.total) < 0.0005 ? '0' : sign(e.total)}</b><span>${e.past.length} closed, ${loans.length + homes.length} open</span></div></div>
+    <div class="pb-acct"><div class="pb-al"><span>Margin on loans and mortgages <small>over the funding line</small></span>${pl(e.earn)}</div>${e.eq > 0.0005 ? `<div class="pb-al"><span>Your equity's return <small>no funding cost on it</small></span>${pl(e.eq)}</div>` : ''}<div class="pb-al"><span>Losses on bad loans</span>${pl(-e.loss)}</div><div class="pb-al net"><span><b>Earned in all</b></span>${pl(e.total)}</div></div>
+    <h3 style="margin-top:14px">Open loans <em>${loans.length + homes.length}</em></h3>
+    ${nowRows || '<p class="pb-small">Nobody owes the bank anything yet.</p>'}
+    <h3 style="margin-top:14px">Earlier loans <em>${e.past.length ? `${e.past.length} · ${Math.abs(pastSum) < 0.0005 ? '0' : sign(pastSum)}` : 'none yet'}</em></h3>
+    ${pastRows || '<p class="pb-small">Loans that are paid off, defaulted or moved show here with what each one earned or lost.</p>'}
+    <p class="pb-small">Counted from ${esc(shortDate(e.m0))}${e.m0 > 0 ? ', when you took over the bank or the loan book started keeping accounts' : ''}. Earned = the rate the customer pays minus the funding line, less any loss.</p></div>`;
 }
 function appRow(c, a) {
   const p = c.players[a.pid], pl = a.pledge && E.listing(c, a.pledge);
@@ -129,7 +149,7 @@ export function lendingBox(c, l, ro) {
   return `<div class="box" id="lending-box"><h2>Lending<small>${apps.length ? `${apps.length} WAITING` : 'BANK'}</small></h2><div class="in">
     <div class="rows"><div class="row"><div class="grow"><b>Business loans at ${pct(BK.rateOf(c, l, x))}</b><span>market ${pct(BK.market(c))} ${pts(BK.spreadOf(c, l, x))} · mortgages ${pct(BK.mRateOf(c, l, x))}</span></div></div>
     <div class="row"><div class="grow"><b>${M(bk.total)} lent out of ${M(BK.bookMax(l))}</b><span>${bk.n} loan${bk.n === 1 ? '' : 's'} · ${f.own ? `${M(f.own)} from equity, ` : ''}${M(f.line)} on the funding line at the Bank of Aurex</span></div></div>
-    ${capRow(c, l, x)}</div>
+    ${capRow(c, l, x)}${(() => { const e = BK.earned(c, l); return e && !ro ? `<div class="row"><div class="grow"><b>Earned in all: <span class="${e.total < -0.0005 ? 'down' : 'up'}">${Math.abs(e.total) < 0.0005 ? '0' : sign(e.total)}</span></b><span>since ${esc(shortDate(e.m0))} · ${e.past.length} closed loan${e.past.length === 1 ? '' : 's'} in the loan book</span></div></div>` : ''; })()}</div>
     <div class="pb-acct">${accountRows(f, 'pb-al')}</div>
     ${f.line ? `<p class="small" style="margin:6px 0 0">If the market rate rises 1 point: net ${sign(r4(f.net - f.shock))} a year.</p>` : ''}
     ${ro ? '' : apps.map((a) => appRow(c, a)).join('')}
