@@ -8,7 +8,10 @@
 // refinances at; when a borrower defaults it takes the pledged company or loses most of the loan.
 // Every bank draws what it lends on a funding line at the Bank of Aurex (business loans at the market rate, mortgages at the
 // market mortgage rate). The line floats while the bank's loans are fixed: when the governor raises the rate, the margin shrinks.
-// city.bk = { cfg: { lid: { by, sp, msp, max, hand, open } }, apps: [], rec: { pid: { bad, def, paid } }, war: { lid: { bid, vs, sp, until } }, loss: { lid: { by, y, v, last } }, cap: { lid: { by, v } }, v }
+// city.bk = { cfg: { lid: { by, sp, msp, max, hand, open } }, apps: [], rec: { pid: { bad, def, paid } }, war: { lid: { bid, vs, sp, until } }, loss: { lid: { by, y, v, last } }, cap: { lid: { by, v } }, led, v }
+// city.bk.led[lid] = the owner's ledger (starts over on a new owner): { by, m0, earn, eq, loss, open: { key: entry }, past: [entry] }
+// entry = { pid, name, k: 'loan' | 'home', hid?, amt (largest balance), rate, m0, m1?, earn (margin earned), loss (signed: a seized
+// company worth more than the loan is a gain), how?: 'repaid' | 'default' | 'seized' | 'foreclosed' | 'moved' }. key = loan id or 'h:' + home uid.
 // Capital: a bank its owner runs holds equity (city.bk.cap) of at least BANKS.capital.ratio of its risk-weighted loans
 // (business loans in full, mortgages at mortW). Equity funds that part of the business loans itself, so the funding line
 // is smaller; losses come off the equity first. Below the ratio the bank makes no new loans. Bot and unowned banks run without.
@@ -29,7 +32,7 @@ export { B };
 
 export function ensure(city) {
   if (!city.bk) city.bk = { cfg: {}, apps: [], rec: {}, war: {}, loss: {}, cap: {} };
-  const k = city.bk; k.cfg = k.cfg || {}; k.apps = k.apps || []; k.rec = k.rec || {}; k.war = k.war || {}; k.loss = k.loss || {}; k.cap = k.cap || {};
+  const k = city.bk; k.cfg = k.cfg || {}; k.apps = k.apps || []; k.rec = k.rec || {}; k.war = k.war || {}; k.loss = k.loss || {}; k.cap = k.cap || {}; k.led = k.led || {};
   return k;
 }
 export const name = (l) => (l ? l.title || `${TYPES[l.type].name}, ${l.district}` : 'the bank');
@@ -112,12 +115,63 @@ export function lossOf(city, lid) {
   if (!x || x.by !== ownKey(l && l.owner)) return { year: 0, last: 0 }; // a new owner starts with a clean account
   return x.y === y ? { year: x.v, last: x.last || 0 } : { year: 0, last: x.y === y - 1 ? x.v : 0 };
 }
-function lose(city, lid, v) {
+function lose(city, lid, v, key) {
+  ledHit(city, lid, key, v);
   if (!(v > 0)) return;
   const k = ensure(city).loss, y = Math.floor((city.m || 0) / 12), l = city.listings.find((z) => z.id === lid), by = ownKey(l && l.owner);
   let x = k[lid]; if (x && x.by !== by) x = null;
   if (!x || x.y !== y) k[lid] = { by, y, v: r2(v), last: x && x.y === y - 1 ? x.v : 0 }; else x.v = r2(x.v + v);
 }
+// ---------------------------------------------------------------- the loan book's ledger: what every loan earned the owner
+const PAST = 120; // closed loans kept per bank
+export function ledger(city, l) {
+  const k = ensure(city).led, by = ownKey(l && l.owner); if (!l || !by) return null;
+  let x = k[l.id]; if (!x || x.by !== by) x = k[l.id] = { by, m0: city.m || 0, earn: 0, eq: 0, loss: 0, open: {}, past: [] };
+  return x;
+}
+const ledKey = (x, k) => (k === 'home' ? `h:${x.uid}` : x.id);
+function ledOpen(city, x, p, y, k) {
+  const key = ledKey(y, k), bal = k === 'home' ? y.bal : y.amt;
+  let e = x.open[key];
+  if (!e) e = x.open[key] = { pid: p.id, name: p.name, k, amt: r2(bal), rate: y.rate ?? null, m0: k === 'home' ? (y.boughtM ?? city.m) : (y.m ?? city.m), earn: 0, loss: 0, ...(k === 'home' ? { hid: y.hid } : {}) };
+  if (bal > e.amt) e.amt = r2(bal);
+  if (typeof y.rate === 'number') e.rate = y.rate;
+  return e;
+}
+function ledHit(city, lid, key, v) {
+  const l = city.listings.find((z) => z.id === lid), x = l && ledger(city, l); if (!x || !v) return;
+  x.loss = r4(x.loss + v); const e = key && x.open[key]; if (e) e.loss = r4(e.loss + v);
+}
+function ledWhy(city, lid, key, how) { const l = city.listings.find((z) => z.id === lid), x = l && ledger(city, l), e = x && x.open[key]; if (e) e.how = how; }
+// every time the clock moves (dt game years): margin on business loans and the equity's return accrue, loans that are gone close
+export function accrue(city, dt) {
+  const bk = ensure(city), mk = market(city), seen = {};
+  lenders(city).forEach((l) => { if (l.owner) seen[l.id] = new Set(); });
+  Object.values(city.players).forEach((p) => {
+    (p.loans || []).forEach((y) => {
+      const s = seen[y.bank]; if (!s) return; const x = ledger(city, ledL(city, y.bank)), e = ledOpen(city, x, p, y, 'loan'); s.add(y.id);
+      if (dt > 0 && typeof y.rate === 'number') { const v = y.amt * (y.rate - mk) / 100 * dt; e.earn = r4(e.earn + v); x.earn = r4(x.earn + v); }
+    });
+    ((p.life && p.life.homes) || []).forEach((h) => { const s = seen[h.bank]; if (!s || !(h.bal > 0)) return; ledOpen(city, ledger(city, ledL(city, h.bank)), p, h, 'home'); s.add(`h:${h.uid}`); });
+  });
+  Object.entries(seen).forEach(([lid, s]) => {
+    const l = ledL(city, lid), x = ledger(city, l);
+    if (dt > 0) { const own = Math.min(capOf(city, l), book(city, lid).biz); if (own > 0) x.eq = r4(x.eq + own * mk / 100 * dt); }
+    Object.keys(x.open).filter((key) => !s.has(key)).forEach((key) => {
+      const e = x.open[key]; delete x.open[key];
+      x.past.unshift({ ...e, key, m1: city.m, how: e.how || 'repaid', earn: r4(e.earn), loss: r4(e.loss) }); if (x.past.length > PAST) x.past.length = PAST;
+    });
+  });
+  // a bank that is gone (or has no owner) keeps no ledger
+  Object.keys(bk.led).forEach((lid) => { if (!seen[lid]) delete bk.led[lid]; });
+}
+const ledL = (city, lid) => city.listings.find((z) => z.id === lid);
+// what the loan book has earned the owner: { earn, eq, loss, total, m0, open: [entry + key], past: [entry] }
+export function earned(city, l) {
+  const x = ledger(city, l); if (!x) return null;
+  return { m0: x.m0, earn: r4(x.earn), eq: r4(x.eq), loss: r4(x.loss), total: r4(x.earn + x.eq - x.loss), open: Object.entries(x.open).map(([key, e]) => ({ key, ...e })), past: x.past };
+}
+
 // the bank's account in a year: interest its customers pay, what its funding line at the Bank of Aurex costs, losses, net.
 // shock = what one point more on the market rate takes off the net (the loans are fixed, the funding line is not).
 export function funding(city, l, ctx) {
@@ -200,6 +254,8 @@ export function repay(city, p, amt, id, ctx) {
   const paid = left;
   const list = (id ? p.loans.filter((x) => x.id === id) : p.loans.slice().sort((a, b) => fixedRate(b, ctx, p) - fixedRate(a, ctx, p)));
   if (!list.length) return err('No such loan.');
+  const owed = sum(list.map((x) => x.amt)); // at least B.minRepay at a time, unless that pays it all off
+  if (left < B.minRepay - 1e-9 && left < owed - 0.01) return err(`Repay at least ${B.minRepay} M at a time, or the whole loan.`);
   for (const x of list) { const v = Math.min(x.amt, left); x.amt = r4(x.amt - v); left = r4(left - v); if (x.amt <= 0.01 && x.bank && x.bank !== 'cb') rec(city, p.id).paid++; if (left <= 0) break; }
   const done = paid - left; p.cash -= done; p.loans = p.loans.filter((x) => x.amt > 0.01);
   return ok(`Repaid ${r2(done)} M.`);
@@ -222,13 +278,15 @@ export function mortgage(city, p, amt, lid, ctx) {
 export function mortPaid(city, h, interest, ctx) {
   const l = h.bank && h.bank !== 'cb' ? ctx.listing(h.bank) : null; if (!l || !l.owner) return;
   const v = r4(interest - h.bal * ctx.mortRate() / 100 / 12); if (v) ctx.credit(l.owner, v);
+  const x = ledger(city, l); if (x && v) { const p = Object.values(city.players).find((q) => ((q.life && q.life.homes) || []).includes(h)); const e = p ? ledOpen(city, x, p, h, 'home') : null; x.earn = r4(x.earn + v); if (e) e.earn = r4(e.earn + v); }
 }
 // a home was sold at a foreclosure auction for got: the bank is paid first; what is missing it loses
 export function foreclosed(city, p, h, got, ctx) {
   const l = h.bank && h.bank !== 'cb' ? ctx.listing(h.bank) : null, short = r2(Math.max(0, h.bal - got));
   rec(city, p.id).bad = city.m; rec(city, p.id).def++;
   if (l && l.owner) {
-    if (short > 0) { hit(city, l, short, ctx); lose(city, l.id, short); }
+    const x = ledger(city, l); if (x) ledOpen(city, x, p, h, 'home'); ledWhy(city, l.id, `h:${h.uid}`, 'foreclosed');
+    if (short > 0) { hit(city, l, short, ctx); lose(city, l.id, short, `h:${h.uid}`); }
     ctx.mailTo(l, { kind: short ? 'bad' : 'info', from: officer(l), subj: `Foreclosure: ${p.name}`, body: `${p.name} stopped paying the mortgage, so the home was sold at auction for ${r2(got)} M. The loan was ${r2(h.bal)} M.${short ? ` The bank lost ${short} M.` : ' The bank got all its money back.'}`, web: `${host(l)}/office` });
   }
 }
@@ -400,7 +458,7 @@ function rateWars(city, ctx) {
     // one loan a week moves to them: a rival tycoon who banks with you and pays more than their rate
     const rate = r2(Math.max(1, market(city) + w.sp));
     const mv = Object.values(city.players).filter((p) => p.bot && p.id !== b.id).flatMap((p) => p.loans.filter((x) => x.bank === vs.id && x.rate > rate + 0.25).map((x) => ({ p, x })))[0];
-    if (mv && bookMax(mine) - book(city, mine.id).total >= mv.x.amt) { mv.x.bank = mine.id; mv.x.rate = rate; ctx.notify(vs, `${mv.p.name} moved a loan to ${name(mine)}`, `${r2(mv.x.amt)} M at ${rate}% there. ${b.name} is undercutting your bank.`, 'bad'); }
+    if (mv && bookMax(mine) - book(city, mine.id).total >= mv.x.amt) { ledWhy(city, vs.id, mv.x.id, 'moved'); mv.x.bank = mine.id; mv.x.rate = rate; ctx.notify(vs, `${mv.p.name} moved a loan to ${name(mine)}`, `${r2(mv.x.amt)} M at ${rate}% there. ${b.name} is undercutting your bank.`, 'bad'); }
   });
   lenders(city).forEach((mine) => {
     const b = mine.owner && mine.owner.k === 'p' && city.players[mine.owner.id]; if (!b || !b.bot || bk.war[mine.id] || Math.random() >= B.war.chance) return;
@@ -425,13 +483,14 @@ export function fail(city, p, x, ctx) {
   const l = ctx.listing(x.bank), r = rec(city, p.id); r.bad = city.m; r.def = (r.def || 0) + 1;
   p.loans = p.loans.filter((y) => y !== x);
   const pl = x.pledge && ctx.listing(x.pledge), canSeize = pl && pl.owner && pl.owner.k === 'p' && pl.owner.id === p.id && l && l.owner;
+  if (l && l.owner) { const lx = ledger(city, l); if (lx) ledOpen(city, lx, p, x, 'loan'); ledWhy(city, l.id, x.id, canSeize ? 'seized' : 'default'); }
   let words;
   if (canSeize) {
     const v = ctx.value(pl), pay = r2(Math.max(0, v * B.seizeAt - x.amt));
-    ctx.seize(pl, l.owner); ctx.credit(l.owner, -(x.amt + pay)); if (pay) p.cash += pay; lose(city, l.id, x.amt + pay - v);
+    ctx.seize(pl, l.owner); ctx.credit(l.owner, -(x.amt + pay)); if (pay) p.cash += pay; lose(city, l.id, r2(x.amt + pay - v), x.id);
     words = `${name(l)} took ${name(pl)} (worth ${r2(v)} M) for the ${r2(x.amt)} M loan.${pay ? ` ${pay} M above the loan went back to ${p.name}.` : ''}`;
   } else {
-    const lost = r2(x.amt * (1 - B.recovery)); if (l && l.owner) { hit(city, l, lost, ctx); lose(city, l.id, lost); }
+    const lost = r2(x.amt * (1 - B.recovery)); if (l && l.owner) { hit(city, l, lost, ctx); lose(city, l.id, lost, x.id); }
     words = `${name(l)} collected ${Math.round(B.recovery * 100)}% of the ${r2(x.amt)} M and lost ${lost} M.`;
   }
   if (!p.bot) ctx.feed(p, `Your loan from ${name(l)} is in default`, `${words} Banks remember a default for ${B.bad} months.`, 'bad');

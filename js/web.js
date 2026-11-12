@@ -8,7 +8,7 @@ import { apexSite } from './team.js';
 import { freightSite, freightAlias } from './freight.js';
 import { concreteSite } from './concrete-site.js';
 import { buildSite, HOST as BUILD_HOST } from './build.js';
-import { bankSite, bankMeta, bankHosts, banksTable, mortQuote } from './banks.js';
+import { bankSite, bankMeta, bankHosts, banksTable, mortQuote, repayBtns } from './banks.js';
 import { CENTRAL, CENTRAL_BANK, WORLD, TYPES, GOODS, HOUSE_PICS } from '../supabase/functions/_shared/content.js';
 
 const L = E.LIFE;
@@ -272,7 +272,7 @@ function boa(u) {
     body = `<h2>Business loans</h2><p class="ba-sub">Credit for ${esc(p.name)}'s companies. Interest is charged on what you owe and paid from your company cash.</p>
       <div class="ba-stats">${stat('You owe', M(debt), debt ? 'down' : '')}${stat('Market rate', cbs.rate + '%')}${stat('Interest a year', M(r.interest))}${stat('Credit limit', M(cap))}</div>
       ${borrow}
-      <div class="ba-card"><h3>Your loans <em>${M(p.cash)} in company cash</em></h3>${p.loans.length ? p.loans.map((x) => { const bl = lender(x); return `<div class="ba-l">${bl ? pb(bl) : '<span>Bank of Aurex</span>'}<span>${M(x.amt)} at ${x.rate === 'bank' ? `${rate}% (market)` : x.rate + '%'} · ${esc(shortDate(x.m))}</span><b><button class="ba-btn ghost" data-a="repay" data-id="${x.id || ''}" data-v="${x.amt}" ${p.cash < x.amt ? 'disabled' : ''}>Repay</button></b></div>`; }).join('') + `<div class="ba-l tot"><span>Total</span><b>${M(debt)}</b></div><div class="ba-btns"><button class="ba-btn ghost" data-a="repay" data-v="999" ${!debt || p.cash < debt ? 'disabled' : ''}>Repay all</button></div>` : '<p class="ba-small">You have no business loans.</p>'}</div>
+      <div class="ba-card"><h3>Your loans <em>${M(p.cash)} in company cash</em></h3>${p.loans.length ? p.loans.map((x) => { const bl = lender(x); return `<div class="ba-l" style="flex-wrap:wrap">${bl ? pb(bl) : '<span>Bank of Aurex</span>'}<span>${M(x.amt)} at ${x.rate === 'bank' ? `${rate}% (market)` : x.rate + '%'} · ${esc(shortDate(x.m))}</span><b>${repayBtns(p, x, 'ba-btn ghost')}</b></div>`; }).join('') + `<div class="ba-l tot"><span>Total</span><b>${M(debt)}</b></div><div class="ba-btns"><button class="ba-btn ghost" data-a="repay" data-v="999" ${!debt || p.cash < debt ? 'disabled' : ''}>Repay all</button></div>` : '<p class="ba-small">You have no business loans.</p>'}</div>
       ${own ? `<div class="ba-card"><h3>How your rate is made</h3>${parts.map(([k, v], i) => `<div class="ba-l"><span>${esc(k)}</span><b>${i ? (v > 0 ? '+' : '−') + Math.abs(v) + ' pts' : v + '%'}</b></div>`).join('')}<div class="ba-l tot"><span>Your rate</span><b>${rate}%</b></div><p class="ba-small">Never below 1%.</p></div>` : ''}`;
   } else if (page === 'policy' || (page === 'office' && !gov0)) {
     const h = (cbs.hist || []).slice(-24), lv = cbs.levy || {}, pend = cbs.pending;
