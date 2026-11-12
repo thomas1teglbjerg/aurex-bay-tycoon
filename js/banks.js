@@ -21,6 +21,11 @@ function accountRows(f, cls) {
 const pts = (v) => `${v >= 0 ? '+' : '−'}${Math.abs(Math.round(v * 100) / 100)}`;
 const ownerName = (c, l) => (!l.owner ? null : l.owner.k === 'p' ? (c.players[l.owner.id] || {}).name : (c.holdings[l.owner.id] || {}).name);
 
+// repay a business loan: 1 M or 5 M at a time (at least B.minRepay), or all of it
+export function repayBtns(p, y, cls) {
+  const amt = Math.round(y.amt * 1e4) / 1e4, steps = [B.minRepay, 5].filter((v) => v < amt - 0.01);
+  return `<span class="repay-btns" style="display:inline-flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${steps.map((v) => `<button class="${cls}" data-a="repay" data-id="${y.id || ''}" data-v="${v}" ${p.cash < v ? 'disabled' : ''}>Repay ${M(v)}</button>`).join('')}<button class="${cls}" data-a="repay" data-id="${y.id || ''}" data-v="${amt}" ${p.cash < amt ? 'disabled' : ''}>${steps.length ? `Repay all ${M(amt)}` : 'Repay'}</button></span>`;
+}
 // ---------------------------------------------------------------- sites: every bank that lends has one
 // host → listing id, for the banks that stand now (Harbor Trust lives under its personal banking site)
 export function bankHosts(c = city()) { return Object.fromEntries(BK.lenders(c).filter((l) => !BK.host(l).includes('/')).map((l) => [BK.host(l), l.id])); }
@@ -57,7 +62,7 @@ export function bankSite(lid, path, base, go) {
   } else if (page === 'mine') {
     const mine = p.loans.filter((y) => y.bank === l.id), homes = p.life ? p.life.homes.filter((h) => h.bank === l.id && h.bal > 0) : [];
     body = `<h2>Your loans</h2>
-      <div class="pb-card">${mine.length ? mine.map((y) => { const pl = y.pledge && E.listing(c, y.pledge); return `<div class="pb-l"><span>${M(y.amt)} at ${pct(y.rate)} · since ${esc(shortDate(y.m))}${pl ? ` · pledge: ${esc(BK.name(pl))}` : ''}</span><b><button class="pb-btn ghost sm" data-a="repay" data-id="${y.id}" data-v="${y.amt}" ${p.cash < y.amt ? 'disabled' : ''}>Repay</button></b></div>`; }).join('') : '<p class="pb-small">You have no business loans with us.</p>'}</div>
+      <div class="pb-card">${mine.length ? mine.map((y) => { const pl = y.pledge && E.listing(c, y.pledge); return `<div class="pb-l" style="flex-wrap:wrap"><span>${M(y.amt)} at ${pct(y.rate)} · since ${esc(shortDate(y.m))}${pl ? ` · pledge: ${esc(BK.name(pl))}` : ''}</span><b>${repayBtns(p, y, 'pb-btn ghost sm')}</b></div>`; }).join('') : '<p class="pb-small">You have no business loans with us.</p>'}</div>
       <div class="pb-card"><h3>Mortgages</h3>${homes.length ? homes.map((h) => `<div class="pb-l"><span>${esc(E.LIFE.HOME[h.hid].name)} · ${pct(h.rate)}</span><b>${M(h.bal)}</b></div>`).join('') + '<p class="pb-small">Pay mortgages off at Harbor Trust, your personal bank.</p>' : '<p class="pb-small">No mortgages with us.</p>'}</div>`;
   } else if (page === 'office' && run) {
     body = officeHTML(c, l, x);

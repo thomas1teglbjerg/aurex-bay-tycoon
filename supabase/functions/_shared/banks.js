@@ -254,6 +254,8 @@ export function repay(city, p, amt, id, ctx) {
   const paid = left;
   const list = (id ? p.loans.filter((x) => x.id === id) : p.loans.slice().sort((a, b) => fixedRate(b, ctx, p) - fixedRate(a, ctx, p)));
   if (!list.length) return err('No such loan.');
+  const owed = sum(list.map((x) => x.amt)); // at least B.minRepay at a time, unless that pays it all off
+  if (left < B.minRepay - 1e-9 && left < owed - 0.01) return err(`Repay at least ${B.minRepay} M at a time, or the whole loan.`);
   for (const x of list) { const v = Math.min(x.amt, left); x.amt = r4(x.amt - v); left = r4(left - v); if (x.amt <= 0.01 && x.bank && x.bank !== 'cb') rec(city, p.id).paid++; if (left <= 0) break; }
   const done = paid - left; p.cash -= done; p.loans = p.loans.filter((x) => x.amt > 0.01);
   return ok(`Repaid ${r2(done)} M.`);

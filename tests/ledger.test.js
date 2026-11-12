@@ -30,7 +30,11 @@ assert(e1.eq > 0 && near(e1.total, e1.earn + e1.eq - e1.loss, 1e-6), `the equity
 assert(near(e1.earn, e1.open.reduce((a, e) => a + e.earn, 0) + e1.past.reduce((a, e) => a + e.earn, 0), 1e-3), 'the ledger total is the sum of what each loan earned');
 
 // paid off: the loan moves to earlier loans with its profit
-C.cash = 100; assert(A('c', 'repay', { amt: 20, id: ln.id }).ok, 'Mikkel pays the loan back');
+C.cash = 100;
+assert(!A('c', 'repay', { amt: 0.5, id: ln.id }).ok, 'less than 1 M at a time is not allowed');
+assert(A('c', 'repay', { amt: 1, id: ln.id }).ok && near(ln.amt, 19, 1e-6), 'a loan can be paid down 1 M at a time');
+assert(A('c', 'repay', { amt: 18.5, id: ln.id }).ok && near(ln.amt, 0.5, 1e-6), 'or any amount over 1 M');
+assert(A('c', 'repay', { amt: 0.5, id: ln.id }).ok, 'the last bit under 1 M pays the loan off: Mikkel has paid it back');
 week(1);
 const e2 = BK.earned(city, bank), p1 = e2.past.find((e) => e.key === ln.id);
 assert(p1 && p1.how === 'repaid' && p1.pid === 'c' && near(p1.amt, 20) && p1.loss === 0 && p1.earn > 0, `the repaid loan is listed: earned ${p1 && p1.earn.toFixed(3)} M`);

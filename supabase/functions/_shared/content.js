@@ -141,6 +141,7 @@ export const BANKS = {
   auto: 0.45,                     // credit score the loan officers approve at
   counter: 2,                     // a counter-offer asks this many points more
   arrears: 2,                     // months a tycoon may stay in the red before a loan defaults (homes: the wallet)
+  minRepay: 1,                    // the smallest business-loan repayment (M), unless it pays the loan off
   recovery: 0.4,                  // share of an unsecured loan the bank still collects after a default
   seizeAt: 0.9,                   // a pledged company is taken at this share of its value; the rest goes to the borrower
   bad: 12,                        // months a default stays on a tycoon's record
