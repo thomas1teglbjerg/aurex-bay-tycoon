@@ -19,7 +19,8 @@ import * as BOT from './bots.js';
 import * as BLD from './build.js';
 import * as BK from './banks.js';
 import * as CH from './chance.js';
-export { OPS, LOG, LIFE, TAL, BR, ADS, MAIL, CAR, DEAL, GZ, QT, HD, BOT, BK, CH };
+import * as AUTO from './cars.js';
+export { OPS, LOG, LIFE, TAL, BR, ADS, MAIL, CAR, DEAL, GZ, QT, HD, BOT, BK, CH, AUTO };
 OPS.setFreightQuote((cid, v, q, route) => LOG.freight(cid, v, q, route));
 
 const TRADE_MULT = { Boom: 1.3, Stable: 1, Recession: 0.6, Crisis: 0.4 };
@@ -114,6 +115,13 @@ const bx = (city) => ({
   talentListed: () => (city.talent ? Object.keys(TAL.PERSON).filter((tid) => city.talent[tid] && city.talent[tid].listed != null).map((tid) => ({ name: TAL.PERSON[tid].name, fee: r2(city.talent[tid].listed) })) : [])
 });
 export const botCtx = (city) => bx(city); // for tests
+// clients of a tycoon's companies (optionally only some types) get happier: dinners and Cars & Coffee
+function clientsBoost(city, id, n, types) { let k = 0; ownedBy(city, 'p', id).filter((l) => !types || types.includes(l.type)).forEach((l) => (l.ops && l.ops.clients || []).forEach((c) => { if (c.status === 'active') { c.mood = Math.min(100, c.mood + n); k++; } })); return k; }
+// what cars.js needs: workshops, owners, money and the bots
+export const ax = (city) => ({ listing: (id) => listing(city, id), canRun: (pid, l) => canRun(city, pid, l), standing: (l) => !!l.ops && !BLD.unbuilt(l) && !BLD.idle(l),
+  owners: (l) => cctx(city).owners(l), inactive: (p) => inactive(city, p), credit, notify: (c, l, t, x, k) => notifyOwner(c, l, t, x, k),
+  feed: (p, m, t, x, k) => feed(p, m, t, x, k), news: (c, m, t, x, k) => news(c, m, t, x, k), clientsBoost: (id, n, types) => clientsBoost(city, id, n, types),
+  runs: (pid) => city.listings.filter((l) => l.owner && canRun(city, pid, l) && l.ops && !BLD.idle(l)), botEvent: (bid, pid, kind, x) => BOT.event(city, bid, pid, kind, x, bx(city)) });
 // what chance.js needs: the companies a tycoon runs or owns outright, money, mail senders and the bots' world
 export const chx = (city) => ({ ...bx(city), listing: (id) => listing(city, id), canRun: (pid, l) => canRun(city, pid, l),
   runs: (pid) => city.listings.filter((l) => canRun(city, pid, l) && l.ops && !l.ops.managed && !BLD.idle(l)),
@@ -134,7 +142,7 @@ export const dctx = (city) => ({ listing: (id) => listing(city, id), canRun: (pi
   credit: (o, v) => credit(city, o, v), debit: (o, v) => debit(city, o, v), cashOf: (o) => (o.k === 'p' ? (city.players[o.id] || { cash: 0 }).cash : (city.holdings[o.id] || { treasury: 0 }).treasury),
   book: (l, o) => CTX.book(city, l, o), mail: (pid, x) => MAIL.send(city.players[pid], { g: city.g, m: city.m, ...x }), runners: (l) => runners(city, l) });
 // what banks.js needs: owners, money, mail, the borrower's numbers and the rival tycoons
-export const kx = (city) => ({ listing: (id) => listing(city, id), canRun: (pid, l) => canRun(city, pid, l), runners: (l) => runners(city, l),
+export const kx = (city) => ({ carNudge: (p) => AUTO.bankNudge(p), listing: (id) => listing(city, id), canRun: (pid, l) => canRun(city, pid, l), runners: (l) => runners(city, l),
   run: (l) => runners(city, l).some((p) => !inactive(city, p)), credit: (o, v) => credit(city, o, v), cashOf: (o) => cashOf(city, o), loanCap: (p) => loanCap(city, p), debt, loanRate: (p) => loanRate(city, p),
   netWorth: (id) => netWorth(city, id), value: (l) => listingValue(l), ownedBy: (k, id) => ownedBy(city, k, id), net: (p) => rates(city, 'p', p.id).net,
   personal: (p) => personalParts(city, p).reduce((a, [, v]) => a + v, 0), mortRate: () => LIFE.mortgageRate(city), pers: (id) => BOT.pers(id),
@@ -664,6 +672,7 @@ function weekBoundary(city, wk, monthEnd) {
   BK.weekStep(city, kx(city));
   DEAL.weekStep(city, dctx(city));
   CH.weekStep(city);
+  if (city.life) AUTO.weekStep(city, ax(city));
   QT.weekStep(city, dctx(city));
   BLD.weekStep(city, bctx(city));
   BOT.weekStep(city, bx(city));
@@ -883,6 +892,7 @@ export function answerMail(city, p, id, ix, auto) {
   if (o.bot) { const r = BOT.answer(city, p, x, o, bx(city)); if (r.ok === false && !auto) return r; out = r.msg || ''; }
   if (o.bk) { const r = BK.answer(city, p, o.bk, kx(city)); out = r.msg || ''; }
   if (o.ch) { const r = CH.answer(city, p, x, o, chx(city)); if (r.ok === false && !auto) return r; out = r.msg || ''; }
+  if (o.car) { const r = AUTO.answer(city, p, x, o, ax(city)); if (r.ok === false && !auto) return r; out = r.msg || ''; }
   if (o.gz) { const pl = GZ.paper(city); if (!pl || !canRun(city, p.id, pl)) out = 'The paper is no longer yours.'; else { const r = GZ.answer(city, o.gz, gzctx(city)); out = r.msg || ''; } }
   if (o.act) {
     const r = mailTalent(city, p, o.act[0], o.act[1]);
@@ -899,7 +909,7 @@ function mailWeek(city) {
     p.mail.filter(MAIL.isOpen).forEach((x) => {
       if (x.oid) { const o = (city.tOffers || []).find((y) => y.id === x.oid); if (!o || o.status !== 'open') closeMail(city, p, x, -1, true, o ? `The offer was ${o.status === 'accepted' ? 'accepted' : o.status === 'declined' ? 'declined' : 'closed'}.` : 'The offer is closed.'); return; }
       if (x.dec) { if (!p.inbox.some((d) => d.id === x.dec)) closeMail(city, p, x, -1, true, 'Settled.'); return; }
-      if (x.due != null && x.due <= city.g + 1e-9) answerMail(city, p, x.id, x.bot || x.ch ? Math.max(0, x.opts.findIndex((o) => o.safe)) : MAIL.autoPick(x, p.policy, rand), true); // the autopilot never sells or pays for you when a rival writes
+      if (x.due != null && x.due <= city.g + 1e-9) answerMail(city, p, x.id, x.bot || x.ch || x.car ? Math.max(0, x.opts.findIndex((o) => o.safe)) : MAIL.autoPick(x, p.policy, rand), true); // the autopilot never sells or pays for you when a rival writes
     });
   });
 }
@@ -931,7 +941,7 @@ function monthBoundary(city, m) {
   // warehouse automation only runs when a logistics specialist (Carlos) is on staff
   Object.values(city.players).filter((p) => !p.bot && hasStaff(p, 'carlos')).forEach((p) => LOG.monthly(city, p, OPS.needsPerMonth, (g) => OPS.importPrice(city, g), m / 12));
   if (city.talent) TAL.monthStep(city, m, { ...TCTX, inactive: (p) => inactive(city, p) });
-  if (city.life) LIFE.monthStep(city, m, LCTX);
+  if (city.life) { LIFE.monthStep(city, m, LCTX); AUTO.monthStep(city, m, ax(city)); }
   CAR.monthStep(city, m, cctx(city));
   takeoverMonth(city, m);
   centralMonth(city, m);
@@ -1382,10 +1392,11 @@ function applyAs(city, pid, p, action, a, now) {
   if (action === 'coMerge') { const h = city.holdings[a.hid]; if (!h) return err('Unknown holding.'); if (p.bot || p.admin) return err('Only tycoons do that.'); return HD.merge(city, p, h, hx(city)); }
   if (action === 'lifeSalary' && HD.divOf(city, p)) return err(`Your CEO salary is set by the owners of ${HD.divOf(city, p).name}. Propose a new one under Network.`);
   if (/^(life|home|item|bid|trade|host|bank)/.test(action)) {
-    const ctx = { ...LCTX, canRun: (l) => canRun(city, pid, l), clientsBoost: (id, n) => { let k = 0; ownedBy(city, 'p', id).forEach((l) => (l.ops && l.ops.clients || []).forEach((c) => { if (c.status === 'active') { c.mood = Math.min(100, c.mood + n); k++; } })); return k; } };
+    const ctx = { ...LCTX, canRun: (l) => canRun(city, pid, l), clientsBoost: (id, n) => clientsBoost(city, id, n) };
     const r = LIFE.act(city, p, action, a, ctx); if (r) return r;
   }
   if (/^site[A-Z]/.test(action)) return BLD.act(city, p, action, a, bctx(city)) || err('Unknown action.');
+  if (/^car[A-Z]/.test(action)) return AUTO.act(city, p, action, a, ax(city)) || err('Unknown action.');
   switch (action) {
     case 'buy': {
       const l = listing(city, a.lid); if (!l) return err('Unknown company.'); if (l.owner) return err('Someone already owns this company.');

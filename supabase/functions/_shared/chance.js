@@ -6,11 +6,13 @@
 // A card is a mail with `ch` (and opts with `ch` or `bot`), open for a game month; the autopilot always passes.
 // Timed effects: p.cx (fire: free layoffs until g, hire: { x, until } hiring fee, move: free worker moves until g)
 // and l.cx (shield: the next bad happening is settled, dbl: the next bad happening hits twice).
-import { CHANCE as C, BOT_REL, TYPES, SIZES, TALENT, RECIPES, GOODS, STOCKS, WORLD, BANKS } from './content.js';
+import { CHANCE as C, BOT_REL, TYPES, SIZES, TALENT, RECIPES, GOODS, STOCKS, WORLD, BANKS, SETS } from './content.js';
 import * as MAIL from './mail.js';
 import * as OPS from './ops.js';
 import * as TAL from './talent.js';
 import * as BOT from './bots.js';
+import * as LIFE from './life.js';
+import * as AUTO from './cars.js';
 
 const r1 = (v) => Math.round(v * 10) / 10;
 const r2 = (v) => Math.round(v * 100) / 100;
@@ -436,3 +438,85 @@ export function weekStep(city) {
 }
 // what a company's yield, capacity and wages get from a card
 export const ypiOf = (l) => (l.cx && l.cx.ypi ? l.cx.ypi : null);
+
+// ---------------------------------------------------------------- cars (cars.js)
+const ITEM = LIFE.ITEM;
+const carName = (it) => ITEM[it.cid].name;
+const homeCars = (p) => AUTO.cars(p).filter((it) => LIFE.free(it) && !it.lent);
+const carFans = (city) => { const b = BOT.bots(city), f = b.filter((x) => ((BOT.pers(x.id) || {}).types || []).some((t) => ['car', 'dealer', 'autorepair'].includes(t))); return f.length ? f : b; };
+const wal = (city, p, v, text) => { p.life.wallet = r5(p.life.wallet + v); LIFE.tx(p.life, city.m, text, v); };
+Object.assign(FIND, {
+  barnfind: (city, p) => !p.life || LIFE.roomFree(p, 'car') < 1 || p.life.wallet < K.barnfind.fee ? [] : [{ heat: 0.45, why: 'You have a free bay in your garage.' }],
+  carbid: (city, p) => homeCars(p).map((it) => {
+    const v = LIFE.instValue(city, p, it); if (v < K.carbid.min) return null;
+    const pr = K.carbid.prem, amt = r2(v * (1 + pr[0] + Math.random() * (pr[1] - pr[0])));
+    const b = carFans(city).filter((x) => x.cash > amt + 2 && BOT.relV(city, x.id, p.id) > -75).sort(() => Math.random() - 0.5)[0]; if (!b) return null;
+    return { uid: it.uid, bid: b.id, amt, heat: 0.3 + Math.min(0.4, v / 10), why: `${b.name} loves cars, and your ${carName(it)} is worth ${r2(v)} M.` };
+  }).filter(Boolean).slice(0, 2),
+  speeding: (city, p) => { const it = AUTO.daily(p); if (!it) return []; const r = ITEM[it.cid].rarity; return [{ uid: it.uid, heat: r === 'Epic' || r === 'Legendary' ? 0.55 : 0.35, why: `You drive the ${carName(it)} every day.` }]; },
+  theft: (city, p) => { if (p.life && p.life.guard > city.m) return []; const cs = homeCars(p), v = cs.reduce((a, it) => a + LIFE.instValue(city, p, it), 0); return cs.length && v >= K.theft.min ? [{ heat: 0.3 + (['Recession', 'Crisis'].includes(city.econ) ? 0.2 : 0), why: `You keep ${cs.length} car${cs.length > 1 ? 's' : ''} worth ${r2(v)} M at home.` }] : []; },
+  setchase: (city, p) => {
+    if (!p.life) return []; const have = new Set(p.life.items.map((i) => i.cid)), out = [];
+    Object.keys(SETS).forEach((sid) => {
+      const all = Object.values(ITEM).filter((c) => c.set === sid), miss = all.filter((c) => !have.has(c.id)); if (all.length < 2 || miss.length !== 1) return;
+      const c = miss[0]; if (LIFE.roomFree(p, c.cat) < 1) return; const price = r2(LIFE.itemValue(city, c.id) * (1 + K.setchase.prem));
+      if (p.life.wallet < price) return;
+      if (LIFE.available(city, c.id) > 0) { out.push({ cid: c.id, price, heat: 0.6, why: `You own every piece but one of the ${SETS[sid].name}.` }); return; }
+      const b = BOT.bots(city).find((x) => x.life && x.life.items.some((i) => i.cid === c.id && !i.lot)); if (b) out.push({ cid: c.id, bid: b.id, price, heat: 0.6, why: `You own all but one piece of the set, and ${b.name} has it.` });
+    });
+    return out;
+  }
+});
+Object.assign(SEND, {
+  barnfind: (city, p) => { const k = K.barnfind;
+    return send(city, p, { from: { n: k.from[0], r: k.from[1] }, subj: `${k.title}: an old barn in Old Grid`,
+      body: `My late husband kept cars in the barn for forty years. I never looked under the tarps, and I am moving to my daughter's. Pay me ${r2(k.fee * 1000)} k for the lot and take whatever is there.`,
+      opts: [{ l: `Pay ${r2(k.fee * 1000)} k and look`, d: `${Math.round(k.odds * 100)}% chance of a forgotten classic in poor condition. A workshop can restore it.`, ...ch('barn') }, { l: 'Not for me', d: 'Nothing happens.', safe: true, ...ch('pass') }] }); },
+  carbid: (city, p, h) => { const it = p.life.items.find((i) => i.uid === h.uid), b = city.players[h.bid], v = LIFE.instValue(city, p, it), pct = Math.round((h.amt / v - 1) * 100);
+    return BOT.say(city, b, p, 'car', { x: carName(it), body: `My offer: ${h.amt} M for it. That is ${pct}% over its value of ${r2(v)} M. It stands for a month.` }, { wait: 4,
+      opts: [{ l: 'Sell it', d: `+${h.amt} M to your personal account. ${b.name.split(' ')[0]} will like you for it.`, ...ch('carSell', { uid: h.uid, bid: b.id, amt: h.amt }) },
+        { l: 'Keep it', d: `${b.name.split(' ')[0]} will be a little sore.`, safe: true, ...ch('carKeep', { bid: b.id, uid: h.uid }) }] }); },
+  speeding: (city, p, h) => { const it = p.life.items.find((i) => i.uid === h.uid), k = K.speeding;
+    return send(city, p, { from: { n: 'Aurex Bay Police', r: 'Traffic unit' }, subj: `${k.title}: ${carName(it)}`,
+      body: `A camera on the coast road caught your ${carName(it)} at 162 km/h on Tuesday night. The fine is ${r2(k.fine * 1000)} k. A reporter from the Gazette has already called us about it.`,
+      opts: [{ l: `Pay ${r2(k.fine * 1000)} k quietly`, d: 'Nothing else happens.', safe: true, ...ch('fine') },
+        { l: 'Give the Gazette a quote', d: `${Math.round(k.odds * 100)}%: the city loves it (+${k.legacy} prestige, your car companies sell more for ${k.months} months). Otherwise −${k.legacy} prestige and a double fine.`, ...ch('story') }] }); },
+  theft: (city, p) => { const k = K.theft, n = homeCars(p).length, fee = r2(k.fee * n);
+    return send(city, p, { from: { n: 'Bayguard Security', r: 'Alarms and trackers, Midtown' }, subj: k.title,
+      body: `Three collector cars were taken in Crown Hills and Sunset Strand last month. The police think the same gang is behind it. A tracker in each of your ${n} car${n > 1 ? 's' : ''} keeps you safe for a year.`,
+      opts: [{ l: `Fit trackers for ${r2(fee * 1000)} k`, d: 'None of your cars can be stolen for a year.', safe: true, ...ch('guard', { fee }) },
+        { l: 'Take the risk', d: `${Math.round(k.odds * 100)}% chance one car is stolen. Insurance pays ${Math.round(k.cover * 100)}% of its value.`, ...ch('steal') }] }); },
+  setchase: (city, p, h) => { const c = ITEM[h.cid], b = h.bid ? city.players[h.bid] : null, sname = SETS[c.set] ? SETS[c.set].name : 'set';
+    const body = `${b ? `${b.name} is ready to part with ${c.name}.` : `One of our clients is ready to part with ${c.name}.`} It is the one piece missing from your ${sname}. The price is ${h.price} M, ${Math.round(K.setchase.prem * 100)}% over market, and the offer stands for a month.`;
+    return send(city, p, { from: { n: 'Aurex & Co.', r: 'Private sales' }, subj: `${K.setchase.title}: ${c.name}`, body,
+      opts: [{ l: `Buy it for ${h.price} M`, d: `Completes the ${sname}: more value and prestige for the whole set.`, ...ch('setBuy', { cid: h.cid, bid: h.bid || null, price: h.price }) }, { l: 'Not now', d: 'Nothing happens.', safe: true, ...ch('pass') }] }); }
+});
+Object.assign(ANSWER, {
+  barn: (city, p, a, l, ctx, rnd) => { const k = K.barnfind; if (p.life.wallet < k.fee) return err(`You need ${r2(k.fee * 1000)} k on your account.`); if (LIFE.roomFree(p, 'car') < 1) return err('Your garage is full.');
+    wal(city, p, -k.fee, `${k.from[0]} · the old barn`);
+    if (rnd() >= k.odds) return ok('Under the tarps: a lawnmower, a rusty bicycle and a lot of dust. The money is gone.');
+    const it = AUTO.barnCar(city, p, k, rnd), c = ITEM[it.cid];
+    return ok(`Under the last tarp: a ${c.year} ${c.name} (${c.rarity}), condition ${Math.round(it.cond)}. It is in your garage now. A workshop can restore it.`); },
+  carSell: (city, p, a, l, ctx) => { const it = p.life.items.find((i) => i.uid === a.uid), b = city.players[a.bid];
+    if (!it || !LIFE.free(it) || it.lent) return ok('The car is no longer in your garage.'); if (!b || b.cash < a.amt) return ok(`${b ? b.name : 'They'} can no longer pay.`);
+    p.life.items = p.life.items.filter((x) => x !== it); if (p.life.daily === it.uid) p.life.daily = null; b.cash = r5(b.cash - a.amt);
+    LIFE.ensurePlayer(city, b).items.push({ ...it, m: city.m, cost: a.amt }); wal(city, p, a.amt, `Sold to ${b.name} · ${carName(it)}`);
+    BOT.event(city, b.id, p.id, 'sold', { d: K.carbid.rel, x: carName(it) }, ctx); return ok(`Sold to ${b.name} for ${a.amt} M.`); },
+  carKeep: (city, p, a, l, ctx) => { const it = p.life.items.find((i) => i.uid === a.uid); if (city.players[a.bid]) BOT.event(city, a.bid, p.id, 'keep', { d: K.carbid.keep, x: it ? carName(it) : 'my car' }, ctx); return ok('You keep it.'); },
+  fine: (city, p) => { wal(city, p, -K.speeding.fine, 'Aurex Bay Police · speeding fine'); return ok('Fine paid. Nobody heard about it.'); },
+  story: (city, p, a, l, ctx, rnd) => { const k = K.speeding;
+    if (rnd() < k.odds) { p.life.legacy = (p.life.legacy || 0) + k.legacy; const until = r5(city.g + k.months * MO); let n = 0;
+      ctx.runs(p.id).filter((x) => ['dealer', 'autorepair', 'car'].includes(x.type) && !(x.cx && x.cx.ypi)).forEach((x) => { x.cx = { ...(x.cx || {}), ypi: { v: r2(k.ypi * s(x)), until, note: 'Everyone wants to drive like you' } }; n++; });
+      wal(city, p, -k.fine, 'Aurex Bay Police · speeding fine'); return ok(`"I was testing the brakes," you told the Gazette. The city loved it: +${k.legacy} prestige${n ? `, and your car companies sell more for ${k.months} months` : ''}.`); }
+    p.life.legacy = (p.life.legacy || 0) - k.legacy; wal(city, p, -k.fine * 2, 'Aurex Bay Police · speeding fine, doubled'); return ok(`The Gazette was not amused. −${k.legacy} prestige and a double fine.`); },
+  guard: (city, p, a) => { wal(city, p, -a.fee, 'Bayguard Security · trackers'); p.life.guard = city.m + 12; return ok('Trackers fitted. Your cars are safe for a year.'); },
+  steal: (city, p, a, l, ctx, rnd) => { const k = K.theft; if (rnd() >= k.odds) return ok('Nothing happened. This time.');
+    const it = homeCars(p).sort((x, y) => LIFE.instValue(city, p, y) - LIFE.instValue(city, p, x))[0]; if (!it) return ok('Nothing happened. This time.');
+    const v = r4(LIFE.instValue(city, p, it) * k.cover); p.life.items = p.life.items.filter((x) => x !== it); if (p.life.daily === it.uid) p.life.daily = null;
+    wal(city, p, v, `Insurance · stolen ${carName(it)}`); return ok(`Your ${carName(it)} was stolen from the garage that night. The insurance pays ${r2(v)} M.`); },
+  setBuy: (city, p, a) => { const c = ITEM[a.cid]; if (!c) return ok('Too late.'); if (LIFE.roomFree(p, c.cat) < 1) return err('You have no room for it.'); if (p.life.wallet < a.price) return err(`You need ${a.price} M on your account.`);
+    let it = null;
+    if (a.bid) { const b = city.players[a.bid], x = b && b.life && b.life.items.find((i) => i.cid === a.cid && !i.lot); if (!x) return ok('Someone else bought it first.'); b.life.items = b.life.items.filter((i) => i !== x); b.cash = r5(b.cash + a.price); it = { ...x }; delete it.loan; delete it.shop; it.lent = false; }
+    else { if (LIFE.available(city, a.cid) < 1) return ok('Someone else bought it first.'); it = { uid: 'i' + Math.random().toString(36).slice(2, 9), cid: a.cid, lent: false }; }
+    it.m = city.m; it.cost = a.price; p.life.items.push(it); wal(city, p, -a.price, `Aurex & Co. private sale · ${c.name}`); return ok(`${c.name} is yours. The set is complete.`); }
+});
