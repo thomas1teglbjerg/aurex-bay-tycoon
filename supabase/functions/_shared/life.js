@@ -16,6 +16,24 @@ export const ITEM = Object.fromEntries(COLLECTIBLES.map((c) => [c.id, c]));
 // collectibles made by players' companies (vineyard wine, tuner cars) live in city.life.made and join the catalogue here (server and browser)
 export function register(city) { if (city && city.life && city.life.made) Object.assign(ITEM, city.life.made); }
 export const isMade = (c) => !!(c && c.lid);
+// collectibles that no longer exist (the ready-made cars c1–c7 were taken out): the owner gets back what they paid,
+// and lots, the dealer's shelf, open trades and workshop jobs forget them. Safe to run on every load.
+export function prune(city) {
+  if (!city || !city.life) return 0; register(city); const gone = (cid) => !ITEM[cid], L = city.life; let n = 0;
+  Object.values(city.players).forEach((p) => {
+    if (!p.life || !p.life.items) return; const out = p.life.items.filter((i) => gone(i.cid)); if (!out.length) return;
+    n += out.length; const back = r4(out.reduce((a, i) => a + (i.cost || 0), 0));
+    p.life.items = p.life.items.filter((i) => !gone(i.cid)); if (back) { p.life.wallet = r4((p.life.wallet || 0) + back); tx(p.life, city.m, 'Refund: collectibles taken out of the game', back); }
+    if (p.life.daily && !p.life.items.some((i) => i.uid === p.life.daily)) p.life.daily = null;
+  });
+  const uids = new Set(Object.values(city.players).flatMap((p) => (p.life && p.life.items ? p.life.items.map((i) => i.uid) : [])));
+  L.lots = (L.lots || []).filter((l) => !gone(l.cid)); L.dealer = (L.dealer || []).filter((cid) => !gone(cid));
+  L.trades = (L.trades || []).filter((t) => t.status !== 'open' || [...(t.give || []), ...(t.get || [])].every((u) => uids.has(u)));
+  (city.listings || []).forEach((l) => { if (l.cellar) l.cellar = l.cellar.filter((x) => !gone(x.cid)); });
+  if (city.cars && city.cars.jobs) city.cars.jobs = city.cars.jobs.filter((j) => !j.uid || uids.has(j.uid));
+  if (L.items) Object.keys(L.items).forEach((cid) => { if (gone(cid)) delete L.items[cid]; });
+  return n;
+}
 let seq = 0;
 // bank statement line for the personal account
 export function tx(L, m, text, amt) { if (!L || !amt) return; (L.tx = L.tx || []).unshift({ m, text, amt: r4(amt), bal: r4(L.wallet) }); if (L.tx.length > 40) L.tx.length = 40; }

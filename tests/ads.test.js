@@ -59,7 +59,7 @@ assert(!A.running(city, l.id), 'the 2-week campaign ended');
 assert(act('adLaunch', { lid: l.id, weeks: 8 }).ok && act('adStop', { lid: l.id }).ok && !A.running(city, l.id), 'a campaign can be stopped early');
 
 // a car dealership may advertise cars from the owner's collection, a chip factory may not
-const carId = Object.keys(L.ITEM).find((k) => L.ITEM[k].cat === 'car');
+const carId = 'tcAD'; city.life.made[carId] = { id: carId, cat: 'car', lid: 'test', name: 'Test GT', maker: 'Test', year: 2020, rarity: 'Rare', v: 0.5, ed: 1 }; city.life.items[carId] = { f: 1, h: [0.5] }; L.register(city);
 p.life.items.push({ uid: 'iTEST', cid: carId, m: city.m, cost: 1, lent: false });
 assert(A.products(city, p, { id: 'X', type: 'dealer' }).some((x) => x.uid === 'iTEST'), 'a dealership can advertise your car');
 assert(!A.products(city, p, { id: 'X', type: 'chip' }).some((x) => x.uid === 'iTEST'), 'a chip factory cannot');

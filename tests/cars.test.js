@@ -12,8 +12,11 @@ const A = (a, x, who = 'u') => { p.lastAct = city.m; q.lastAct = city.m; return 
 p.life.wallet = 60; q.life.wallet = 20;
 assert(A('homeBuy', { hid: 'H4', down: 1 }).ok && L.capacity(p, 'car') === 6, 'a villa with a six-car garage');
 const give = (pl, cid, extra = {}) => { const it = { uid: 'i' + Math.random().toString(36).slice(2, 8), cid, m: city.m, cost: 1, lent: false, ...extra }; pl.life.items.push(it); return it; };
-const carIds = Object.keys(L.ITEM).filter((k) => L.ITEM[k].cat === 'car' && !L.ITEM[k].lid);
-const car = give(p, 'c2'), cheap = give(p, 'c7');
+// every car is made by a player's company: register a few test cars the way an auto repair shop would
+const mk = (id, rarity, v) => { city.life.made[id] = { id, cat: 'car', lid: 'test', name: 'Test ' + id, maker: 'Test', year: 2020, rarity, v, ed: 1, medium: 'Test car' }; city.life.items[id] = { f: 1, h: [v] }; };
+mk('tc1', 'Legendary', 6.5); mk('tc2', 'Epic', 2.4); mk('tc7', 'Common', 0.12); L.register(city);
+assert(!['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7'].some((k) => L.ITEM[k]), 'no ready-made cars: only cars that players make');
+const car = give(p, 'tc2'), cheap = give(p, 'tc7');
 
 // condition and value
 const v85 = L.instValue(city, p, car); car.cond = 100; const v100 = L.instValue(city, p, car); car.cond = 30; const v30 = L.instValue(city, p, car);
@@ -87,18 +90,16 @@ p.life.items.filter((i) => L.ITEM[i.cid].cat === 'car').forEach((i) => { delete 
 const sp = hits.find((h) => h.id === 'speeding'); if (sp) { const m = E.CH.deal(city, p, sp, ctx); const w = p.life.wallet; assert(A('mailAnswer', { id: m.id, opt: 0 }).ok && p.life.wallet < w, 'pay the speeding fine'); }
 const th = hits.find((h) => h.id === 'theft'); { const m = E.CH.deal(city, p, th, ctx); assert(A('mailAnswer', { id: m.id, opt: 0 }).ok && p.life.guard > city.m, 'fit trackers'); assert(!E.CH.fits(city, p, ctx).some((h) => h.id === 'theft'), 'no theft card while the trackers work'); }
 // a rival wants your car
-E.BOT.bots(city).forEach((b) => { b.cash = 100; }); give(p, 'c1');
+E.BOT.bots(city).forEach((b) => { b.cash = 100; }); give(p, 'tc1');
 const cb = E.CH.fits(city, p, ctx).find((h) => h.id === 'carbid'); assert(cb, 'a rival tycoon wants to buy one of your cars');
 const cm = E.CH.deal(city, p, cb, ctx), w4 = p.life.wallet, sold = p.life.items.find((i) => i.uid === cb.uid);
 assert(A('mailAnswer', { id: cm.id, opt: 0 }).ok && !p.life.items.includes(sold) && p.life.wallet > w4 && city.players[cb.bid].life.items.some((i) => i.uid === sold.uid), 'sell it to them');
-// the missing piece of a set
-p.life.items = p.life.items.filter((i) => i.cid !== 'c1' && i.cid !== 'c2'); Object.values(city.players).forEach((x) => { if (x.life) x.life.items = x.life.items.filter((i) => i.cid !== 'c1'); }); city.life.lots = city.life.lots.filter((l) => l.cid !== 'c1');
-give(p, 'c2'); p.life.wallet = 50;
-const sc = E.CH.fits(city, p, ctx).find((h) => h.id === 'setchase' && h.cid === 'c1'); assert(sc, 'one car short of Le Mans Legends: a missing piece card');
-const sm = E.CH.deal(city, p, sc, ctx); assert(A('mailAnswer', { id: sm.id, opt: 0 }).ok && L.completeSets(p).includes('lemans'), 'buy it and complete the set');
+// a car that is taken out of the game: the owner gets the money back, the dealer and auction forget it
+{ const gone = give(q, 'tcX', { cost: 0.7 }); const w = q.life.wallet; city.life.dealer.push('tcX'); city.life.lots.push({ id: 'lotX', cid: 'tcX', est: 1, endM: city.m + 1, bids: {} });
+  assert(L.prune(city) === 1 && !q.life.items.includes(gone) && Math.abs(q.life.wallet - w - 0.7) < 1e-9 && !city.life.dealer.includes('tcX') && !city.life.lots.some((l) => l.cid === 'tcX'), 'a car that no longer exists is refunded and forgotten'); }
 // street parking: one car without a garage
 { const sv = { homes: p.life.homes, items: p.life.items, res: p.life.res, daily: p.life.daily }; p.life.homes = []; p.life.res = null; p.life.items = []; p.life.daily = null; p.life.wallet = 50;
-  const cars = Object.values(L.ITEM).filter((d) => d.cat === 'car' && !d.lid && L.available(city, d.id) > 0).map((d) => d.id); cars.forEach((cid) => { if (!city.life.dealer.includes(cid)) city.life.dealer.push(cid); });
+  mk('ts1', 'Rare', 0.3); mk('ts2', 'Rare', 0.3); L.register(city); const cars = ['ts1', 'ts2']; cars.forEach((cid) => { if (!city.life.dealer.includes(cid)) city.life.dealer.push(cid); });
   assert(L.street(p) && L.capacity(p, 'car') === 1 && L.capacity(p, 'art') === 0, 'no home: room for one car on the street, no art');
   if (cars.length >= 2) { const r1 = A('itemBuy', { cid: cars[0] }); assert(r1.ok, 'buy a car with no garage: ' + r1.msg); const r2 = A('itemBuy', { cid: cars[1] }); assert(!r2.ok && /street/.test(r2.msg), 'a second car needs a garage: ' + r2.msg); }
   Object.assign(p.life, sv); }

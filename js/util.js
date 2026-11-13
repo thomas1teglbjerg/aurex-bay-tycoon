@@ -16,7 +16,7 @@ export const coImg = (l) => (WH[l.id] ? (WH[l.id].img || `img/dist-${WH[l.id].d}
 
 export const S = { B: null };
 let madeSeen = null; // wines bottled by vineyards join the collectible catalogue when a new city state arrives
-export const city = () => { const c = S.B.city; if (c && c.life && c.life.made && c.life.made !== madeSeen) { madeSeen = c.life.made; E.LIFE.register(c); } return c; };
+export const city = () => { const c = S.B.city; if (c && c.life && c.life.made && c.life.made !== madeSeen) { madeSeen = c.life.made; E.LIFE.register(c); E.LIFE.prune(c); } return c; };
 export const meId = () => S.B.me;
 export const me = () => (S.B.me ? S.B.city.players[S.B.me] : null);
 export const now = () => Date.now();
