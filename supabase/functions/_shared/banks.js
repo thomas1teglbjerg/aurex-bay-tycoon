@@ -320,6 +320,7 @@ export function score(city, a, ctx) {
   s -= { Boom: -0.03, Stable: 0, Recession: 0.08, Crisis: 0.15 }[city.econ] || 0;
   if (p.bot) s -= (((B.bots[p.id] || {}).risk ?? B.risk) - B.risk) * 7;
   if (pl) s += 0.15 * Math.min(1, ctx.value(pl) / a.amt);
+  if (ctx.carNudge && !p.bot) s += ctx.carNudge(p); // the committee sees what you drive up in
   return r2(clamp(s, 0, 1));
 }
 // the borrower's best company not already pledged, for a counter-offer that asks for security

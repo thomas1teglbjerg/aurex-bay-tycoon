@@ -6,6 +6,7 @@ import { CAREER, PORTRAITS, TYPES, CHANCE } from '../supabase/functions/_shared/
 import { city, me, meId, esc, M, N, lname, coImg, dateLabel, lineChart } from './util.js';
 import { logoMark } from './brand.js';
 import { cardHTML, homeBg, ricon, money } from './life.js';
+import { dailyLine } from './garage.js';
 
 const C = E.CAR;
 const PORTRAIT_V = 1;
@@ -117,7 +118,10 @@ function ownsHTML(c, p, own) {
   const top = items.filter((i) => L.ITEM[i.cid]).map((i) => ({ i, v: L.instValue(c, p, i, sets) })).sort((a, b) => b.v - a.v).slice(0, 6);
   const cards = top.map(({ i, v }) => cardHTML(i.cid, { value: v, noDelta: true, cls: 'sm', tag: i.lent ? 'Museum' : '' })).join('');
   const who = own ? 'You own' : 'Owns';
-  return `<div class="pf-row"><div class="pf-box"><h3>Property<small>${homes.length ? money(hv) : ''}</small></h3>${homeRows || `<p class="pf-note">${who} no homes yet.</p>`}${own ? '<button class="linkbtn" data-a="lifeView" data-v="property">Manage property ›</button>' : ''}</div>
+  // the car they drive every day (cars.js), and their Concours trophies
+  const dc = dailyLine(c, p.id), wins = items.reduce((a, i) => a + (i.award || []).filter((x) => x.place === 1).length, 0);
+  const drives = `<div class="pf-home"><span class="pf-hth" style="${dc.pic ? `background-image:url(${dc.pic})` : 'background-image:url(img/ph-car.svg)'}"></span><div><b>${dc.rar ? `Drives a ${esc(dc.name)}` : esc(dc.name)}</b><span>${dc.rar ? `${dc.rar} · condition ${Math.round(dc.cond)}` : own ? 'Pick a daily car in your garage' : 'No daily car'}${wins ? ` · ${wins} Best in Show` : ''}</span></div></div>`;
+  return `<div class="pf-row"><div class="pf-box"><h3>Property<small>${homes.length ? money(hv) : ''}</small></h3>${homeRows || `<p class="pf-note">${who} no homes yet.</p>`}${drives}${own ? '<button class="linkbtn" data-a="lifeView" data-v="property">Manage property ›</button>' : ''}</div>
     <div class="pf-box"><h3>Collection<small>${items.length ? `${items.length} piece${items.length > 1 ? 's' : ''} · ${money(cv)}` : ''}</small></h3>${cats ? `<div class="pf-cats">${cats}</div>` : `<p class="pf-note">${own ? 'Nothing collected yet.' : 'No collection yet.'}</p>`}${sets.length ? `<p class="pf-note">${sets.length} complete set${sets.length > 1 ? 's' : ''}.</p>` : ''}${own && items.length ? '<button class="linkbtn" data-a="lifeView" data-v="collection">Open the collection ›</button>' : ''}</div></div>
     ${cards ? `<div class="pf-box lifep pf-best"><h3>Finest pieces</h3><div class="cstrip">${cards}</div></div>` : ''}`;
 }

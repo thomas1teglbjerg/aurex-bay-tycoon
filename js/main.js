@@ -11,7 +11,9 @@ import { SCENES, startScene, endScene, sceneFor, tickScenes, sceneTitle } from '
 import { WAREHOUSE_SITES, HOMES, TAKEOVER as GC_T } from '../supabase/functions/_shared/content.js';
 import { webHTML, parseUrl, HOME_URL, gazetteBox } from './web.js';
 import { teamBoxHTML, talentModal, talentStep } from './team.js';
-import { lifeHTML, lifeModal, newDinner, startDinner, dinnerHTML, money, bidBase, HOME_V } from './life.js';
+import { lifeHTML, lifeModal, newDinner, startDinner, dinnerHTML, money, bidBase, HOME_V, cardHTML } from './life.js';
+import { newMeet, startMeet, meetHTML, dailyLine } from './garage.js';
+import { pinsHTML, movePins, position as drivePos } from './drive.js';
 import { logoMark, logoFull, symbolIcon } from './brand.js';
 import { initChat, openChat, unreadFrom, inboxOf } from './chat.js';
 import { openMixer } from './mixer.js';
@@ -86,7 +88,7 @@ function mountLayer(level) {
   cancelAnimationFrame(anim);
   Object.assign(view, { W: L.W, H: L.H, crop: L.crop, level });
   w.style.width = L.W + 'px'; w.style.height = L.H + 'px';
-  w.innerHTML = `<img src="${L.img}" alt="${level ? esc(DISTRICT[level].name) : 'Satellite map of Aurex Bay'}" id="mapimg" draggable="false" style="${L.crop ? `position:absolute;left:${-L.crop.x}px;top:${-L.crop.y}px;width:${MAP.w}px;height:${MAP.h}px;max-width:none` : `width:${L.W}px;height:${L.H}px`}"><div id="mapmarks"></div>`;
+  w.innerHTML = `<img src="${L.img}" alt="${level ? esc(DISTRICT[level].name) : 'Satellite map of Aurex Bay'}" id="mapimg" draggable="false" style="${L.crop ? `position:absolute;left:${-L.crop.x}px;top:${-L.crop.y}px;width:${MAP.w}px;height:${MAP.h}px;max-width:none` : `width:${L.W}px;height:${L.H}px`}"><div id="mapmarks"></div>${level ? '' : '<div id="drivers"></div>'}`;
   const pic = mapImgs[L.img]; if (pic && pic.img.complete && pic.img.naturalWidth) { const im = pic.img, cur = w.firstChild; im.id = 'mapimg'; im.alt = cur.alt; im.draggable = false; im.style.cssText = cur.style.cssText; w.replaceChild(im, cur); } // already decoded: no flash
   w.classList.toggle('indist', !!level);
   view.s = 0; fitMap();
@@ -202,6 +204,9 @@ function mapCardHTML(key) {
     const ss = l.site ? siteStatus(l) : null;
     return `<div class="mc-img${E.BLD.unbuilt(l) ? ' plot' : ''}" style="background-image:url(${coImg(l)})"></div><div class="mc-b"><span class="mc-k">${E.BLD.unbuilt(l) ? 'Building plot · ' : ''}${esc(TYPES[l.type].sector)}</span><h4>${esc(lname(l))}</h4><p>${l.title ? esc(TYPES[l.type].name) + ' · ' : ''}${esc(l.district)} · ${SIZES[l.size].label} · Level ${l.level}</p>${ss ? row('Site', esc(ss.label)) : E.BLD.cond(l) < E.BLD.B.cond.worn ? row('Condition', `${Math.round(E.BLD.cond(l))}% · ${E.BLD.condLabel(l)}`) : ''}
       ${row('Owner', l.owner ? `${o.brand ? logoMark(o.brand, 16) : `<i class="mc-dot" style="background:${o.color}"></i>`} ${esc(o.mine ? 'You' : o.brand ? o.brand.name : o.name)}` : '<em class="s">For sale</em>')}${row(l.owner ? 'Value' : 'Price', M(l.owner ? E.listingValue(l) : E.listingPrice(l)))}${row('Earns', `${M(y.total, true)} / yr`)}<div class="mc-foot">${lastPointer === 'touch' ? '<button class="btn sm gold" data-a="open" data-lid="' + l.id + '">Open</button>' : 'Click to open'}</div></div>`; }
+  if (k === 'd') { const p = c.players[id]; if (!p) return ''; const b = E.BR.brandOf(c, id), car = dailyLine(c, id), q = drivePos(c, id);
+    const goal = q && (q.parked ? q.at : q.to), where = goal ? (goal.home ? `${q.parked ? 'At home' : 'Driving home'}: ${esc(goal.home)}` : goal.name ? `${q.parked ? 'Parked at' : 'On the way to'} ${esc(goal.name)}` : 'Out for a drive') : '';
+    return `<div class="mc-img"${car.pic ? ` style="background-image:url(${car.pic})"` : ' style="background-image:url(img/ph-car.svg);background-size:40%;background-repeat:no-repeat;background-color:#2b3442"'}></div><div class="mc-b"><span class="mc-k">${id === meId() ? 'You · online' : 'Online now'}</span><h4>${esc(p.name)}</h4><p>${b ? `${logoMark(b, 16)} ${esc(b.name)}` : 'Tycoon'}</p>${row('Drives', esc(car.name))}${car.rar ? row('Car', `${car.rar} · condition ${Math.round(car.cond)}`) : ''}${where ? `<div class="mc-foot">${where}</div>` : ''}</div>`; }
   if (k === 'w') { const site = WAREHOUSE_SITES.find((x) => x.id === id), w = (c.warehouses || []).find((x) => x.id === id), own = w && w.owner ? c.players[w.owner] : null;
     return `<div class="mc-img${w && w.site ? ' plot' : ''}" style="${site.img ? `background-image:url(${site.img})` : cropStyle(site, 2.4)}"></div><div class="mc-b"><span class="mc-k">${w && w.site ? 'Building plot · warehouse' : `Warehouse · ${esc(MODE_LABEL[site.mode])}`}</span><h4>${esc(site.name)}</h4><p>${esc(site.district)}</p>${row('Owner', own ? `<i class="mc-dot" style="background:${own.id === meId() ? 'var(--good)' : own.color}"></i>${esc(own.id === meId() ? 'You' : own.name)}` : '<em class="s">For sale</em>')}${w && w.site ? row(own ? 'Built' : 'Plot price', own ? `${Math.round(E.BLD.progress(w) * 100)}%` : M(E.LOG.whPrice(w))) : row(own ? 'Storage' : 'Price', own ? `${N(E.LOG.capacityOf(w))} units` : M(site.price))}${row('Upkeep', `${M(site.upkeep)} / yr`)}<div class="mc-foot">${lastPointer === 'touch' ? `<button class="btn sm gold" data-a="wh" data-wid="${id}">Open</button>` : 'Click to open'}</div></div>`; }
   if (k === 'h') { const h = HOMES.find((x) => x.id === id), lp = me().life, mine = lp && lp.homes.find((x) => x.hid === id), price = c.life ? h.price * c.life.homes[id].ix : h.price, left = c.life ? E.LIFE.unitsLeft(c, id) : h.units;
@@ -221,6 +226,7 @@ function showMapCard(key, el) {
 function hideMapCard(now) { clearTimeout(cardTimer); const go = () => { const card = $('mapcard'); if (card) card.hidden = true; cardKey = null; document.querySelectorAll('.zone.on').forEach((z) => z.classList.remove('on')); }; if (now === false) cardTimer = setTimeout(go, 160); else go(); }
 function openMark(key) {
   const [k, id] = key.split(':');
+  if (k === 'd') { const el = document.querySelector(`[data-mk="${key}"]`); if (el) showMapCard(key, el); return; }
   if (k === 'l') openListing(id); else if (k === 'w') openWarehouse(id);
   else if (k === 'h') { const p = me(), mine = p && p.life && p.life.homes.some((x) => x.hid === id); if (mine) setTab('life'); else openWeb(`bayhomes.ab/home/${id}`); }
 }
@@ -278,6 +284,14 @@ function enterDistrict(id, e) {
   setLevel(id, false, e && e.clientX != null ? { x: e.clientX - r.left, y: e.clientY - r.top } : null);
 }
 function updatePins() { renderMarks(); }
+// the cars of the tycoons who are online (js/drive.js): rebuilt when someone comes or goes, moved in between
+let drvKey = '';
+function driveTick() {
+  const box = $('drivers'), c = city(); if (!box || !c || view.level || document.hidden) return;
+  const t = Date.now(), on = (B.online || []).map((o) => ({ ...o, idle: t - (o.lastAct || 0) >= IDLE_MS })), key = on.map((o) => o.id + (o.idle ? 'i' : '') + ((c.players[o.id] && c.players[o.id].life && c.players[o.id].life.daily) || '')).join(',');
+  if (key !== drvKey || !box.firstChild && on.length) { drvKey = key; box.innerHTML = pinsHTML(c, on, meId()); }
+  movePins(c, box);
+}
 // pan limits: map edge aligned with the viewport edge, or centred when the map is smaller
 function panLimits(s = view.s) {
   const vp = $('viewport'), W = view.W * s, H = view.H * s, cw = vp.clientWidth, ch = vp.clientHeight;
@@ -423,6 +437,7 @@ function liveUpdate() {
 
   tickScenes((st) => { toast(`${sceneTitle(st)}: your call`, 'good'); renderAll(); });
   if (UI.modal && UI.modal.t === 'dinner') tickDinner();
+  if (UI.modal && UI.modal.t === 'meet') tickMeet();
   // share prices tick between weekly closes: refresh the exchange views every second or so
   if (Date.now() - lastTicker > 1200) { lastTicker = Date.now(); if (UI.tab === 'market' && !UI.company && !$('panel').hidden) renderPanel(); if (UI.modal && UI.modal.t === 'stock') openStock(UI.modal.id); }
   const t = now();
@@ -690,6 +705,12 @@ function tickDinner() {
   if (Date.now() - lastDinner > 450) { lastDinner = Date.now(); const el = document.querySelector('.scene'); if (el) el.outerHTML = dinnerHTML(st); }
 }
 const GC_DINNER_MS = 20000;
+let lastMeet = 0;
+function tickMeet() {
+  const st = UI.modal; if (st.phase !== 'run') return;
+  if (Date.now() - st.start >= GC_DINNER_MS) { st.phase = 'finishing'; B.act('carMeet', { uid: st.uid, who: st.who }).then((r) => { st.phase = 'done'; st.result = r && r.msg ? r.msg : 'A good morning.'; renderAll(); modal(meetHTML(st, cardHTML)); }); return; }
+  if (Date.now() - lastMeet > 450) { lastMeet = Date.now(); const el = document.querySelector('.scene'); if (el) el.outerHTML = meetHTML(st, cardHTML); }
+}
 function refreshModal() { if (!UI.modal) return; if (LIFE_MODALS.includes(UI.modal.t)) openLife(UI.modal); if (UI.modal.t === 'wh') openWarehouse(UI.modal.id); if (UI.modal.t === 'deliv' && !UI.modal.truck) renderDelivery(); if (UI.modal.t === 'listing') openListing(UI.modal.id); if (UI.modal.t === 'staff') openStaff(UI.modal.id, true); if (UI.modal.t === 'stock') openStock(UI.modal.id); if (UI.modal.t === 'dealNew') openDeal(UI.modal); if (UI.modal.t === 'move') openMove(UI.modal); }
 // ---------------------------------------------------------------- account and parent company (shown before the game)
 // Order: log in (online) → avatar name → parent company → game. Older guest players are asked once to add e-mail + password.
@@ -1042,7 +1063,7 @@ async function onClick(e) {
     case 'itemSell': { const r = await act('itemSell', { uid: d.uid, how: d.v }); if (r && r.ok && d.v === 'dealer') closeModal(); return; }
     case 'itemWithdraw': await act('itemWithdraw', { uid: d.uid }); return;
     case 'cellar': await act('itemCellar', { lid: d.lid, uid: d.uid, how: d.v === 'dealerAll' ? 'dealer' : d.v, all: d.v === 'dealerAll' }); return;
-    case 'itemLend': await act('itemLend', { uid: d.uid }); return;
+    case 'itemLend': { const r = await act('itemLend', { uid: d.uid }); if (r && r.ok && UI.modal) { UI.modal.lend = false; if (LIFE_MODALS.includes(UI.modal.t)) openLife(UI.modal); } return; }
     case 'itemGift': { const r = await act('itemGift', { uid: d.uid, to: $('gift-to').value }); if (r && r.ok) closeModal(); return; }
     case 'itemDonate': { if (d.v !== 'yes') { UI.modal.confirm = true; openLife(UI.modal); return; } const r = await act('itemDonate', { uid: d.uid }); if (r && r.ok) closeModal(); return; }
     case 'tradeOpen': openLife({ t: 'trade', to: d.to || null, give: d.give ? [d.give] : [], get: [], cash: 0 }); return;
@@ -1055,6 +1076,18 @@ async function onClick(e) {
     case 'dinnerGuests': UI.modal.guests = d.v; modal(dinnerHTML(UI.modal)); return;
     case 'dinnerWine': UI.modal.uid = d.uid; modal(dinnerHTML(UI.modal)); return;
     case 'dinnerStart': startDinner(UI.modal); modal(dinnerHTML(UI.modal)); return;
+    case 'meetOpen': UI.modal = newMeet(d.uid); modal(meetHTML(UI.modal, cardHTML)); return;
+    case 'meetWho': UI.modal.who = d.v; modal(meetHTML(UI.modal, cardHTML)); return;
+    case 'meetCar': UI.modal.uid = d.uid; modal(meetHTML(UI.modal, cardHTML)); return;
+    case 'meetStart': startMeet(UI.modal); modal(meetHTML(UI.modal, cardHTML)); return;
+    case 'carShop': UI.modal.shop = true; UI.modal.lend = false; openLife(UI.modal); return;
+    case 'carLendOpen': UI.modal.lend = true; UI.modal.shop = false; openLife(UI.modal); return;
+    case 'carBack': UI.modal.shop = false; UI.modal.lend = false; openLife(UI.modal); return;
+    case 'carService': { const r = await act('carService', { uid: d.uid, lid: d.lid }); if (r && r.ok && UI.modal) { UI.modal.shop = false; openLife(UI.modal); } return; }
+    case 'carCancel': await act('carCancel', { id: d.id }); return;
+    case 'carLend': { const r = await act('carLend', { uid: d.uid, to: d.v, lid: d.lid }); if (r && r.ok && UI.modal) { UI.modal.lend = false; openLife(UI.modal); } return; }
+    case 'carDaily': await act('carDaily', { uid: d.uid || null }); return;
+    case 'carEnter': await act('carEnter', { uid: d.uid || null }); return;
   }
 }
 
@@ -1220,6 +1253,7 @@ async function boot(hot) {
   navInit();
   setInterval(() => B.tick(), 1000);
   setInterval(liveUpdate, 150);
+  setInterval(driveTick, 120); // online tycoons' cars on the city map
   if (B.onPresence) B.onPresence(() => { renderWho(); measureTop(); });
   // any click or key press in the game counts as activity for the online bar (game actions do too, in B.act)
   const touch = () => { if (B.touch && me()) B.touch(); };

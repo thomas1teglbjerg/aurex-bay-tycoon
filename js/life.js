@@ -1,10 +1,11 @@
 // Personal tab: your home, personal account, collections, auction house and dinner parties.
 import * as E from '../supabase/functions/_shared/engine.js';
-import { HOMES, ROOMS, LIFESTYLES, SALARIES, TAX, LIFE as LC, RARITY, PRESTIGE_TIERS, PRESTIGE_PERKS, COLLECT_CATS, COLLECTIBLES, SETS, DINNER } from '../supabase/functions/_shared/content.js';
+import { HOMES, ROOMS, LIFESTYLES, SALARIES, TAX, LIFE as LC, RARITY, PRESTIGE_TIERS, PRESTIGE_PERKS, COLLECT_CATS, COLLECTIBLES, SETS, DINNER, CARS } from '../supabase/functions/_shared/content.js';
 import { city, me, meId, esc, M, P, lineChart, seg, shortDate, msUntilMonth, dur } from './util.js';
 import { cropLayer } from './util.js';
 import { profilePageHTML } from './profile.js';
 import { mortQuote } from './banks.js';
+import { carPanel, carTag, garageBoxes, meetHTML, condBar } from './garage.js';
 
 const L = E.LIFE;
 const CATS = ['art', 'wine', 'watch', 'car'];
@@ -46,7 +47,7 @@ export function cardHTML(cid, o = {}) {
   const mono = c.maker.split(' ').map((w) => w[0]).join('').slice(0, 2);
   const tag = o.tag ? `<span class="ctag">${esc(o.tag)}</span>` : '';
   return `<button class="ccard r-${c.rarity.toLowerCase()} ${o.cls || ''}" style="--rc:${r.col}" data-a="${o.a || 'cid'}" ${o.attrs || `data-cid="${cid}"`} aria-label="${esc(c.name)}, ${c.rarity}">
-    <span class="cimg" style="${c.pic ? `background-image:linear-gradient(180deg, transparent 60%, rgba(10,8,6,0.6)), url(img/${c.pic}.jpg);background-size:cover;background-position:center, 58% center` : c.img ? `background-image:linear-gradient(180deg, transparent 60%, rgba(10,8,6,0.6)), url(img/x-${cid}.jpg);background-position:center, ${c.img}` : `background-image:linear-gradient(180deg, transparent 55%, rgba(10,8,6,0.75)), ${L.isMade(c) ? '' : `url(img/x-${cid}.jpg), `}linear-gradient(135deg, hsla(${hue(cid)},45%,40%,0.55), rgba(20,14,8,0.4)), url(${CARD_FALLBACK[c.cat]})`}">${c.img || c.pic ? '' : `<span class="mono">${esc(mono)}</span>${ricon(c.cat, 16)}`}<span class="rar">${c.rarity}</span>${tag}</span>
+    <span class="cimg" style="${c.pic ? `background-image:linear-gradient(180deg, transparent 60%, rgba(10,8,6,0.6)), url(img/${c.pic}.jpg);background-size:cover;background-position:center, 58% center` : c.img ? `background-image:linear-gradient(180deg, transparent 60%, rgba(10,8,6,0.6)), url(img/x-${cid}.jpg);background-position:center, ${c.img}` : `background-image:linear-gradient(180deg, transparent 55%, rgba(10,8,6,0.75)), ${L.isMade(c) ? '' : `url(img/x-${cid}.jpg), `}linear-gradient(135deg, hsla(${hue(cid)},45%,40%,0.55), rgba(20,14,8,0.4)), url(${CARD_FALLBACK[c.cat]})`}">${c.img || c.pic ? '' : `<span class="mono">${esc(mono)}</span>${ricon(c.cat, 16)}`}<span class="rar">${c.rarity}</span>${tag}${o.cond ? condBar(o.cond) : ''}</span>
     <span class="cbody"><b>${esc(c.name)}</b><span>${esc(c.maker)} · ${c.year}</span><span class="cval"><strong>${money(v)}</strong>${o.noDelta ? '' : `<em class="${d >= 0 ? 'up' : 'down'}">${P(d)}</em>`}</span></span>
     ${c.set ? `<span class="cset" title="${esc(SETS[c.set].name)}">Set</span>` : ''}</button>`;
 }
@@ -157,7 +158,7 @@ function roomHTML(UI) {
     return `<div class="row"><div class="grow"><b>${lv === 0 ? esc(rinstall(h.hid, room)) : `Expand the ${rname(h.hid, room).toLowerCase()}`}</b><span>${esc(L.HOME[h.hid].name)} · ${lv === 0 ? `room for ${d.cap}` : `from ${d.cap} to ${d.cap * 2}`} ${R.unit} · adds value to the home</span></div><button class="btn sm gold" data-a="homeRoom" data-uid="${h.uid}" data-room="${room}">${money(cost)}</button></div>`;
   }).join('');
   const mine = p.life.items.filter((i) => L.ITEM[i.cid].cat === room), sets = L.completeSets(p);
-  const cards = mine.map((i) => cardHTML(i.cid, { a: 'item', attrs: `data-uid="${i.uid}"`, value: L.instValue(c, p, i, sets), cost: i.cost, tag: i.lot ? 'At auction' : i.lent ? 'At the museum' : '' })).join('');
+  const cards = mine.map((i) => cardHTML(i.cid, { a: 'item', attrs: `data-uid="${i.uid}"`, value: L.instValue(c, p, i, sets), cost: i.cost, tag: room === 'car' ? carTag(p, i) : i.lot ? 'At auction' : i.lent ? 'At the museum' : '', cond: room === 'car' ? i : null })).join('');
   const free = s.cap ? Math.max(0, s.cap - L.used(p, room)) : 0, empties = free ? emptySlot(`${free} free ${R.unit}`) : '';
   const val = L.collectionValue(c, p, room), cost = mine.reduce((a, i) => a + (i.cost || 0), 0);
   const ix = c.life.ixh[room], ixd = ix.length > 12 ? pct(ix[ix.length - 1], ix[ix.length - 13]) : pct(ix[ix.length - 1], ix[0]);
@@ -171,6 +172,7 @@ function roomHTML(UI) {
     <div class="kpis sm"><div class="stat"><small>Value</small><b>${money(val)}</b></div><div class="stat"><small>Paid</small><b>${money(cost)}</b></div><div class="stat"><small>Gain</small><b class="${val - cost >= 0 ? 'up' : 'down'}">${money(val - cost, true)}</b></div><div class="stat"><small>${esc(COLLECT_CATS[room].name)} market, 12 mo</small><b class="${ixd >= 0 ? 'up' : 'down'}">${P(ixd)}</b></div></div>
     ${installs ? `<section class="box"><h2>Build</h2><div class="in"><div class="rows">${installs}</div></div></section>` : ''}
     <div class="cgrid">${cards}${empties}${!cards && !s.cap ? `<p class="empty">${esc(s.text)}.</p>` : ''}</div>
+    ${room === 'car' && s.cap ? garageBoxes() : ''}
     ${setRows ? `<section class="box"><h2>Sets <small>Complete a set for bonus value and prestige</small></h2><div class="in"><div class="rows">${setRows}</div></div></section>` : ''}
     <section class="box"><h2>Buy ${esc(COLLECT_CATS[room].name.toLowerCase())}</h2><div class="in">${shop || lots ? `<div class="cstrip">${lots}${shop}</div>` : ''}<div class="chips"><button class="btn sm gold" data-a="web" data-u="${DEALER_SITE[room][0]}">${WEB_ICON} ${esc(DEALER_SITE[room][1])}</button><button class="btn sm" data-a="web" data-u="aurexauctions.ab">${WEB_ICON} Aurex &amp; Co. auctions</button></div></div></section>
     <section class="box"><h2>${esc(COLLECT_CATS[room].name)} market index</h2><div class="in">${lineChart([{ v: ix.slice(-48), c: '#d9ad45', fill: true }], ix.slice(-48).map((_, i, a) => shortDate(c.m - a.length + 1 + i)), { fmt: (v) => (v * 100).toFixed(0), label: 'Market index', h: 150 })}<p class="empty">100 = the start of the season. Booms lift collectibles, crises hit them${room === 'wine' ? '. Wine also ages: each case has a peak year' : ''}.</p></div></section></div>`;
@@ -247,6 +249,7 @@ export function lifeModal(st, UI) {
   if (st.t === 'lot') return lotModal(st);
   if (st.t === 'trade') return tradeModal(st);
   if (st.t === 'dinner') return dinnerHTML(st);
+  if (st.t === 'meet') return meetHTML(st, cardHTML);
   return '';
 }
 function homeModal(st) {
@@ -276,10 +279,10 @@ function itemInfo(cid) {
 function itemModal(st) {
   const c = city(), p = me(), i = p.life.items.find((x) => x.uid === st.uid); if (!i) return '<article class="sheet lifep"><p>This piece is no longer yours.</p></article>';
   const it = L.ITEM[i.cid], v = L.instValue(c, p, i), others = Object.values(c.players).filter((x) => x.id !== meId() && !x.admin);
-  const busy = !!i.lot;
-  return `<article class="sheet lifep"><span class="cap">${esc(ROOMS[it.cat].name)} · ${esc(it.maker)}</span><h2>${esc(it.name)}</h2>${itemInfo(i.cid)}
-    <div class="kpis sm"><div class="stat"><small>Value now</small><b>${money(v)}</b></div><div class="stat"><small>You paid</small><b>${i.cost ? money(i.cost) : 'Gift'}</b></div><div class="stat"><small>Gain</small><b class="${v - (i.cost || 0) >= 0 ? 'up' : 'down'}">${money(v - (i.cost || 0), true)}</b></div><div class="stat"><small>${esc(COLLECT_CATS[it.cat].careName || 'Storage')}</small><b>${money(v * COLLECT_CATS[it.cat].care)}</b><span class="sub">per year</span></div></div>
-    ${busy ? `<div class="lnote">At auction this month.<button class="btn sm" data-a="itemWithdraw" data-uid="${i.uid}">Withdraw</button></div>` : `
+  const busy = !!i.lot, isCar = it.cat === 'car', away = !!(i.shop || i.loan || (isCar && i.lent));
+  return `<article class="sheet lifep"><span class="cap">${esc(ROOMS[it.cat].name)} · ${esc(it.maker)}</span><h2>${esc(it.name)}</h2>${itemInfo(i.cid)}${isCar ? carPanel(st, i) : ''}
+    <div class="kpis sm"><div class="stat"><small>Value now</small><b>${money(v)}</b></div><div class="stat"><small>You paid</small><b>${i.cost ? money(i.cost) : 'Gift'}</b></div><div class="stat"><small>Gain</small><b class="${v - (i.cost || 0) >= 0 ? 'up' : 'down'}">${money(v - (i.cost || 0), true)}</b></div><div class="stat"><small>${esc(COLLECT_CATS[it.cat].careName || 'Storage')}</small><b>${money(v * COLLECT_CATS[it.cat].care * (L.isDaily(p, i) ? CARS.daily.care : 1))}</b><span class="sub">per year</span></div></div>
+    ${isCar && (st.shop || st.lend) ? '' : isCar && away ? (i.lent && !i.loan ? `<button class="btn" data-a="itemLend" data-uid="${i.uid}">Bring it home from the museum</button>` : '') : busy ? `<div class="lnote">At auction this month.<button class="btn sm" data-a="itemWithdraw" data-uid="${i.uid}">Withdraw</button></div>` : `
     <div class="acts">
       <button class="btn" data-a="itemSell" data-uid="${i.uid}" data-v="dealer">Sell to dealer · ${money(v * LC.dealerBuyback)}</button>
       <button class="btn gold" data-a="itemSell" data-uid="${i.uid}" data-v="auction">Put up for auction · est. ${money(v)}</button>

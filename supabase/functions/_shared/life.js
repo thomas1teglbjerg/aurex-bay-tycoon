@@ -2,7 +2,7 @@
 // Your own wallet (separate from the empire), homes as investments, and collections of art, wine,
 // watches and cars that gain or lose value over time. Collections and homes add up to Prestige,
 // which gives perks back in the business game. Pure functions over the city object, like the engine.
-import { HOMES, ROOMS, LIFESTYLES, SALARIES, TAX, LIFE, RARITY, PRESTIGE_TIERS, COLLECT_CATS, COLLECTIBLES, SETS, DINNER, VINTAGE, SIZES, CRAFT, CENTRAL, BANKS } from './content.js';
+import { HOMES, ROOMS, LIFESTYLES, SALARIES, TAX, LIFE, RARITY, PRESTIGE_TIERS, COLLECT_CATS, COLLECTIBLES, SETS, DINNER, VINTAGE, SIZES, CRAFT, CENTRAL, BANKS, CARS } from './content.js';
 
 const r2 = (v) => Math.round(v * 100) / 100;
 const r4 = (v) => Math.round(v * 10000) / 10000;
@@ -60,8 +60,13 @@ export function completeSets(p) {
 }
 export function instValue(city, p, it, sets) {
   const c = ITEM[it.cid], s = sets || completeSets(p);
-  return itemValue(city, it.cid) * (c.set && s.includes(c.set) ? 1 + SETS[c.set].bonus : 1);
+  return itemValue(city, it.cid) * (c.set && s.includes(c.set) ? 1 + SETS[c.set].bonus : 1) * (c.cat === 'car' ? carMult(it) : 1);
 }
+// cars (cars.js): condition 0–100 and Concours wins move a car's value
+export const carCond = (it) => (it && typeof it.cond === 'number' ? it.cond : CARS.cond.start);
+export function condMult(cond) { return cond >= 80 ? 1 + (cond - 80) * 0.0025 : cond >= 50 ? 0.85 + (cond - 50) * 0.005 : 0.4 + cond * 0.009; }
+export function carMult(it) { const wins = Math.min(CARS.concours.maxBonus, ((it && it.award) || []).filter((a) => a.place === 1).length); return condMult(carCond(it)) * (1 + wins * CARS.concours.bonus); }
+export const isDaily = (p, it) => !!(p && p.life && it && p.life.daily === it.uid);
 export function collectionValue(city, p, cat) {
   const s = completeSets(p);
   return p.life.items.filter((i) => !cat || ITEM[i.cid].cat === cat).reduce((a, i) => a + instValue(city, p, i, s), 0);
@@ -116,7 +121,7 @@ export function monthly(city, p) {
   const style = LIFESTYLES.find((s) => s.id === L.style) || LIFESTYLES[0];
   const lifestyle = L.res || L.homes.length ? style.cost / 12 : style.cost / 12 + 0.04 / 12; // no home: you rent a room
   let care = 0, lend = 0;
-  L.items.forEach((i) => { const c = ITEM[i.cid], v = instValue(city, p, i, sets); if (i.lent) lend += v * LIFE.lendFee / 12; else care += v * COLLECT_CATS[c.cat].care / 12; });
+  L.items.forEach((i) => { const c = ITEM[i.cid], v = instValue(city, p, i, sets); if (i.lent && !i.loan) lend += v * LIFE.lendFee / 12; else care += v * COLLECT_CATS[c.cat].care / 12 * (isDaily(p, i) ? CARS.daily.care : 1); });
   const overdraft = L.wallet < 0 ? -L.wallet * LIFE.overdraft / 12 : 0;
   const inflow = salaryGross - tax + rent + lend;
   const outflow = charges + propTax + upkeep + interest + principal + lifestyle + care + overdraft;
@@ -131,7 +136,7 @@ export function prestige(city, p) {
   const sets = completeSets(p);
   const extra = (h) => Object.keys(h.rooms || {}).reduce((x, k) => { const d = HOME[h.hid].rooms[k]; return x + (d ? Math.max(0, h.rooms[k] - (d.add ? 0 : 1)) * 5 : 0); }, 0);
   const home = L.homes.reduce((a, h) => a + HOME[h.hid].prestige * (h.uid === L.res ? 1 : 0.5) + extra(h), 0);
-  const items = L.items.reduce((a, i) => { const c = ITEM[i.cid]; return a + (RARITY[c.rarity].pts + Math.sqrt(Math.max(0, instValue(city, p, i, sets))) * 10) * (i.lent ? 1.5 : 1); }, 0);
+  const items = L.items.reduce((a, i) => { const c = ITEM[i.cid]; return a + (RARITY[c.rarity].pts + Math.sqrt(Math.max(0, instValue(city, p, i, sets))) * 10) * (i.lent && !i.loan ? 1.5 : 1) * (isDaily(p, i) ? CARS.daily.prest : 1); }, 0);
   const setPts = sets.reduce((a, s) => a + SETS[s].prestige, 0);
   const style = (LIFESTYLES.find((s) => s.id === L.style) || LIFESTYLES[0]).prestige;
   const score = Math.round(home + items + setPts + style + (L.legacy || 0));
@@ -314,7 +319,8 @@ function foreclose(city, p, h, ctx) {
 // ---------------------------------------------------------------- actions
 const findItem = (p, id) => p.life.items.find((i) => i.uid === id);
 const findHome = (p, id) => p.life.homes.find((h) => h.uid === id);
-function canMove(p, it) { return !!it && !it.lot; }
+function canMove(p, it) { return !!it && !it.lot && !it.shop && !it.loan; }
+export const free = (it) => canMove(null, it);
 function hasRoomAfter(p, homeUid, rent) {
   // would the collection still fit if this home were sold (rent=false) or rented out (rent=true)?
   const h = findHome(p, homeUid), saved = h.rented; h.rented = true;
@@ -394,7 +400,8 @@ export function act(city, p, action, a, ctx) {
       const price = v * LIFE.dealerBuyback; L.wallet += price; tx(L, m, `Sold to dealer · ${c.name}`, price); L.items = L.items.filter((x) => x !== it); if (isMade(c)) toDealer(city, it.cid); return ok(`Sold to the dealer for ${r2(price)} M.`);
     }
     case 'itemWithdraw': { const it = findItem(p, a.uid); if (!it || !it.lot) return err('Not on auction.'); city.life.lots = city.life.lots.filter((l) => l.id !== it.lot); delete it.lot; return ok('Withdrawn from the auction.'); }
-    case 'itemLend': { const it = findItem(p, a.uid); if (!canMove(p, it)) return err('Not available.'); const c = ITEM[it.cid]; if (c.cat !== 'art') return err('Only art can be lent to the museum.'); if (it.lent && roomFree(p, 'art') < 1) return err('No free wall to bring it home to.'); it.lent = !it.lent; return ok(it.lent ? `${c.name} now hangs in the Aurex Bay Museum. It frees a wall, earns a fee and adds prestige.` : `${c.name} is back on your wall.`); }
+    case 'itemLend': { const it = findItem(p, a.uid); if (!canMove(p, it)) return err('Not available.'); const c = ITEM[it.cid]; if (c.cat !== 'art' && c.cat !== 'car') return err('Only art and cars can be lent to the museum.');
+      if (!it.lent && L.daily === it.uid) L.daily = null; if (it.lent && roomFree(p, c.cat) < 1) return err(c.cat === 'car' ? 'No free bay in your garage to bring it home to.' : 'No free wall to bring it home to.'); it.lent = !it.lent; return ok(c.cat === 'car' ? (it.lent ? `${c.name} now stands in the museum's car hall. It frees a bay, earns a fee and adds prestige.` : `${c.name} is back in your garage.`) : it.lent ? `${c.name} now hangs in the Aurex Bay Museum. It frees a wall, earns a fee and adds prestige.` : `${c.name} is back on your wall.`); }
     case 'itemGift': {
       const it = findItem(p, a.uid), to = city.players[a.to]; if (!canMove(p, it)) return err('Not available.'); if (!to || to.id === p.id) return err('Pick someone to give it to.');
       const c = ITEM[it.cid]; ensurePlayer(city, to); if (!to.bot && roomFree(to, c.cat) < 1) return err(`${to.name} has no room for it.`);
