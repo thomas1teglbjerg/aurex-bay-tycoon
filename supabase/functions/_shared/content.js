@@ -1260,6 +1260,8 @@ export const HOLDING = {
 // Cars in the personal life (_shared/cars.js, AUTO from engine.js). Condition 0–100 sets part of a car's value;
 // workshops service and restore them, Cars & Coffee once a month, a Concours once a year, loans and the daily car.
 export const CARS = {
+  // everyone can keep this many cars on the street, home or no home, until a garage holds more
+  street: 1,
   cond: { start: 85, top: 95 },
   // value × condition: 100 → 1.05, 80 → 1, 50 → 0.85, 0 → 0.4
   wear: { daily: 1.5, idle: 0.5, idleM: 6, meet: 1 },
