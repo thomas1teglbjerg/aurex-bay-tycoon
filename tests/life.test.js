@@ -1,4 +1,5 @@
 // Personal life: wallet, homes, collections, auctions, trades, gifts and prestige
+import './open-doors.js';
 import * as E from '../supabase/functions/_shared/engine.js';
 const L = E.LIFE;
 const assert = (c, m) => { if (!c) { console.error('FAIL', m); process.exit(1); } console.log('ok ', m); };

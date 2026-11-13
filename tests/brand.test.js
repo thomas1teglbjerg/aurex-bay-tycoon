@@ -1,4 +1,5 @@
 // Parent companies: avatar names, founding solo or co-owned, buy-ins and logos.
+import './open-doors.js';
 import * as E from '../supabase/functions/_shared/engine.js';
 const BR = E.BR;
 const assert = (c, m) => { if (!c) { console.error('FAIL', m); process.exit(1); } console.log('ok ', m); };

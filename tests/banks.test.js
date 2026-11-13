@@ -1,5 +1,6 @@
 // Private banks: they set their own rates, only bank owners borrow at the market rate, the credit committee,
 // defaults with pledges, mortgages and foreclosure, rival tycoons as borrowers and rate wars
+import './open-doors.js';
 import * as E from '../supabase/functions/_shared/engine.js';
 import { BANKS as B, CENTRAL_BANK } from '../supabase/functions/_shared/content.js';
 const assert = (c, m) => { if (!c) { console.error('FAIL', m); process.exit(1); } console.log('ok ', m); };

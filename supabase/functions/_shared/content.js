@@ -896,7 +896,7 @@ export const PRESTIGE_TIERS = [
 export const PRESTIGE = {
   bigTier: 2,                       // Respected: buy a Large company (also as a plot, a bid or a hostile bid)
   talent: { 4: 1, 5: 2 },           // specialist rating → tier needed to sign or bid for them (4★ Known, 5★ Respected)
-  lux: { pct: 0.02, types: ['hotel', 'restaurant', 'vineyard', 'dealer', 'autorepair', 'clothing', 'fashion', 'film', 'music'] } // +2% demand per tier
+  lux: { pct: 0.02, types: ['hotel', 'restaurant', 'vineyard', 'dealer', 'clothing', 'fashion', 'film', 'music'] } // +2% demand per tier
 };
 export const PRESTIGE_PERKS = [
   'Large companies need Respected',

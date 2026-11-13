@@ -1,5 +1,6 @@
 // Mail: staff write about happenings and ask for an answer, specialists write when they are unhappy,
 // decisions arrive as mail, the autopilot answers what is left, and the Gazette sends a monthly briefing with an ad
+import './open-doors.js';
 import * as E from '../supabase/functions/_shared/engine.js';
 import { HAPPENINGS, MAIL_HAP, DECISIONS, MAIL_PACE } from '../supabase/functions/_shared/content.js';
 const T = E.TAL, ML = E.MAIL;

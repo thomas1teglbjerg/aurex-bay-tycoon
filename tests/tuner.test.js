@@ -1,4 +1,5 @@
 // Auto repair shops build a collectible tuner car once a year (same model as vineyard wine, CRAFT in content.js)
+import './open-doors.js';
 import * as E from '../supabase/functions/_shared/engine.js';
 import { TUNER, DEALER_CARS, CRAFT } from '../supabase/functions/_shared/content.js';
 const assert = (c, m) => { if (!c) { console.error('FAIL', m); process.exit(1); } console.log('ok ', m); };

@@ -1,4 +1,5 @@
 // Vineyards: once a year a chance to bottle a collectible wine that players can sell to the dealer, auction or keep
+import './open-doors.js';
 import './standing.js';
 import * as E from '../supabase/functions/_shared/engine.js';
 import { LISTINGS, VINTAGE } from '../supabase/functions/_shared/content.js';

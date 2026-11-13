@@ -1,4 +1,5 @@
 // Cars in the personal life: condition, workshops, Cars & Coffee, the Concours, loans, the daily car and car chance cards
+import './open-doors.js';
 import * as E from '../supabase/functions/_shared/engine.js';
 import { CARS as K, CHANCE } from '../supabase/functions/_shared/content.js';
 const L = E.LIFE, AU = E.AUTO;

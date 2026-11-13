@@ -1,4 +1,5 @@
 // The Aurex Gazette as a company: ad desk, press releases, the front page and the administrator's house ad
+import './open-doors.js';
 import './standing.js';
 import * as E from '../supabase/functions/_shared/engine.js';
 import { PAPER, HOUSE_AD } from '../supabase/functions/_shared/content.js';
