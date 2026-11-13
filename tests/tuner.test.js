@@ -5,7 +5,7 @@ const assert = (c, m) => { if (!c) { console.error('FAIL', m); process.exit(1); 
 const L = E.LIFE;
 let now = 1_700_000_000_000;
 
-assert(TUNER.models.map((m) => m.name).join('|') === 'Rivermore Trailhawk|Takemi VTEC|Valtor GT-RS', 'the first three tuner cars');
+assert(TUNER.models.map((m) => m.name).join('|') === 'Rivermore Trailhawk|Takemi VTEC|Valtor GT-RS|Riventor GT|Riventor Twin-Stripe', 'the tuner cars, with the two Riventors');
 assert(E.makes({ type: 'autorepair' }) && E.makes({ type: 'vineyard' }), 'auto repair and vineyards make collectibles');
 assert(E.makes({ type: 'dealer' }) && CRAFT.dealer.cat === 'car', 'dealerships share the model with their own cars');
 assert(DEALER_CARS.models.every((m) => /^(Bergwald|Valtor) /.test(m.name)) && !DEALER_CARS.models.some((m) => TUNER.models.some((t) => t.name === m.name)), 'dealerships get Valtor and Bergwald cars, never tuner cars');

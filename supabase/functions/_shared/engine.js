@@ -596,7 +596,7 @@ export function moveListing(city, lid, p) {
   Object.assign(l, { p: q, ...placeOn(l.d, q) });
   return { ok: true, msg: `${l.title || TYPES[l.type].name} moved.` };
 }
-function migrateLife(city) { migrateMap(city); BLD.migrate(city, bctx(city)); LIFE.register(city); if (city.over) city.over = false; if (!city.talent) TAL.ensure(city); if (city.wk == null) city.wk = city.m * 4; if (city.m0 == null) city.m0 = Math.max(0, city.m - 2); if (city.migratedLife === 1) return; LIFE.ensure(city); city.migratedLife = 1; }
+function migrateLife(city) { migrateMap(city); BLD.migrate(city, bctx(city)); LIFE.register(city); LIFE.prune(city); if (city.over) city.over = false; if (!city.talent) TAL.ensure(city); if (city.wk == null) city.wk = city.m * 4; if (city.m0 == null) city.m0 = Math.max(0, city.m - 2); if (city.migratedLife === 1) return; LIFE.ensure(city); city.migratedLife = 1; }
 // small companies lost HR, Finance, R&D and Legal: whoever led them steps down (specialists stay on the team),
 // workers move to Operations where there is room, the rest leave without severance, and the opening fee is paid back
 function trimSmall(city) {

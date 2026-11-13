@@ -933,14 +933,8 @@ export const COLLECTIBLES = [
   { id: 't3', cat: 'watch', name: 'Vauclair Perpetual Calendar', maker: 'Vauclair', year: 1995, rarity: 'Legendary', v: 1.4, ed: 1, medium: 'Platinum' },
   { id: 't5', cat: 'watch', name: 'Lindqvist Rectangle', maker: 'Lindqvist', year: 1972, rarity: 'Common', v: 0.03, ed: 6, medium: 'Gold, leather strap' },
   { id: 't6', cat: 'watch', name: 'Halden Diver Green', maker: 'Halden', year: 2010, rarity: 'Common', v: 0.025, ed: 6, medium: 'Steel diver' },
-  { id: 't7', cat: 'watch', name: 'Vauclair Tourbillon', maker: 'Vauclair', year: 2018, rarity: 'Epic', v: 0.36, ed: 2, medium: 'Rose gold' },
-  { id: 'c1', cat: 'car', name: 'Varenne GT 1967', maker: 'Varenne', year: 1967, rarity: 'Legendary', v: 6.5, ed: 1, set: 'lemans', medium: 'V12 coupé' },
-  { id: 'c2', cat: 'car', name: 'Moretti Stradale', maker: 'Moretti', year: 1972, rarity: 'Epic', v: 2.4, ed: 1, set: 'lemans', medium: 'Mid-engine V8' },
-  { id: 'c3', cat: 'car', name: 'Halsey Roadster', maker: 'Halsey', year: 1958, rarity: 'Rare', v: 0.45, ed: 2, medium: 'Open two-seater' },
-  { id: 'c4', cat: 'car', name: 'Vellano V9 Coupé', maker: 'Vellano', year: 1971, rarity: 'Rare', v: 0.24, ed: 3, medium: 'Air-cooled flat-six coupé', img: '58% 60%' },
-  { id: 'c5', cat: 'car', name: 'Aurex Motors Prototype', maker: 'Aurex Motors', year: 2021, rarity: 'Epic', v: 1.2, ed: 1, medium: 'Electric hypercar' },
-  { id: 'c6', cat: 'car', name: 'Nordvik Rally', maker: 'Nordvik', year: 1985, rarity: 'Rare', v: 0.3, ed: 2, medium: 'Group B rally car' },
-  { id: 'c7', cat: 'car', name: 'Brasco 440', maker: 'Brasco', year: 1970, rarity: 'Common', v: 0.12, ed: 3, medium: 'Muscle car' }
+  { id: 't7', cat: 'watch', name: 'Vauclair Tourbillon', maker: 'Vauclair', year: 2018, rarity: 'Epic', v: 0.36, ed: 2, medium: 'Rose gold' }
+  // no ready-made cars: every car is built by a player's auto repair shop or unveiled by a dealership (CRAFT), or a barn find
 ];
 // Vineyards bottle a collectible wine at harvest (once a year). odds = rarity weights by estate size; top = the rarest a size can make.
 // Each specialist leading a department adds perHead to the chance and bump × rating to the chance of one rarity step up.
@@ -976,7 +970,9 @@ export const TUNER = {
   models: [
     { id: 'trailhawk', name: 'Rivermore Trailhawk', body: 'Lifted off-road SUV', pic: 'x-tuner-trailhawk', rar: ['Common', 'Rare', 'Epic'] },
     { id: 'takemi', name: 'Takemi VTEC', body: 'Tuned sport sedan', pic: 'x-tuner-takemi', rar: ['Common', 'Rare', 'Epic'] },
-    { id: 'gtrs', name: 'Valtor GT-RS', body: 'Widebody turbo coupé', pic: 'x-tuner-gtrs', rar: ['Rare', 'Epic', 'Legendary'] }
+    { id: 'gtrs', name: 'Valtor GT-RS', body: 'Widebody turbo coupé', pic: 'x-tuner-gtrs', rar: ['Rare', 'Epic', 'Legendary'] },
+    { id: 'rvgt', name: 'Riventor GT', body: 'Classic V8 coupé, restomod', pic: 'x-tuner-riventor-gt', rar: ['Common', 'Rare', 'Epic'] },
+    { id: 'rvstripe', name: 'Riventor Twin-Stripe', body: 'Classic muscle car, hood scoops and racing stripes', pic: 'x-tuner-riventor-stripe', rar: ['Rare', 'Epic', 'Legendary'] }
   ],
   trims: { Common: ['Street', 'Daily Driver'], Rare: ['Stage 2', 'Sport'], Epic: ['Stage 3', 'Track Spec'], Legendary: ['Time Attack', 'One-Off'] }
 };
@@ -1008,8 +1004,7 @@ export const SETS = {
   kestrel: { name: 'The Kestrel Harbors', bonus: 0.12, prestige: 40 },
   crowns: { name: 'Okafor-Lind Crowns', bonus: 0.15, prestige: 40 },
   verlaine: { name: 'Vaillon Vertical', bonus: 0.1, prestige: 30 },
-  aurel: { name: 'Vanthoben Trinity', bonus: 0.12, prestige: 35 },
-  lemans: { name: 'Le Mans Legends', bonus: 0.15, prestige: 60 }
+  aurel: { name: 'Vanthoben Trinity', bonus: 0.12, prestige: 35 }
 };
 // A dinner party at home: pick guests and a case of wine. Better wine, stronger effect.
 export const DINNER = {
