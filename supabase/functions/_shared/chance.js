@@ -446,7 +446,7 @@ const homeCars = (p) => AUTO.cars(p).filter((it) => LIFE.free(it) && !it.lent);
 const carFans = (city) => { const b = BOT.bots(city), f = b.filter((x) => ((BOT.pers(x.id) || {}).types || []).some((t) => ['car', 'dealer', 'autorepair'].includes(t))); return f.length ? f : b; };
 const wal = (city, p, v, text) => { p.life.wallet = r5(p.life.wallet + v); LIFE.tx(p.life, city.m, text, v); };
 Object.assign(FIND, {
-  barnfind: (city, p) => !p.life || LIFE.roomFree(p, 'car') < 1 || p.life.wallet < K.barnfind.fee ? [] : [{ heat: 0.45, why: 'You have a free bay in your garage.' }],
+  barnfind: (city, p) => !p.life || LIFE.roomFree(p, 'car') < 1 || p.life.wallet < K.barnfind.fee ? [] : [{ heat: 0.45, why: LIFE.street(p) ? 'Your street spot is free.' : 'You have a free bay in your garage.' }],
   carbid: (city, p) => homeCars(p).map((it) => {
     const v = LIFE.instValue(city, p, it); if (v < K.carbid.min) return null;
     const pr = K.carbid.prem, amt = r2(v * (1 + pr[0] + Math.random() * (pr[1] - pr[0])));
@@ -492,11 +492,11 @@ Object.assign(SEND, {
       opts: [{ l: `Buy it for ${h.price} M`, d: `Completes the ${sname}: more value and prestige for the whole set.`, ...ch('setBuy', { cid: h.cid, bid: h.bid || null, price: h.price }) }, { l: 'Not now', d: 'Nothing happens.', safe: true, ...ch('pass') }] }); }
 });
 Object.assign(ANSWER, {
-  barn: (city, p, a, l, ctx, rnd) => { const k = K.barnfind; if (p.life.wallet < k.fee) return err(`You need ${r2(k.fee * 1000)} k on your account.`); if (LIFE.roomFree(p, 'car') < 1) return err('Your garage is full.');
+  barn: (city, p, a, l, ctx, rnd) => { const k = K.barnfind; if (p.life.wallet < k.fee) return err(`You need ${r2(k.fee * 1000)} k on your account.`); if (LIFE.roomFree(p, 'car') < 1) return err(LIFE.street(p) ? 'Your street spot is taken.' : 'Your garage is full.');
     wal(city, p, -k.fee, `${k.from[0]} · the old barn`);
     if (rnd() >= k.odds) return ok('Under the tarps: a lawnmower, a rusty bicycle and a lot of dust. The money is gone.');
     const it = AUTO.barnCar(city, p, k, rnd), c = ITEM[it.cid];
-    return ok(`Under the last tarp: a ${c.year} ${c.name} (${c.rarity}), condition ${Math.round(it.cond)}. It is in your garage now. A workshop can restore it.`); },
+    return ok(`Under the last tarp: a ${c.year} ${c.name} (${c.rarity}), condition ${Math.round(it.cond)}. ${LIFE.street(p) ? 'It is parked on the street outside now.' : 'It is in your garage now.'} A workshop can restore it.`); },
   carSell: (city, p, a, l, ctx) => { const it = p.life.items.find((i) => i.uid === a.uid), b = city.players[a.bid];
     if (!it || !LIFE.free(it) || it.lent) return ok('The car is no longer in your garage.'); if (!b || b.cash < a.amt) return ok(`${b ? b.name : 'They'} can no longer pay.`);
     p.life.items = p.life.items.filter((x) => x !== it); if (p.life.daily === it.uid) p.life.daily = null; b.cash = r5(b.cash - a.amt);

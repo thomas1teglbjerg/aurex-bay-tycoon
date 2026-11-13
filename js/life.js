@@ -109,6 +109,7 @@ const rinstall = (hid, room) => (hid && L.HOME[hid].names && L.HOME[hid].names[r
 function roomStatus(p, room) {
   if (room === 'living') return { open: true, text: 'Finances · lifestyle · dinners' };
   const homes = p.life.homes.filter((h) => !h.rented), cap = L.capacity(p, room), used = L.used(p, room);
+  if (L.street(p, room)) return { open: true, street: true, text: `${used} / ${cap} street parking`, used, cap };
   if (cap > 0) return { open: true, text: `${used} / ${cap} ${ROOMS[room].unit}`, used, cap };
   if (homes.some((h) => L.roomLevel(h, room) === 0)) return { open: false, install: true, text: `Not installed · ${rinstall((homes.find((h) => L.roomLevel(h, room) === 0) || {}).hid, room)}` };
   const res = p.life.homes.find((h) => h.uid === p.life.res);
@@ -119,14 +120,15 @@ function homeView(UI, res) {
   if (!res) return noHomeView();
   const tiles = ROOM_ORDER.map((room) => {
     const s = roomStatus(p, room), v = room === 'living' ? null : L.collectionValue(c, p, room);
-    return `<button class="rtile ${s.open ? '' : 'locked'} ${room === 'living' ? 'wide' : ''}" data-a="lifeRoom" data-v="${room}" style="${homeBg(res.hid, room)}">
-      <span class="rt-in"><span class="rt-ic">${ricon(s.open || s.install ? room : 'lock', 20)}</span><b>${esc(rname(res.hid, room))}</b><span>${esc(s.text)}</span>${v ? `<strong>${money(v)}</strong>` : ''}</span></button>`;
+    return `<button class="rtile ${s.open ? '' : 'locked'} ${room === 'living' ? 'wide' : ''}" data-a="lifeRoom" data-v="${room}" style="${homeBg(res.hid, s.street ? 'ext' : room)}">
+      <span class="rt-in"><span class="rt-ic">${ricon(s.open || s.install ? room : 'lock', 20)}</span><b>${s.street ? 'Street parking' : esc(rname(res.hid, room))}</b><span>${esc(s.text)}</span>${v ? `<strong>${money(v)}</strong>` : ''}</span></button>`;
   }).join('');
   return `<div class="rtiles">${tiles}</div>${moneyBox(true)}${wealthHTML()}${prestigeHTML()}`;
 }
 function noHomeView() {
   const p = me();
-  return `${moneyBox(true)}<section class="box"><h2>Homes for sale <small>${HOMES.length} buildings</small></h2><div class="in"><div class="hgrid">${HOMES.map(homeCardSmall).join('')}</div></div></section>${prestigeHTML()}`;
+  const s = roomStatus(p, 'car'), car = `<div class="rtiles"><button class="rtile wide" data-a="lifeRoom" data-v="car" style="${homeBg('H1', 'ext')}"><span class="rt-in"><span class="rt-ic">${ricon('car', 20)}</span><b>Street parking</b><span>${esc(s.text)}</span>${L.used(p, 'car') ? `<strong>${money(L.collectionValue(city(), p, 'car'))}</strong>` : ''}</span></button></div>`;
+  return `${moneyBox(true)}${car}<section class="box"><h2>Homes for sale <small>${HOMES.length} buildings</small></h2><div class="in"><div class="hgrid">${HOMES.map(homeCardSmall).join('')}</div></div></section>${prestigeHTML()}`;
 }
 function wealthHTML() {
   const c = city(), p = me(), Lp = p.life, eq = L.equity(c, p), coll = L.collectionValue(c, p), nw = Lp.wallet + (Lp.savings || 0) + eq + coll;
@@ -150,16 +152,16 @@ function prestigeHTML() {
 function roomHTML(UI) {
   const c = city(), p = me(), room = UI.life.room, res = p.life.homes.find((h) => h.uid === p.life.res) || p.life.homes[0];
   const hid = res ? res.hid : 'H1', s = roomStatus(p, room), R = ROOMS[room];
-  const head = `<section class="rhead ${s.open ? '' : 'locked'}" style="${homeBg(hid, room)}"><button class="chip dark back" data-a="lifeBack">‹ ${res ? esc(L.HOME[res.hid].name) : 'Life'}</button>
-    <div class="rh-in"><span class="cap">${esc(R.short)}</span><h1>${esc(rname(res && hid, room))}</h1><p>${esc(R.blurb)}</p>${s.cap ? `<div class="rcap"><div class="bar"><i style="width:${Math.min(100, s.used / s.cap * 100)}%"></i></div><span>${esc(s.text)}</span></div>` : `<span class="chip dark">${esc(s.text)}</span>`}</div></section>`;
+  const head = `<section class="rhead ${s.open ? '' : 'locked'}" style="${homeBg(hid, s.street ? 'ext' : room)}"><button class="chip dark back" data-a="lifeBack">‹ ${res ? esc(L.HOME[res.hid].name) : 'Life'}</button>
+    <div class="rh-in"><span class="cap">${esc(R.short)}</span><h1>${s.street ? 'Street parking' : esc(rname(res && hid, room))}</h1><p>${s.street ? `No garage yet, so ${CARS.street === 1 ? "one car parks" : CARS.street + " cars park"} on the street outside. A home with a garage holds more.` : esc(R.blurb)}</p>${s.cap ? `<div class="rcap"><div class="bar"><i style="width:${Math.min(100, s.used / s.cap * 100)}%"></i></div><span>${esc(s.text)}</span></div>` : `<span class="chip dark">${esc(s.text)}</span>`}</div></section>`;
   if (room === 'living') return `<div class="lifep">${head}${livingHTML()}</div>`;
   const installs = p.life.homes.filter((h) => L.HOME[h.hid].rooms[room] && L.roomCost(h, room) != null).map((h) => {
     const lv = L.roomLevel(h, room), d = L.HOME[h.hid].rooms[room], cost = L.roomCost(h, room);
     return `<div class="row"><div class="grow"><b>${lv === 0 ? esc(rinstall(h.hid, room)) : `Expand the ${rname(h.hid, room).toLowerCase()}`}</b><span>${esc(L.HOME[h.hid].name)} · ${lv === 0 ? `room for ${d.cap}` : `from ${d.cap} to ${d.cap * 2}`} ${R.unit} · adds value to the home</span></div><button class="btn sm gold" data-a="homeRoom" data-uid="${h.uid}" data-room="${room}">${money(cost)}</button></div>`;
   }).join('');
   const mine = p.life.items.filter((i) => L.ITEM[i.cid].cat === room), sets = L.completeSets(p);
-  const cards = mine.map((i) => cardHTML(i.cid, { a: 'item', attrs: `data-uid="${i.uid}"`, value: L.instValue(c, p, i, sets), cost: i.cost, tag: room === 'car' ? carTag(p, i) : i.lot ? 'At auction' : i.lent ? 'At the museum' : '', cond: room === 'car' ? i : null })).join('');
-  const free = s.cap ? Math.max(0, s.cap - L.used(p, room)) : 0, empties = free ? emptySlot(`${free} free ${R.unit}`) : '';
+  const cards = mine.map((i) => cardHTML(i.cid, { a: 'item', attrs: `data-uid="${i.uid}"`, value: L.instValue(c, p, i, sets), cost: i.cost, tag: room === 'car' ? carTag(p, i) || (s.street && !i.lent ? 'On the street' : '') : i.lot ? 'At auction' : i.lent ? 'At the museum' : '', cond: room === 'car' ? i : null })).join('');
+  const free = s.cap ? Math.max(0, s.cap - L.used(p, room)) : 0, empties = free ? emptySlot(s.street ? 'Free street spot' : `${free} free ${R.unit}`) : '';
   const val = L.collectionValue(c, p, room), cost = mine.reduce((a, i) => a + (i.cost || 0), 0);
   const ix = c.life.ixh[room], ixd = ix.length > 12 ? pct(ix[ix.length - 1], ix[ix.length - 13]) : pct(ix[ix.length - 1], ix[0]);
   const setRows = Object.entries(SETS).filter(([k]) => COLLECTIBLES.some((x) => x.set === k && x.cat === room)).map(([k, st]) => {

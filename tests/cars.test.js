@@ -96,4 +96,10 @@ p.life.items = p.life.items.filter((i) => i.cid !== 'c1' && i.cid !== 'c2'); Obj
 give(p, 'c2'); p.life.wallet = 50;
 const sc = E.CH.fits(city, p, ctx).find((h) => h.id === 'setchase' && h.cid === 'c1'); assert(sc, 'one car short of Le Mans Legends: a missing piece card');
 const sm = E.CH.deal(city, p, sc, ctx); assert(A('mailAnswer', { id: sm.id, opt: 0 }).ok && L.completeSets(p).includes('lemans'), 'buy it and complete the set');
+// street parking: one car without a garage
+{ const sv = { homes: p.life.homes, items: p.life.items, res: p.life.res, daily: p.life.daily }; p.life.homes = []; p.life.res = null; p.life.items = []; p.life.daily = null; p.life.wallet = 50;
+  const cars = Object.values(L.ITEM).filter((d) => d.cat === 'car' && !d.lid && L.available(city, d.id) > 0).map((d) => d.id); cars.forEach((cid) => { if (!city.life.dealer.includes(cid)) city.life.dealer.push(cid); });
+  assert(L.street(p) && L.capacity(p, 'car') === 1 && L.capacity(p, 'art') === 0, 'no home: room for one car on the street, no art');
+  if (cars.length >= 2) { const r1 = A('itemBuy', { cid: cars[0] }); assert(r1.ok, 'buy a car with no garage: ' + r1.msg); const r2 = A('itemBuy', { cid: cars[1] }); assert(!r2.ok && /street/.test(r2.msg), 'a second car needs a garage: ' + r2.msg); }
+  Object.assign(p.life, sv); }
 console.log('cars: all good');

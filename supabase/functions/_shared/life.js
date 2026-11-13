@@ -84,9 +84,12 @@ export const inCellars = (city, cid) => (city.listings || []).reduce((a, l) => a
 export const available = (city, cid) => ITEM[cid].ed - ownedCount(city, cid) - onAuction(city, cid) - (isMade(ITEM[cid]) ? inCellars(city, cid) : 0);
 
 export function roomLevel(h, room) { const def = HOME[h.hid].rooms[room]; if (!def) return -1; return h.rooms && h.rooms[room] != null ? h.rooms[room] : def.add ? 0 : 1; }
-export function capacity(p, cat) {
+export function roomCap(p, cat) {
   return p.life.homes.filter((h) => !h.rented).reduce((a, h) => { const lv = roomLevel(h, cat), def = HOME[h.hid].rooms[cat]; return a + (lv > 0 ? def.cap * lv : 0); }, 0);
 }
+// cars: a garage, or street parking for CARS.street cars when your garages hold fewer
+export const street = (p, cat = 'car') => cat === 'car' && roomCap(p, 'car') < CARS.street;
+export function capacity(p, cat) { const n = roomCap(p, cat); return cat === 'car' ? Math.max(n, CARS.street) : n; }
 export const used = (p, cat) => p.life.items.filter((i) => ITEM[i.cid].cat === cat && !i.lent).length;
 export const roomFree = (p, cat) => capacity(p, cat) - used(p, cat);
 export function roomCost(h, room) {
@@ -401,7 +404,7 @@ export function act(city, p, action, a, ctx) {
     }
     case 'itemWithdraw': { const it = findItem(p, a.uid); if (!it || !it.lot) return err('Not on auction.'); city.life.lots = city.life.lots.filter((l) => l.id !== it.lot); delete it.lot; return ok('Withdrawn from the auction.'); }
     case 'itemLend': { const it = findItem(p, a.uid); if (!canMove(p, it)) return err('Not available.'); const c = ITEM[it.cid]; if (c.cat !== 'art' && c.cat !== 'car') return err('Only art and cars can be lent to the museum.');
-      if (!it.lent && L.daily === it.uid) L.daily = null; if (it.lent && roomFree(p, c.cat) < 1) return err(c.cat === 'car' ? 'No free bay in your garage to bring it home to.' : 'No free wall to bring it home to.'); it.lent = !it.lent; return ok(c.cat === 'car' ? (it.lent ? `${c.name} now stands in the museum's car hall. It frees a bay, earns a fee and adds prestige.` : `${c.name} is back in your garage.`) : it.lent ? `${c.name} now hangs in the Aurex Bay Museum. It frees a wall, earns a fee and adds prestige.` : `${c.name} is back on your wall.`); }
+      if (!it.lent && L.daily === it.uid) L.daily = null; if (it.lent && roomFree(p, c.cat) < 1) return err(c.cat === 'car' ? (street(p) ? 'Your street spot is taken.' : 'No free bay in your garage to bring it home to.') : 'No free wall to bring it home to.'); it.lent = !it.lent; return ok(c.cat === 'car' ? (it.lent ? `${c.name} now stands in the museum's car hall. It frees a bay, earns a fee and adds prestige.` : `${c.name} is back in your garage.`) : it.lent ? `${c.name} now hangs in the Aurex Bay Museum. It frees a wall, earns a fee and adds prestige.` : `${c.name} is back on your wall.`); }
     case 'itemGift': {
       const it = findItem(p, a.uid), to = city.players[a.to]; if (!canMove(p, it)) return err('Not available.'); if (!to || to.id === p.id) return err('Pick someone to give it to.');
       const c = ITEM[it.cid]; ensurePlayer(city, to); if (!to.bot && roomFree(to, c.cat) < 1) return err(`${to.name} has no room for it.`);
@@ -428,7 +431,7 @@ export function act(city, p, action, a, ctx) {
         if (l.owner.k !== 'p') return err(`A ${w.item} from a co-owned company stays with the company. Sell it instead.`);
         if (roomFree(p, c.cat) < 1) return err(roomMsg(p, c.cat));
         l.cellar = l.cellar.filter((x) => x !== cs); L.items.push({ uid: cs.uid, cid: cs.cid, m, cost: 0, lent: false });
-        return ok(`${c.name} is in your ${w.home} now. Keep it, trade it with other players or give it away${c.cat === 'wine' ? ' or serve it at a dinner' : ''}.`);
+        return ok(`${c.name} is ${street(p, c.cat) ? 'parked on the street outside' : `in your ${w.home}`} now. Keep it, trade it with other players or give it away${c.cat === 'wine' ? ' or serve it at a dinner' : ''}.`);
       }
       const all = a.all ? l.cellar.filter((x) => x.cid === cs.cid && !x.lot) : [cs], price = r4(v * LIFE.dealerBuyback * all.length);
       l.cellar = l.cellar.filter((x) => !all.includes(x)); ctx.credit(city, l.owner, price); toDealer(city, cs.cid);
@@ -506,6 +509,7 @@ export function cellarSellAll(city, l, cid) {
   return r4(itemValue(city, cid) * LIFE.dealerBuyback * all.length);
 }
 function roomMsg(p, cat) {
+  if (street(p, cat)) return `Your street spot is taken. A home with a garage holds more cars.`;
   const has = p.life.homes.some((h) => HOME[h.hid].rooms[cat]);
   if (!p.life.homes.length) return 'Buy a home first. Collections live in your home.';
   return has ? `No free ${ROOMS[cat].unit}. Install or expand your ${ROOMS[cat].name.toLowerCase()}.` : `None of your homes has a ${ROOMS[cat].name.toLowerCase()}.`;

@@ -23,7 +23,7 @@ const DEALERS = {
   watch: { host: 'hourandhand.ab', name: 'Hour & Hand', sub: 'Watches of distinction · Aurex City', logo: ['H&H', '#0f1e3a', '#d9b45a'], hero: 'img/h1-watch.jpg', theme: 'watch', slogan: 'Time, beautifully kept',
     blurb: 'Certified pre-owned and limited pieces. Every watch is serviced, authenticated and ready to wear.', buy: 'Reserve', private: 'On other wrists' },
   car: { host: 'coastlineclassics.ab', name: 'Coastline Classics', sub: 'Classic and collector cars · Sunset Strand', logo: ['CC', '#e0662b', '#fff7ea'], hero: 'img/x-c4.jpg', theme: 'cars', slogan: 'Built for the coast road',
-    blurb: 'Matching numbers, full histories and a test drive along the coast road. Garage required.', buy: 'Buy this car', private: 'In other garages' }
+    blurb: 'Matching numbers, full histories and a test drive along the coast road. One car parks on the street; more need a garage.', buy: 'Buy this car', private: 'In other garages' }
 };
 export const SITES = {
   'baylink.ab': { name: 'Baylink', tag: 'Search Aurex Bay', logo: ['b', '#2f6fb0', '#fff'] },
@@ -143,7 +143,7 @@ const myBidsCount = (c) => c.life.lots.filter((l) => l.bids[meId()] != null).len
 function dealer(cat, u) {
   const c = city(), p = me(), d = DEALERS[cat], R = ROOMS[cat], free = L.roomFree(p, cat);
   const head = `<div class="dl-head">${go(d.host, `<b>${esc(d.name)}</b>`, 'dl-logo')}<nav>${go(d.host, 'Shop', u.path[0] ? '' : 'on')}${go(d.host + '/collectors', 'Collectors', u.path[0] === 'collectors' ? 'on' : '')}${go(d.host + '/sell', 'Sell to us', u.path[0] === 'sell' ? 'on' : '')}</nav></div>`;
-  const roomNote = free > 0 ? `<div class="dl-note ok">You have ${free} free ${R.unit} at home.</div>` : `<div class="dl-note">${p.life.homes.length ? `No free ${R.unit} at home. Install or expand your ${R.name.toLowerCase()} first.` : 'Buy a home with the right room before you start collecting.'}</div>`;
+  const st = L.street(p, cat), roomNote = free > 0 ? `<div class="dl-note ok">${st ? 'Your street spot is free: one car can park outside.' : `You have ${free} free ${R.unit} at home.`}</div>` : `<div class="dl-note">${st ? 'Your street spot is taken. A home with a garage holds more cars.' : p.life.homes.length ? `No free ${R.unit} at home. Install or expand your ${R.name.toLowerCase()} first.` : 'Buy a home with the right room before you start collecting.'}</div>`;
   if (u.path[0] === 'item') {
     const cid = u.path[1], it = L.ITEM[cid]; if (!it || it.cat !== cat) return head + '<div class="dl-body"><h2>Not found</h2></div>';
     const inStock = c.life.dealer.includes(cid), price = L.itemValue(c, cid) * LC.dealerMarkup, h = c.life.items[cid].h, w = L.wineWindow(it, c.m / 12);
