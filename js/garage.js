@@ -82,7 +82,7 @@ export function startMeet(st) {
 }
 export function meetHTML(st, cardHTML) {
   const p = me(), it = st.uid && p.life.items.find((x) => x.uid === st.uid);
-  const head = `<header style="background-image:linear-gradient(180deg, rgba(10,30,50,0.45), rgba(10,16,26,0.9)), url(img/x-carsandcoffee.jpg)"><span class="dh-ic">${ricon()}</span><div><span class="cap" style="color:#fff;opacity:.8">${esc(K.meet.place)}</span><h3>${esc(K.meet.title)}</h3><p>${esc(K.meet.scene)}</p></div><div class="pulse" aria-hidden="true"><i></i><i></i><i></i></div></header>`;
+  const head = `<header class="meetcov" style="background-image:linear-gradient(180deg, rgba(10,16,26,0) 45%, rgba(10,16,26,0.92)), url(img/x-carsandcoffee.jpg)"><span class="dh-ic">${ricon()}</span><div><span class="cap" style="color:#fff;opacity:.8">${esc(K.meet.place)}</span><h3>${esc(K.meet.title)}</h3><p>${esc(K.meet.scene)}</p></div><div class="pulse" aria-hidden="true"><i></i><i></i><i></i></div></header>`;
   if (st.phase === 'setup') {
     const cars = AU.cars(p).filter((i) => L.free(i) && !i.lent);
     return `<article class="scene lifep">${head}<div class="scene-in"><div class="ask"><b>Who do you want to meet?</b>${K.meet.who.map((g) => `<button class="opt ${st.who === g.id ? 'sel' : ''}" data-a="meetWho" data-v="${g.id}"><b>${esc(g.label)}</b><span>${esc(g.note)}</span></button>`).join('')}</div>
