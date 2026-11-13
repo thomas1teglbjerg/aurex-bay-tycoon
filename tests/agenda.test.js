@@ -1,4 +1,5 @@
 // Things happen all through the week: world cards, decisions, company happenings, bot moves and orders land at their own moments
+import './open-doors.js';
 import * as E from '../supabase/functions/_shared/engine.js';
 import { HAPPENINGS, MAIL_HAP, WORLD } from '../supabase/functions/_shared/content.js';
 const MAIL_OPEN = (x) => !!(x.opts && x.opts.length && !x.done);

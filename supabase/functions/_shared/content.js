@@ -892,7 +892,16 @@ export const RARITY = { Common: { pts: 2, drift: -0.005, col: '#7d8a9c' }, Rare:
 export const PRESTIGE_TIERS = [
   { min: 0, name: 'Newcomer' }, { min: 60, name: 'Known' }, { min: 150, name: 'Respected' }, { min: 300, name: 'Elite' }, { min: 550, name: 'Icon' }
 ];
+// what a tycoon's name opens up (humans only; bots never wait for a tier). Tiers count from 0 = Newcomer.
+export const PRESTIGE = {
+  bigTier: 2,                       // Respected: buy a Large company (also as a plot, a bid or a hostile bid)
+  talent: { 4: 1, 5: 2 },           // specialist rating → tier needed to sign or bid for them (4★ Known, 5★ Respected)
+  lux: { pct: 0.02, types: ['hotel', 'restaurant', 'vineyard', 'dealer', 'clothing', 'fashion', 'film', 'music'] } // +2% demand per tier
+};
 export const PRESTIGE_PERKS = [
+  'Large companies need Respected',
+  '4★ specialists need Known, 5★ need Respected',
+  'Luxury companies +2% demand per tier',
   'Bank rate −0.5 pp per tier',
   'New clients start 2 mood happier per tier',
   '+1 Influence per tier every year',

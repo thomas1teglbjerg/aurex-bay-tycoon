@@ -1,5 +1,6 @@
 // Holdings with divisions: every owner's empire is a division with them as CEO, one account, CEO salary,
 // money in and out, annual report + meeting, equalising net worth, leaving by vote, migration of older holdings
+import './open-doors.js';
 import * as E from '../supabase/functions/_shared/engine.js';
 import { HOLDING, TYPES } from '../supabase/functions/_shared/content.js';
 const HD = E.HD;

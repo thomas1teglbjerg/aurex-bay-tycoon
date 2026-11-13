@@ -1,4 +1,5 @@
 // Quote requests on Bayside Concrete's website: ask, quote, accept (money held), the plant mixes and delivers, or refunds
+import './open-doors.js';
 import './standing.js';
 import * as E from '../supabase/functions/_shared/engine.js';
 import { QUOTES, SITE_CO } from '../supabase/functions/_shared/content.js';

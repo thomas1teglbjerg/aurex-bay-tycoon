@@ -1,7 +1,7 @@
 // Aurex Bay Tycoon — game engine.
 // Pure functions over one plain "city" object, so the exact same rules run in the browser demo
 // and server-side in the Supabase Edge Function. Time is real time: 1 game year = 1 real week (speed 1).
-import { RECIPES, DISTRICTS, TYPES, SYNERGY, SIZES, LISTINGS, STAFF, STOCKS, WORLD, DECISIONS, HAPPENINGS, BOTS, CONFIG, VINTAGE, VIP, DEPT_DEFAULTS, WORKER, GOODS, TAKEOVER, SOMMELIER, CRAFT, BOT_REL, MAIL_HAP, DEC_FROM, MAIL_PACE, GAZETTE, PRESTIGE_TIERS, MAINT, placeOn, LIFE as LIFE_CFG } from './content.js';
+import { RECIPES, DISTRICTS, TYPES, SYNERGY, SIZES, LISTINGS, STAFF, STOCKS, WORLD, DECISIONS, HAPPENINGS, BOTS, CONFIG, VINTAGE, VIP, DEPT_DEFAULTS, WORKER, GOODS, TAKEOVER, SOMMELIER, CRAFT, BOT_REL, MAIL_HAP, DEC_FROM, MAIL_PACE, GAZETTE, PRESTIGE_TIERS, PRESTIGE, MAINT, placeOn, LIFE as LIFE_CFG } from './content.js';
 import * as OPS from './ops.js';
 import * as LOG from './logistics.js';
 import * as LIFE from './life.js';
@@ -874,7 +874,7 @@ function mailTalent(city, p, action, args) {
   const a = { ...args }; let emp = p;
   if (a.coop) { const h = city.holdings[a.coop]; if (!h || !h.members[p.id]) return err('Not your coop any more.'); emp = TAL.coopEmp(city, h); }
   if (a.oid && !a.tid) { const o = (city.tOffers || []).find((y) => y.id === a.oid); if (!o || o.status !== 'open') return err('This offer is closed.'); a.tid = o.tid; }
-  return TAL.act(city, emp, action, a, { ...TCTX, inactive: (y) => inactive(city, y) }) || err('Not possible any more.');
+  return TAL.act(city, emp, action, a, { ...TCTX, inactive: (y) => inactive(city, y), gate: (tid) => talentGate(city, p, tid) }) || err('Not possible any more.');
 }
 export function answerMail(city, p, id, ix, auto) {
   const x = MAIL.find(p, id); if (!x) return err('This mail is gone.');
@@ -932,7 +932,7 @@ function monthBoundary(city, m) {
   BLD.monthStep(city, m, bctx(city));
   const running = city.listings.filter((l) => l.owner && !BLD.idle(l));
   CAR.refresh(city, cctx(city));
-  running.forEach((l) => { if (!l.ops) l.ops = OPS.newOps(l, isManaged(city, l)); if (city.life && l.owner.k === 'p' && city.players[l.owner.id]) l.ops.pt = LIFE.tierOf(city, city.players[l.owner.id]); OPS.produce(city, CTX, l, m); });
+  running.forEach((l) => { if (!l.ops) l.ops = OPS.newOps(l, isManaged(city, l)); if (city.life && l.owner.k === 'p' && city.players[l.owner.id]) l.ops.pt = LIFE.tierOf(city, city.players[l.owner.id]); l.ops.lux = city.life && l.owner.k === 'p' && city.players[l.owner.id] && !city.players[l.owner.id].bot ? LIFE.tierOf(city, city.players[l.owner.id]) : 0; OPS.produce(city, CTX, l, m); });
   CH.monthStep(city, chx(city));
   running.forEach((l) => OPS.autoSell(city, CTX, l));
   shuffle(running).forEach((l) => OPS.autoBuy(city, CTX, l));
@@ -1246,6 +1246,17 @@ const cbBuyCtx = (city) => ({ tier: (p) => (city.life && p.life ? LIFE.tierOf(ci
 export const cbEligible = (city, p) => CB.eligible(p, cbBuyCtx(city));
 function govTypes(city, pid) { const t = new Set(ownedBy(city, 'p', pid).map((l) => l.type)); Object.values(city.holdings || {}).filter((h) => h.members[pid]).forEach((h) => ownedBy(city, 'h', h.id).forEach((l) => t.add(l.type))); return t; }
 export const cbGovTypes = govTypes;
+// ---------------------------------------------------------------- what a tycoon's prestige opens up (PRESTIGE in content.js; humans only)
+const gated = (city, p) => !!(city.life && p && p.life && !p.bot && !p.admin);
+export function bigGate(city, p, l) {
+  if (!l || l.size !== 'L' || !gated(city, p)) return null;
+  return LIFE.tierOf(city, p) >= PRESTIGE.bigTier ? null : `Large companies are for ${PRESTIGE_TIERS[PRESTIGE.bigTier].name} tycoons and above. Grow your prestige in Personal first.`;
+}
+export function talentGate(city, p, tid) {
+  if (!gated(city, p) || !city.talent || !city.talent[tid]) return null;
+  const need = PRESTIGE.talent[city.talent[tid].rating]; if (!need || LIFE.tierOf(city, p) >= need) return null;
+  return `${city.talent[tid].rating}★ specialists only talk to ${PRESTIGE_TIERS[need].name} tycoons and above. Grow your prestige in Personal first.`;
+}
 export function protection(city, l) {
   if (!l.owner || l.owner.k !== 'p') return { safe: true, why: 'Not a private company' };
   if (CB.isBank(l)) return { safe: true, why: 'The national bank cannot be taken over' };
@@ -1262,6 +1273,7 @@ export function takeoverPrice(city, l) { const rep = l.ops ? l.ops.rep : 50; ret
 function hostileBid(city, p, a) {
   const l = listing(city, a.lid); if (!l || !l.owner || l.owner.k !== 'p' || l.owner.id === p.id) return err('Pick a company owned by another tycoon.');
   if (protection(city, l).safe) return err('This company is protected. You can only make a friendly offer.');
+  { const g = bigGate(city, p, l); if (g) return err(g); }
   const amt = Math.round(Number(a.amt) || takeoverPrice(city, l)); if (amt < takeoverPrice(city, l) * TAKEOVER.minBid) return err(`The board will not consider less than ${Math.ceil(takeoverPrice(city, l) * TAKEOVER.minBid)} M.`);
   if (p.cash < amt) return err('You need the full amount in cash.');
   if (city.offers.some((o) => o.status === 'open' && o.lid === l.id && o.hostile)) return err('Another hostile bid is already running for this company.');
@@ -1379,7 +1391,7 @@ function applyAs(city, pid, p, action, a, now) {
     if (!a.tid && a.id) a.tid = a.id;
     // a.coop: the co-owner acts for their coop, paid from the coop treasury
     let emp = p; if (a.coop) { const h = city.holdings[a.coop]; if (!h || !h.members[pid] || !humanCoop(city, h)) return err('Not your coop.'); if (h.div && action === 'hire') return err(`${h.name} has divisions: each CEO hires specialists for their own division.`); emp = TAL.coopEmp(city, h); }
-    const r = TAL.act(city, emp, action, a, { ...TCTX, inactive: (x) => inactive(city, x) }); if (r) return r;
+    const r = TAL.act(city, emp, action, a, { ...TCTX, inactive: (x) => inactive(city, x), gate: (tid) => talentGate(city, p, tid) }); if (r) return r;
   }
   if (action === 'hostileBid') return hostileBid(city, p, a);
   if (action === 'cbRate' || action === 'cbLevy') return CB.act(city, p, action, a, { governor: (c, id) => canRun(c, id, listing(c, CB.ID)), ownTypes: (c, id) => govTypes(c, id), news: (t, x, k) => news(city, m, t, x, k) });
@@ -1401,6 +1413,7 @@ function applyAs(city, pid, p, action, a, now) {
     case 'buy': {
       const l = listing(city, a.lid); if (!l) return err('Unknown company.'); if (l.owner) return err('Someone already owns this company.');
       if (CB.isBank(l)) { const e = CB.eligible(p, cbBuyCtx(city)); if (!e.ok) return err(e.why); }
+      { const g = bigGate(city, p, l); if (g) return err(g); }
       const price = listingPrice(l);
       if (a.as && a.as !== 'me') {
         const h = city.holdings[a.as]; if (!h || !h.members[pid]) return err('You are not an owner of that coop.');
@@ -1420,6 +1433,7 @@ function applyAs(city, pid, p, action, a, now) {
       const l = listing(city, a.lid); const amt = Math.round(Number(a.amt) || 0);
       if (!l || !l.owner || l.owner.k !== 'p' || l.owner.id === pid) return err('You can only bid on companies owned by other players.');
       if (CB.isBank(l)) { const e = CB.eligible(p, cbBuyCtx(city)); if (!e.ok) return err(e.why); }
+      { const g = bigGate(city, p, l); if (g) return err(g); }
       if (amt <= 0 || p.cash < amt) return err('You need the full amount in cash to bid.');
       if (city.offers.some((o) => o.status === 'open' && o.from === pid && o.lid === l.id)) return err('You already have an open offer on this company.');
       const o = { id: uid('o'), lid: l.id, from: pid, to: l.owner.id, amount: amt, m, status: 'open' }; city.offers.push(o);

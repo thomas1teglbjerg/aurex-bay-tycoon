@@ -1,4 +1,5 @@
 // Marketing: ad campaigns on the city's websites, for the company or one piece it makes or the owner holds
+import './open-doors.js';
 import './standing.js';
 import * as E from '../supabase/functions/_shared/engine.js';
 import { DEPTS, AD } from '../supabase/functions/_shared/content.js';

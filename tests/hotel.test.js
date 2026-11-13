@@ -1,4 +1,5 @@
 // Hotels host guests: bookings instead of orders, check-in instead of finished stock and delivery, supplies used per stay, rare VIPs
+import './open-doors.js';
 import './standing.js';
 import * as E from '../supabase/functions/_shared/engine.js';
 import { RECIPES, VIP_GUESTS } from '../supabase/functions/_shared/content.js';

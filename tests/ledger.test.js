@@ -1,4 +1,5 @@
 // The loan book's ledger: what every loan has earned the bank's owner, closed loans with their profit or loss
+import './open-doors.js';
 import * as E from '../supabase/functions/_shared/engine.js';
 import { BANKS as B } from '../supabase/functions/_shared/content.js';
 const assert = (c, m) => { if (!c) { console.error('FAIL', m); process.exit(1); } console.log('ok ', m); };

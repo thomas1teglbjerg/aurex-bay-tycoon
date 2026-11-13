@@ -1,4 +1,5 @@
 // Bayside Concrete: a concrete plant in Harbor Row; concrete is a supply on the city market and Structura builds with it
+import './open-doors.js';
 import * as E from '../supabase/functions/_shared/engine.js';
 import * as O from '../supabase/functions/_shared/ops.js';
 import { GOODS, RECIPES, TYPES, SIZES } from '../supabase/functions/_shared/content.js';

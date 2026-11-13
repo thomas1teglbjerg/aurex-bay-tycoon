@@ -63,7 +63,9 @@ export function talentModal(st) {
   const yearsSeg = `<div class="seg">${[1, 2, 3, 4].map((y) => `<button data-a="tYears" data-v="${y}" aria-pressed="${years === y}">${y} yr</button>`).join('')}</div>`;
   const forSeg = !mine && coops.length && !(owner && owner.coop && c.holdings[owner.id].members[me0.id]) ? `<div class="set"><span class="cap">Sign for</span><div class="seg"><button data-a="tFor" data-v="" aria-pressed="${!p.coop}">You</button>${coops.map((h) => `<button data-a="tFor" data-v="${h.id}" aria-pressed="${p.id === h.id}">${esc(h.name)} · treasury ${M(h.treasury)}</button>`).join('')}</div></div>` : '';
   let actions = '';
-  if (mine) {
+  const gate = !mine && !(owner && owner.id === me0.id) ? E.talentGate(c, me0, tid) : null;
+  if (gate) actions = `<div class="tact"><p class="empty">${esc(gate)}</p></div>`;
+  else if (mine) {
     const a = p.assign && p.assign[t.kind], al = a ? E.listing(c, a.lid) : null, left = s.until - c.m;
     actions = `<div class="tact"><p class="empty">${al ? `Heads ${esc(E.OPS.deptFor(al, a.dept).name)} at ${esc(TYPES[al.type].name)}, ${esc(al.district)}.` : (p.coop ? 'Not leading a department. Make them head of a department in one of the coop\'s companies.' : 'Not leading a department. Open a company and make them head of their department.')}${s.leave != null ? ' On leave right now.' : ''}${s.notice != null ? ` <b class="down">Leaves in ${dur(msUntilMonth(s.notice))} unless things improve.</b>` : ''}</p>
       <div class="set"><span class="cap">Salary per year (asks ${M(ask)})</span><div class="btns">${step('salary', M(sal))}<button class="btn sm gold" data-a="tSalary" data-tid="${tid}"${cd} data-v="${sal}" ${Math.abs(sal - s.salary) < 0.005 ? 'disabled' : ''}>${sal >= s.salary ? 'Give raise' : 'Cut salary'}</button></div></div>

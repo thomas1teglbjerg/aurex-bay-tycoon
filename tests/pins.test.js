@@ -1,4 +1,5 @@
 // Admin moves a company pin: saved on the city, kept through map migrations, refused when malformed.
+import './open-doors.js';
 import * as E from '../supabase/functions/_shared/engine.js';
 import { DISTRICT, placeOn } from '../supabase/functions/_shared/content.js';
 const assert = (c, m) => { if (!c) { console.error('FAIL', m); process.exit(1); } };

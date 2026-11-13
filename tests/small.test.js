@@ -1,4 +1,5 @@
 // Small companies have no HR, Finance, R&D or Legal; older saves are trimmed once
+import './open-doors.js';
 import * as E from '../supabase/functions/_shared/engine.js';
 import * as O from '../supabase/functions/_shared/ops.js';
 const assert = (c, m) => { if (!c) { console.error('FAIL', m); process.exit(1); } console.log('ok ', m); };

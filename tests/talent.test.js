@@ -1,4 +1,5 @@
 // Specialists as a market, contracts, stress and boredom, transfers, endless time and hostile takeovers
+import './open-doors.js';
 import * as E from '../supabase/functions/_shared/engine.js';
 const T = E.TAL;
 const assert = (c, m) => { if (!c) { console.error('FAIL', m); process.exit(1); } console.log('ok ', m); };
