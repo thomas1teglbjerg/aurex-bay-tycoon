@@ -1,4 +1,5 @@
 // Supply makers produce a quarter of the month's output every week instead of everything at the month boundary
+import './open-doors.js';
 import * as E from '../supabase/functions/_shared/engine.js';
 import * as O from '../supabase/functions/_shared/ops.js';
 import { RECIPES, CONFIG } from '../supabase/functions/_shared/content.js';

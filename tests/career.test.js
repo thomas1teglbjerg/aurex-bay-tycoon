@@ -1,4 +1,5 @@
 // The tycoon's own career: lead a department yourself, earn XP, level up slowly, choose a specialisation.
+import './open-doors.js';
 import './standing.js';
 import * as E from '../supabase/functions/_shared/engine.js';
 import { CAREER } from '../supabase/functions/_shared/content.js';

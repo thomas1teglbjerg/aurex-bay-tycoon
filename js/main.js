@@ -476,8 +476,10 @@ function listingActions(l) {
   if (!l.owner) {
     const price = E.listingPrice(l);
     if (E.CB.isBank(l)) { const e = E.cbEligible(c, p); out.push(`<p class="empty" style="font-size:13.5px">The national bank: its owner sets the bank rate and levies for the whole city. ${e.ok ? '' : esc(e.why)} <a href="#" data-a="webGo" data-u="bankofaurex.ab/policy">How it works ›</a></p>`); if (!e.ok) return out.join(''); }
-    out.push(`<button class="btn gold" data-a="buy" data-lid="${l.id}" ${p.cash < price ? 'disabled' : ''}>Buy for ${M(price)}${p.cash < price ? ` · you have ${M(p.cash)}` : ''}</button>`);
-    E.myHoldings(c, p.id).forEach((h) => out.push(`<button class="btn coop" data-a="buyas" data-lid="${l.id}" data-hid="${h.id}" ${h.treasury < price ? 'disabled' : ''}>Buy with ${esc(h.name)} · treasury ${M(h.treasury)}</button>`));
+    const gate = E.bigGate(c, p, l);
+    if (gate) out.push(`<p class="empty" style="font-size:13.5px">${esc(gate)} <a href="#" data-a="tab" data-v="life">Prestige ›</a></p>`);
+    else out.push(`<button class="btn gold" data-a="buy" data-lid="${l.id}" ${p.cash < price ? 'disabled' : ''}>Buy for ${M(price)}${p.cash < price ? ` · you have ${M(p.cash)}` : ''}</button>`);
+    if (!gate) E.myHoldings(c, p.id).forEach((h) => out.push(`<button class="btn coop" data-a="buyas" data-lid="${l.id}" data-hid="${h.id}" ${h.treasury < price ? 'disabled' : ''}>Buy with ${esc(h.name)} · treasury ${M(h.treasury)}</button>`));
   } else if (o.mine && !o.coop) {
     if (!E.BLD.unbuilt(l)) out.push(`<button class="btn gold" data-a="company" data-lid="${l.id}">Open company dashboard</button>`);
     if (l.upgrade) out.push(`<div><div class="cap">Upgrading to level ${l.upgrade.to} · ready in <span data-live="until:${l.upgrade.doneM}">…</span></div><div class="bar" style="margin-top:6px"><i data-live="prog:${l.id}"></i></div></div>`);
@@ -498,7 +500,8 @@ function listingActions(l) {
       if (h && h.proposals.some((x) => x.status === 'open' && x.kind === 'sell' && x.lid === l.id)) out.push('<span class="chip">Sale vote running</span>');
       else out.push(`<button class="btn danger" data-a="sell" data-lid="${l.id}">Propose sale to the market · ${M(E.listingValue(l) * 0.8)} to the treasury</button>`);
     } else out.push('<p class="empty">Owned by a coop. Coop companies can only change hands by a vote of their owners.</p>');
-  } else {
+  } else if (E.bigGate(c, p, l)) out.push(`<p class="empty" style="font-size:13.5px">${esc(E.bigGate(c, p, l))} <a href="#" data-a="tab" data-v="life">Prestige ›</a></p>`);
+  else {
     const prot = E.protection(c, l), tp = E.takeoverPrice(c, l), running = c.offers.find((x) => x.status === 'open' && x.lid === l.id && x.hostile);
     if (!prot.safe) out.push(`<div class="hostilebox"><b>Vulnerable: ${esc(o.name)} has been away for months</b><span>Nobody protects this company. Bid now and it is yours unless the owner comes back and rejects within ${GC_T.bidMonths} months.</span>${running ? `<span class="chip warn">${running.from === p.id ? 'Your hostile bid is running' : 'Another hostile bid is running'}</span>` : `<button class="btn danger" data-a="hostileBid" data-lid="${l.id}" data-v="${tp}" ${p.cash < tp ? 'disabled' : ''}>Launch hostile bid · ${M(tp)}</button>`}</div>`);
     else if (!o.coop && c.players[o.pid] && !c.players[o.pid].bot) out.push(`<p class="empty" style="font-size:13px">Protected: ${esc(prot.why.toLowerCase())}.</p>`);

@@ -1,6 +1,7 @@
 // Building sites: new companies start as plots, the developer hires a builder (or the city crew), supplies go in
 // week by week through the phases, the builder does a crane task after each phase and is paid phase by phase.
 // Old buildings wear, ruins are renovated, upgrades from level 2 are building projects. Car factories are plots now.
+import './open-doors.js';
 import * as E from '../supabase/functions/_shared/engine.js';
 import { BUILD, CONFIG, GOODS } from '../supabase/functions/_shared/content.js';
 const assert = (c, m) => { if (!c) { console.error('FAIL', m); process.exit(1); } console.log('ok ', m); };

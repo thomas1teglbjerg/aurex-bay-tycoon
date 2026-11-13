@@ -1,4 +1,5 @@
 // Wood works: Old Oak Joinery (small) and Crown Hills Timberworks (large) in Crown Hills make wooden beams and wall elements
+import './open-doors.js';
 import './standing.js';
 import * as E from '../supabase/functions/_shared/engine.js';
 import { TYPES, GOODS, CONFIG } from '../supabase/functions/_shared/content.js';

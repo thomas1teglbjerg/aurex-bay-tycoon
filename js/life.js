@@ -145,7 +145,7 @@ function prestigeHTML() {
     <div class="prest"><span class="pr-ic">${ricon('crown', 26)}</span><div class="grow"><b>${pr.score} points</b><div class="bar"><i style="width:${w.toFixed(0)}%"></i></div><span class="muted">${pr.next ? `${pr.next - pr.score} to ${esc(pr.nextName)}` : 'Top tier'}</span></div></div>
     <div class="chips">${parts.map(([k, v]) => `<span class="chip">${k} ${v}</span>`).join('')}</div>
     <div class="perks">${PRESTIGE_PERKS.map((x) => `<span>${esc(x)}</span>`).join('')}</div>
-    <p class="empty">Right now: bank rate −${(pr.tier * 0.5).toFixed(1)} pp, new clients +${pr.tier * 2} mood, +${pr.tier} Influence a year.</p></div></section>`;
+    <p class="empty">Right now: luxury companies +${pr.tier * 2}% demand, bank rate −${(pr.tier * 0.5).toFixed(1)} pp, new clients +${pr.tier * 2} mood, +${pr.tier} Influence a year.</p></div></section>`;
 }
 
 // ---------------------------------------------------------------- rooms

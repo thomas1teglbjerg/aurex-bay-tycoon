@@ -1,4 +1,5 @@
 // Rival tycoons with a personality: relation, memory, rivalry, price wars, Gazette stories, consent bids, deals, crisis, dream bids, alliances, chat
+import './open-doors.js';
 import './standing.js';
 import * as E from '../supabase/functions/_shared/engine.js';
 import { BOT_PERS, BOT_REL as R, GOODS, LISTINGS } from '../supabase/functions/_shared/content.js';

@@ -1,4 +1,5 @@
 // Moving supplies between your own companies (and your warehouses) with your own truck
+import './open-doors.js';
 import './standing.js';
 import * as E from '../supabase/functions/_shared/engine.js';
 const assert = (c, m) => { if (!c) { console.error('FAIL', m); process.exit(1); } console.log('ok ', m); };

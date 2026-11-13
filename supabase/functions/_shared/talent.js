@@ -229,6 +229,7 @@ function offer(city, p, tid, fee, salary, years, ctx) {
   if (owner.id === p.id) return err('They already work for you.');
   if (locked(city, tid)) return err(`${t.name} is on a fixed contract and cannot move.`);
   if (p.team[t.kind]) return err(`You already have a ${ROLE[t.kind].role}. Release or sell them first.`);
+  { const g = ctx.gate && ctx.gate(tid); if (g) return err(g); }
   const wa = willAccept(city, tid, salary, true); if (!wa.ok) return err(`${t.name} wants at least ${wa.need} M a year to move.`);
   if (p.cash < fee) return err(`You need ${fee} M in cash for the fee.`);
   if (owner.bot) {
@@ -256,6 +257,7 @@ export function act(city, p, action, a, ctx) {
     case 'hire': {
       if (s.owner) return err('They are under contract with someone else. Make a transfer offer instead.');
       if (p.team[t.kind]) return err(`You already have a ${ROLE[t.kind].role}. Release them first.`);
+      { const g = ctx.gate && ctx.gate(tid); if (g) return err(g); }
       const wa = willAccept(city, tid, salary, false); if (!wa.ok) return err(`${t.name} wants at least ${wa.need} M a year.`);
       const fee = signFee(city, p, tid); if (p.cash < fee) return err(`The signing fee is ${fee} M.`);
       p.cash -= fee; sign(city, p, tid, salary, years, m);

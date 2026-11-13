@@ -1,4 +1,5 @@
 // Chance cards: triggered by the economy, your companies and the rivals; one choice with a price, effects for a game month
+import './open-doors.js';
 import './standing.js';
 import * as E from '../supabase/functions/_shared/engine.js';
 import { CHANCE, HAPPENINGS, BOT_PERS, WORKER, SIZES, GOODS } from '../supabase/functions/_shared/content.js';
