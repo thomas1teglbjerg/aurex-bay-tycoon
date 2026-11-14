@@ -60,7 +60,7 @@ export function lifeHTML(UI) {
   if (st.room) return roomHTML(UI);
   const Lp = p.life, res = Lp.homes.find((h) => h.uid === Lp.res);
   const view = st.view || 'home';
-  const nav = `<div class="lnav">${[['home', 'Home'], ['collection', 'Collection'], ['property', 'Property'], ['profile', 'Profile']].map(([v, l]) => `<button data-a="lifeView" data-v="${v}" aria-pressed="${view === v}">${l}</button>`).join('')}<button class="webnav" data-a="web" data-u="aurexauctions.ab">${WEB_ICON} Shop online${myBids(c).length ? `<i>${myBids(c).length}</i>` : ''}</button></div>`;
+  const nav = `<div class="lnav">${[['home', 'Home'], ['collection', 'Collection'], ['property', 'Property'], ['profile', 'Profile']].map(([v, l]) => `<button data-a="lifeView" data-v="${v}" aria-pressed="${view === v}">${l}</button>`).join('')}<button class="webnav casnav" data-a="casino">♠ Casino</button><button class="webnav" data-a="web" data-u="aurexauctions.ab">${WEB_ICON} Shop online${myBids(c).length ? `<i>${myBids(c).length}</i>` : ''}</button></div>`;
   if (view === 'profile') return `<div class="lifep lprof">${nav}</div>${profilePageHTML(UI, meId())}`;
   const body = view === 'collection' ? collectionView(UI) : view === 'property' ? propertyView(UI) : homeView(UI, res);
   return `<div class="lifep">${heroHTML(res)}${nav}${inboxHTML()}${body}</div>`;

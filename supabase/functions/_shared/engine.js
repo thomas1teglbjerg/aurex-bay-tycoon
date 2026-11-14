@@ -20,7 +20,8 @@ import * as BLD from './build.js';
 import * as BK from './banks.js';
 import * as CH from './chance.js';
 import * as AUTO from './cars.js';
-export { OPS, LOG, LIFE, TAL, BR, ADS, MAIL, CAR, DEAL, GZ, QT, HD, BOT, BK, CH, AUTO };
+import * as CAS from './casino.js';
+export { OPS, LOG, LIFE, TAL, BR, ADS, MAIL, CAR, DEAL, GZ, QT, HD, BOT, BK, CH, AUTO, CAS };
 OPS.setFreightQuote((cid, v, q, route) => LOG.freight(cid, v, q, route));
 
 const TRADE_MULT = { Boom: 1.3, Stable: 1, Recession: 0.6, Crisis: 0.4 };
@@ -122,6 +123,10 @@ export const ax = (city) => ({ listing: (id) => listing(city, id), canRun: (pid,
   owners: (l) => cctx(city).owners(l), inactive: (p) => inactive(city, p), credit, notify: (c, l, t, x, k) => notifyOwner(c, l, t, x, k),
   feed: (p, m, t, x, k) => feed(p, m, t, x, k), news: (c, m, t, x, k) => news(c, m, t, x, k), clientsBoost: (id, n, types) => clientsBoost(city, id, n, types),
   runs: (pid) => city.listings.filter((l) => l.owner && canRun(city, pid, l) && l.ops && !BLD.idle(l)), botEvent: (bid, pid, kind, x) => BOT.event(city, bid, pid, kind, x, bx(city)) });
+// what casino.js needs: the casino listing and its owner, prestige, the wallet's statement and the news
+export const csx = (city) => ({ listing: (id) => listing(city, id), canRun: (pid, l) => canRun(city, pid, l), credit: (o, v) => credit(city, o, v),
+  tier: (p) => (city.life && p.life ? LIFE.tierOf(city, p) : 0), tierName: (t) => PRESTIGE_TIERS[t].name, tx: (p, t, v) => LIFE.tx(p.life, city.m, t, v),
+  feed: (p, t, x, k) => feed(p, city.m, t, x, k), news: (t, x, k) => news(city, city.m, t, x, k) });
 // what chance.js needs: the companies a tycoon runs or owns outright, money, mail senders and the bots' world
 export const chx = (city) => ({ ...bx(city), listing: (id) => listing(city, id), canRun: (pid, l) => canRun(city, pid, l),
   runs: (pid) => city.listings.filter((l) => canRun(city, pid, l) && l.ops && !l.ops.managed && !BLD.idle(l)),
@@ -617,7 +622,7 @@ function trimSmall(city) {
   city.smallV = 1;
 }
 export function advance(city, now) {
-  migrate(city); migrateLife(city); trimSmall(city); coopRunMode(city); HD.migrate(city, hx(city)); BK.migrate(city, kx(city));
+  migrate(city); migrateLife(city); trimSmall(city); CAS.ensure(city); coopRunMode(city); HD.migrate(city, hx(city)); BK.migrate(city, kx(city));
   Object.values(city.players).forEach((p) => { if (!p.bot && !p.admin && !(p.career && p.career.seeded)) CAR.seed(city, p, cctx(city)); });
   mailSync(city);
   if (city.over) return;
@@ -637,6 +642,7 @@ export function advance(city, now) {
   settleAll(city, g);
   city.listings.forEach((l) => { if (l.ops && l.owner && !l.ops.managed) OPS.releaseQueue(city, l, g); });
   LOG.arrivals(city, city.g, (sh) => shipmentArrived(city, sh));
+  if (city.casino) CAS.stepAll(city, now, csx(city)); // tables whose timers ran out
   refillAdmin(city);
 }
 function shipmentArrived(city, sh) {
@@ -941,7 +947,7 @@ function monthBoundary(city, m) {
   // warehouse automation only runs when a logistics specialist (Carlos) is on staff
   Object.values(city.players).filter((p) => !p.bot && hasStaff(p, 'carlos')).forEach((p) => LOG.monthly(city, p, OPS.needsPerMonth, (g) => OPS.importPrice(city, g), m / 12));
   if (city.talent) TAL.monthStep(city, m, { ...TCTX, inactive: (p) => inactive(city, p) });
-  if (city.life) { LIFE.monthStep(city, m, LCTX); AUTO.monthStep(city, m, ax(city)); }
+  if (city.life) { LIFE.monthStep(city, m, LCTX); AUTO.monthStep(city, m, ax(city)); CAS.monthStep(city, m, csx(city)); }
   CAR.monthStep(city, m, cctx(city));
   takeoverMonth(city, m);
   centralMonth(city, m);
@@ -1409,6 +1415,7 @@ function applyAs(city, pid, p, action, a, now) {
   }
   if (/^site[A-Z]/.test(action)) return BLD.act(city, p, action, a, bctx(city)) || err('Unknown action.');
   if (/^car[A-Z]/.test(action)) return AUTO.act(city, p, action, a, ax(city)) || err('Unknown action.');
+  if (/^cas[A-Z]/.test(action)) return CAS.act(city, p, action, a, csx(city), now) || err('Unknown action.');
   switch (action) {
     case 'buy': {
       const l = listing(city, a.lid); if (!l) return err('Unknown company.'); if (l.owner) return err('Someone already owns this company.');

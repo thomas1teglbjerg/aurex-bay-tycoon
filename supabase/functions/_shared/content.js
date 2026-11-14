@@ -35,6 +35,9 @@ export const TYPES = {
   woodworks: { name: 'Wood Works', sector: 'Industry · Timber & Joinery', price: 10, trade: 0.8, ypi: 1.2, group: 'industry', tags: ['Timber', 'Industry', 'Building Materials'],
     perks: [{ t: 'Local Timber', d: 'Saws imported logs into wooden beams and wall elements and sells them to construction companies and the city market' }, { t: 'Builder Synergy', d: '+YPI to Construction Companies in the portfolio' }],
     neg: [{ t: 'Low Passive Yield', d: 'Earns mainly by selling beams and wall elements' }, { t: 'Saw Upkeep', d: '0.3 M maintenance per year' }, { t: 'Building Freeze', d: '−0.3 M YPI during a recession' }] },
+  casino: { name: 'Casino', sector: 'Leisure · Gaming & Hospitality', starter: true, price: 24, trade: 2, ypi: 2.4, group: 'service', tags: ['Leisure', 'Luxury', 'Gaming'],
+    perks: [{ t: 'House Edge', d: 'What tycoons and rivals lose at the Blackjack tables goes to the owner' }, { t: 'Gaming Nights', d: 'Tour desks and junket operators book gaming nights like hotel stays' }, { t: 'Luxury Name', d: 'Sells better the more prestige its owner has' }],
+    neg: [{ t: 'Lucky Nights', d: 'When a player wins big at the tables, the house pays' }, { t: 'Gaming Licence', d: '0.7 M licence and security per year' }, { t: 'Players Card', d: 'Cashback to regular players comes out of the house' }] },
   car: { name: 'Car Factory', sector: 'Automotive Manufacturing', price: 21, trade: 3, ypi: 3.5, group: 'industry', tags: ['Automotive', 'Industry'],
     perks: [{ t: 'Metal Synergy', d: '+1 M Trade with Metal Production in the portfolio' }], neg: [{ t: 'Energy Dependence', d: 'No Trade income during an energy shortage or oil shock' }] },
   finance: { name: 'Finance & Banking', sector: 'Finance · Banking Sector', price: 22, trade: 3, ypi: 3.5, group: 'finance', tags: ['Finance', 'Loans'],
@@ -59,7 +62,7 @@ export const TYPES = {
 // Portfolio synergies: owning (or contracting with) the first type boosts the second
 export const SYNERGY = [['car', 'dealer'], ['autorepair', 'dealer'], ['car', 'autorepair'], ['metal', 'car'], ['metal', 'chip'], ['chip', 'data'], ['chip', 'pharma'], ['film', 'fashion'], ['hotel', 'fashion'], ['finance', 'data'], ['vineyard', 'restaurant'], ['newspaper', 'film'], ['newspaper', 'music'], ['textile', 'clothing'], ['textile', 'fashion'], ['chemical', 'pharma'], ['chemical', 'chip'], ['metal', 'construction'], ['construction', 'hotel'], ['construction', 'restaurant'], ['concrete', 'construction'], ['power', 'metal'], ['power', 'data'], ['woodworks', 'construction']];
 // yearly maintenance in M per size multiplier (heavy plants)
-export const MAINT = { metal: 2, chemical: 1, concrete: 0.5, power: 1, woodworks: 0.3 };
+export const MAINT = { metal: 2, chemical: 1, concrete: 0.5, power: 1, woodworks: 0.3, casino: 0.5 };
 
 export const SIZES = { S: { label: 'Small', mult: 0.6 }, M: { label: 'Medium', mult: 1 }, L: { label: 'Large', mult: 1.5 } };
 
@@ -108,7 +111,9 @@ export const LISTINGS = [
   ['woodworks', 'crown', 'L', 0.935, 0.67, 'Crown Hills Timberworks', 'c-timberworks'],
   // Harbor Row Builders (L42) stands from day one; from L43 on every new company starts as a building plot (BUILD, build.js)
   ['construction', 'harbor', 'S', 0.77, 0.47, 'Harbor Row Builders'],
-  ['construction', 'aurex', 'L', 0.42, 0.52, 'Crown Bridge Builders']
+  ['construction', 'aurex', 'L', 0.42, 0.52, 'Crown Bridge Builders'],
+  // the casino stands from day one (BUILD.keep): Blackjack tables in casino.js, bots never own it
+  ['casino', 'marina', 'L', 0.72, 0.42, 'Marina Royale', 'cas-room-main']
 ].map(([type, d, size, px, py, title, img], i) => ({ id: 'L' + (i + 1), type, d, p: [px, py], district: DISTRICT[d].name, size, ...(title ? { title } : {}), ...(img ? { img } : {}), ...placeOn(d, [px, py]) }));
 
 // the national bank: the Bank of Aurex site in Aurex City (bankofaurex.ab in the in-game browser)
@@ -610,6 +615,7 @@ export const RECIPES = {
   clothing: { cap: 40, unit: 'garment drops', in: { textiles: 1, energy: 0.2 }, out: {} },
   fashion: { cap: 20, unit: 'collections', in: { textiles: 3, media: 0.3 }, out: {} },
   // guests: no finished stock and no deliveries. Bookings come in, guests check in when a room and supplies are free, and use the supplies during their stay.
+  casino: { cap: 30, unit: 'gaming nights', in: { food: 1.5, energy: 1, media: 0.4 }, out: {}, guests: { client: 'Junket desk' } },
   hotel: { cap: 25, unit: 'guest stays', in: { food: 2, textiles: 0.5, energy: 1, media: 0.3 }, out: {}, guests: { client: 'Booking channel' } },
   finance: { cap: 20, unit: 'client accounts', in: { software: 0.5, energy: 0.5 }, out: {} },
   newspaper: { cap: 30, unit: 'editions', in: { software: 0.3, energy: 0.2, textiles: 0.2 }, out: {} },
@@ -660,7 +666,7 @@ export const WORKER = { salary: 0.08, hireFee: 0.02 };
 // ---------------------------------------------------------------- clients and orders
 // B2B companies have a few large corporate clients who negotiate hard but stay loyal.
 // B2C companies sell through many retail channels with smaller, faster, more impatient orders.
-export const MARKET_KIND = { bank: 'b2c', dealer: 'b2c', restaurant: 'b2c', autorepair: 'b2c', metal: 'b2b', textile: 'b2b', chemical: 'b2b', power: 'b2b', woodworks: 'b2b', construction: 'b2b', concrete: 'b2b', chip: 'b2b', data: 'b2b', finance: 'b2b', pharma: 'b2b', car: 'b2c', clothing: 'b2c', fashion: 'b2c', hotel: 'b2c', music: 'b2c', film: 'b2c', vineyard: 'b2c', newspaper: 'b2c' };
+export const MARKET_KIND = { bank: 'b2c', dealer: 'b2c', restaurant: 'b2c', autorepair: 'b2c', metal: 'b2b', textile: 'b2b', chemical: 'b2b', power: 'b2b', woodworks: 'b2b', construction: 'b2b', concrete: 'b2b', chip: 'b2b', data: 'b2b', finance: 'b2b', pharma: 'b2b', car: 'b2c', clothing: 'b2c', fashion: 'b2c', hotel: 'b2c', casino: 'b2c', music: 'b2c', film: 'b2c', vineyard: 'b2c', newspaper: 'b2c' };
 export const CLIENT_RULES = {
   b2b: { start: 4, weight: [1, 2.5], orderChance: 0.55, expire: 3, renegotiate: 0.6, rejectHit: 18, label: 'Corporate client' },
   b2c: { start: 6, weight: [0.4, 1.2], orderChance: 0.7, expire: 2, renegotiate: 0.42, rejectHit: 10, label: 'Retail channel' }
@@ -677,6 +683,7 @@ export const VIP_GUESTS = [
 ];
 export const VIP = { week: 1 / 40 }; // chance per week for each human-run hotel, scaled by reputation
 export const CLIENT_NAMES = {
+  casino: ['Northwind Travel', 'Golden Mile Junkets', 'Aurex Business Travel', 'Cruise Terminal Desk', 'Harbor Row Events', 'Bachelor Weekends Co', 'Crown Hills Golf Club', 'Marina Yacht Charters', 'Lucky Star Tours'],
   bank: ['Ironport households', 'Old Grid shop owners', 'Harbor Row dock workers', 'Small business loans', 'First-time home buyers', 'Ironport Shipyards payroll', 'Student accounts', 'Local savings club'],
   dealer: ['Walk-in buyers', 'Ironport Couriers', 'Aurex Taxi Co', 'First-car buyers', 'Harbor Row Rentals', 'Family trade-ins', 'Online leads', 'City Fleet Services', 'Rideshare drivers'],
   restaurant: ['Walk-ins', 'Office lunch orders', 'Weekend brunch crowd', 'Ironport Shipyards canteen', 'Delivery apps', 'Old Grid Gallery events', 'Night shift regulars', 'Aurex Bay Food Tours', 'Birthday parties'],
@@ -738,6 +745,34 @@ export const INTERACTIONS = {
 // ---------------------------------------------------------------- how departments and tasks look in a business that works differently
 // Same rules and the same specialist heads, but the names, texts and scenes of a real hotel.
 export const DEPT_LOOK = {
+  casino: {
+    ops: { name: 'Gaming Floor', desc: 'Dealers, pit bosses and cashiers. More staff means more tables open for guests.',
+      settings: { shifts: { label: 'Opening hours', opts: [[1, 'Evenings'], [2, 'Evenings and nights'], [3, 'Open 24/7']] } },
+      manual: { label: 'Plan next month on the floor', note: 'A 20-second walk through the pit, then choose extra shifts' },
+      auto: 'Every table has a dealer and every shift a pit boss.', without: 'Only 30% of the tables open.' },
+    procurement: { name: 'Purchasing', desc: 'Buys food and drink for the bars, energy and shows.',
+      manual: { label: 'Order supplies', note: 'Pick a carrier and order food, drink and the rest by hand' },
+      auto: 'Keeps the bars and kitchens stocked every month.', without: 'You order by hand. Run out and guests are turned away.' },
+    sales: { name: 'Players Club & Junkets', desc: 'Books gaming nights with tour desks and junket operators.',
+      settings: { price: { label: 'Package prices', opts: [['budget', 'Value'], ['standard', 'Standard'], ['premium', 'High roller']] }, b2b: { label: 'Resale pricing' } },
+      manual: { label: 'Call junket operators', note: '20 seconds, then pick which partner to sign' },
+      auto: 'Confirms bookings and keeps the calendar full.', without: 'You confirm every booking yourself. Unanswered guests go elsewhere.' },
+    social: { name: 'Marketing & VIP Hosts', desc: 'Shows, billboards and VIP hosts bring more guests.',
+      settings: { intensity: { label: 'Campaigns' } },
+      manual: { label: 'Shoot a casino campaign', note: '20 seconds on the floor, then choose how to launch' },
+      auto: 'Runs campaigns and looks after the VIPs every month.', without: 'No campaigns and nobody calls the VIPs.' },
+    hr: { name: 'Human Resources', desc: 'Hires, trains and keeps dealers and hosts happy.',
+      manual: { label: 'Hold a dealer briefing', note: '20 seconds with the team, then decide what to offer' } },
+    finance: { name: 'Cage & Count Room', desc: 'Counts the drop, runs the cashier cage and the monthly books.',
+      manual: { label: 'Close the monthly books', note: 'Go through the count room and the cage' } },
+    rnd: { name: 'Shows & Restaurants', desc: 'New shows, bars and restaurants. Raise quality, prices and demand.',
+      settings: { budget: { label: 'Investment' } },
+      manual: { label: 'Try a new show', note: '20 seconds backstage, then choose the next step' },
+      auto: 'The entertainment team improves the offer every month within budget.', without: 'Nothing new unless you try it yourself.' },
+    legal: { name: 'Gaming Licence & Security', desc: 'Keeps the gaming licence, surveillance and anti-money-laundering checks in order.',
+      manual: { label: 'Run a licence audit', note: 'Walk through surveillance, the cage and the books with your manager' },
+      auto: 'Strict compliance makes this casino immune to inspection fines.', without: 'Fines hit unless you run the audit yourself.' }
+  },
   hotel: {
     ops: { name: 'Front Desk & Housekeeping', desc: 'Checks guests in and gets rooms ready. More staff means more rooms you can fill.',
       settings: { shifts: { label: 'Staffing', opts: [[1, 'Day shift'], [2, 'Day and evening'], [3, 'Open 24/7']] } },
@@ -821,7 +856,7 @@ export const BUILD = {
   firstPlot: 43,                       // listings from L43 on start as building plots (L42 Harbor Row Builders stands from day one)
   plots: ['L10', 'L12'],               // older sites turned into plots: the car factories
   sizes: ['M', 'L'],                   // every Medium and Large company starts as a plot ...
-  keep: ['L7', 'L13', 'L33', 'L37', 'L39'], // ... except these, standing from day one: Harbor Row steel works (L), Bank of Aurex, The Aurex Gazette, Bayside Concrete, Aurex City PowerPlant
+  keep: ['L7', 'L13', 'L33', 'L37', 'L39', 'L44'], // ... except these, standing from day one: Harbor Row steel works (L), Bank of Aurex, The Aurex Gazette, Bayside Concrete, Aurex City PowerPlant
   warehouses: true,                    // every warehouse starts as a plot too (built like a company, priced by the warehouse)
   plotShare: 0.25,                     // a plot costs this share of the company's price ...
   siteShare: 0.6,                      // ... plus this share for the part already built
@@ -896,7 +931,7 @@ export const PRESTIGE_TIERS = [
 export const PRESTIGE = {
   bigTier: 2,                       // Respected: buy a Large company (also as a plot, a bid or a hostile bid)
   talent: { 4: 1, 5: 2 },           // specialist rating → tier needed to sign or bid for them (4★ Known, 5★ Respected)
-  lux: { pct: 0.02, types: ['hotel', 'restaurant', 'vineyard', 'dealer', 'clothing', 'fashion', 'film', 'music'] } // +2% demand per tier
+  lux: { pct: 0.02, types: ['casino', 'hotel', 'restaurant', 'vineyard', 'dealer', 'clothing', 'fashion', 'film', 'music'] } // +2% demand per tier
 };
 export const PRESTIGE_PERKS = [
   'Large companies need Respected',
@@ -1169,7 +1204,7 @@ export const PAPER = {
 export const AD = { perWeek: 0.04, weeks: [2, 4, 8], cust: 0.015, rep: 0.5, lift: 0.004, head: 1.5,
   tones: [['irony', 'Ironic'], ['sarcasm', 'Sarcastic'], ['wink', 'Tongue-in-cheek']] };
 // what each business sells, for the ad copy
-export const AD_NOUN = { bank: 'banking', dealer: 'cars', restaurant: 'dinner', autorepair: 'repairs', clothing: 'clothes', fashion: 'fashion', hotel: 'hotel rooms', metal: 'steel', textile: 'fabric', power: 'electricity', woodworks: 'timber', chemical: 'chemicals', construction: 'renovations', concrete: 'concrete', car: 'cars', finance: 'investments', chip: 'microchips', data: 'software', pharma: 'medicine', music: 'music', film: 'films', vineyard: 'wine', newspaper: 'the news' };
+export const AD_NOUN = { bank: 'banking', dealer: 'cars', restaurant: 'dinner', autorepair: 'repairs', clothing: 'clothes', fashion: 'fashion', hotel: 'hotel rooms', casino: 'a night at the tables', metal: 'steel', textile: 'fabric', power: 'electricity', woodworks: 'timber', chemical: 'chemicals', construction: 'renovations', concrete: 'concrete', car: 'cars', finance: 'investments', chip: 'microchips', data: 'software', pharma: 'medicine', music: 'music', film: 'films', vineyard: 'wine', newspaper: 'the news' };
 // besides what it makes itself, a company may advertise pieces from the owner's collection that fit its trade
 export const AD_CATS = { dealer: ['car'], autorepair: ['car'], car: ['car'], vineyard: ['wine'], restaurant: ['wine'], hotel: ['wine', 'art'], fashion: ['watch', 'art'], clothing: ['watch'], bank: ['art', 'watch'], finance: ['art', 'watch'], film: ['art'], music: ['art'] };
 // [headline, line]. {co} company, {d} district, {thing} what it sells, {type} kind of business, {item} {maker} {year} a piece, {owner} the tycoon
@@ -1299,3 +1334,42 @@ export const CARS = {
 export const ROADNET = {
   nodes: { s0: [40, 145], s1: [110, 185], s2: [200, 235], s3: [290, 268], ix: [420, 285], n1: [480, 255], n2: [560, 225], n3: [650, 190], n4: [740, 150], n5: [810, 122], cr1: [665, 45], cr0: [450, 135], g1: [880, 148], g2: [980, 168], g3: [1080, 185], g4: [1160, 225], g5: [1175, 270], g6: [1140, 298], dg1: [820, 210], dg2: [900, 250], dg3: [990, 292], ea1: [1220, 300], ea2: [1310, 265], e1: [500, 330], e2: [600, 340], e3: [700, 370], d1: [780, 410], c1: [430, 350], c2: [440, 420], c3: [430, 480], c4: [415, 525], sb1: [230, 330], sb2: [250, 400], sb3: [340, 390], hw1: [300, 515], hw2: [200, 560], pier: [90, 615], hx1: [350, 610], hx2: [400, 710], hx3: [490, 725], h1: [470, 585], h2: [540, 625], h3: [620, 655], b0: [660, 648], b1: [770, 670], b2: [870, 688], i0: [955, 712], i1: [1020, 690], i2: [1110, 688], i3: [1200, 700], i4: [1290, 770], i5: [1300, 840], i6: [1220, 855], i7: [1120, 830], i8: [1040, 770], m1: [560, 470], m2: [700, 455], m3: [870, 495], m4: [1040, 530], m5: [1180, 520], hs1: [410, 790], hs2: [480, 880] },
   edges: [['s0', 's1'], ['s1', 's2'], ['s2', 's3'], ['s3', 'ix'], ['ix', 'n1'], ['n1', 'n2'], ['n2', 'n3'], ['n3', 'n4'], ['n4', 'n5'], ['n5', 'cr1'], ['ix', 'cr0'], ['n5', 'g1'], ['g1', 'g2'], ['g2', 'g3'], ['g3', 'g4'], ['g4', 'g5'], ['g5', 'g6'], ['g6', 'dg3'], ['n4', 'dg1'], ['dg1', 'dg2'], ['dg2', 'dg3'], ['g6', 'ea1'], ['ea1', 'ea2'], ['ix', 'e1'], ['e1', 'e2'], ['e2', 'e3'], ['e3', 'd1'], ['ix', 'c1'], ['c1', 'c2'], ['c2', 'c3'], ['c3', 'c4'], ['s2', 'sb1'], ['sb1', 'sb2'], ['sb2', 'sb3'], ['sb3', 'c2'], ['c4', 'hw1'], ['hw1', 'hw2'], ['hw2', 'pier'], ['hw1', 'hx1'], ['hx1', 'hx2'], ['hx2', 'hx3'], ['hx3', 'h2'], ['hx1', 'h1'], ['c4', 'h1'], ['h1', 'h2'], ['h2', 'h3'], ['h3', 'b0'], ['b0', 'b1'], ['b1', 'b2'], ['b2', 'i0'], ['i0', 'i1'], ['i1', 'i2'], ['i2', 'i3'], ['i3', 'i4'], ['i4', 'i5'], ['i5', 'i6'], ['i6', 'i7'], ['i7', 'i8'], ['i8', 'i0'], ['c3', 'm1'], ['m1', 'm2'], ['m2', 'd1'], ['d1', 'm3'], ['m3', 'm4'], ['m4', 'm5'], ['dg3', 'm4'], ['hx2', 'hs1'], ['hs1', 'hs2']] };
+
+// ---------------------------------------------------------------- Marina Royale casino (casino.js)
+// Money at the tables is counted in thousands (k): chips, bets and payouts are k so halves stay exact.
+export const CASINO = {
+  lid: 'L44', name: 'Marina Royale', host: 'marinaroyale.ab',
+  chips: [1, 5, 25, 100, 500, 1000],           // chip values in k (img/cas-chip-<v>.webp)
+  decks: 6, pen: 0.75,                         // shoe and cut card (share of the shoe dealt before a shuffle)
+  seats: 5, betSec: 15, insSec: 10, turnSec: 20, idleMin: 6, // timers when more than one tycoon sits at the table
+  rooms: {
+    main: { name: 'Main Floor', tag: 'The blue room. Lights, music and a full house every night.', min: 1, max: 25, side: 5, tier: 0, tables: 3, csm: true, felt: 'cas-felt-main', back: 'cas-back-main', img: 'cas-room-main', hint: true },
+    high: { name: 'High Limit Salon', tag: 'The green salon. Quieter, bigger stacks, a dealer who knows your name.', min: 10, max: 250, side: 25, tier: 2, tables: 2, felt: 'cas-felt-high', back: 'cas-back-high', img: 'cas-room-high' },
+    vault: { name: 'The Vault', tag: 'Behind the red curtain. One table, private dealer, no cameras for the Gazette.', min: 100, max: 2000, side: 100, tier: 3, black: 2, tables: 1, felt: 'cas-felt-vault', back: 'cas-back-vault', img: 'cas-room-vault' }
+  },
+  maxX: [0.5, 1, 2],                           // the owner may halve or double each room's table maximum
+  comp: [[0, 'Off'], [1, 'Standard'], [1.5, 'Generous']], // Players Card cashback setting
+  // Players Card: by everything you have ever bet (k). rebate = % of a month's bets back (below the house edge)
+  card: [
+    { id: 'silver', name: 'Silver', min: 0, rebate: 0.1 },
+    { id: 'gold', name: 'Gold', min: 5000, rebate: 0.2, legacy: 2 },
+    { id: 'black', name: 'Black', min: 25000, rebate: 0.3, legacy: 4 }
+  ],
+  compMin: 250,                                // a month with at least this much bet (k) earns the card's dinner (legacy prestige)
+  news: 1000,                                  // a round won by at least this much (k) makes the Gazette (unless you asked for discretion)
+  pays: { bj: 1.5, ins: 2, pp: { mixed: 6, colour: 12, perfect: 25 }, t3: { flush: 5, straight: 10, trips: 30, sflush: 40, strips: 100 } },
+  pit: { tc: 2, spread: 4, times: 3, prefMin: 45 }, // the pit boss: big bets on a good count, 3 times in a shoe; then the shoe is shuffled every round
+  bots: { join: 0.35, leave: 0.12, max: 2, buyX: 40, stack: 0.25 },
+  dealers: { main: ['Marco', 'Sofie', 'Daniel', 'Ines'], high: ['Victor', 'Camille'], vault: ['Mr. Ashford'] },
+  talk: {
+    sit: ['Evening, everyone.', 'Mind if I join?', 'Feeling lucky tonight.', 'Deal me in.'],
+    bj: ['Blackjack! The cards love me tonight.', 'Twenty-one, thank you very much.', 'That is how it is done.'],
+    bust: ['Of course.', 'One card too many.', 'The shoe hates me.'],
+    win: ['Drinks are on me.', 'Keep them coming.', 'Now we are talking.'],
+    leave: ['That is enough for one night.', 'Good luck, everyone.', 'I am cashing out while I can.'],
+    pit1: 'Nice run tonight. We are keeping an eye on this table, that is all.',
+    pit2: 'The house will shuffle more often at this table for a while. Nothing personal.',
+    shuffle: 'Shuffling a fresh shoe.'
+  }
+};
+
