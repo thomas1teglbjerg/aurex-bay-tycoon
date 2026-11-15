@@ -150,10 +150,17 @@ function face(cd) {
 // Each card's animation gets a start time the first time it is drawn; cards queue one after another (CZ.queue), and a
 // redraw in the middle simply carries on with a negative delay.
 const STEP = C.dealMs || 650, FLIP = 700, DUR = 1200; // DUR: from the shoe to the spot (first half) and turned over (second half); // keep STEP in step with CASINO.dealMs: the server's timers wait for it
+// Pauses: the opening deal runs card after card (STEP); a card for another hand than the last one (the next player,
+// a bot, the dealer) waits GAP first so you can follow whose turn it is; the dealer turns the hole card after GAP and
+// draws at DSTEP. The server's clocks allow for the same (CASINO.dealMs, turnGap).
+const GAP = C.turnGap || 1300, DSTEP = 1100;
 function reg(cd, key) {
   const now = Date.now(); let a = CZ.anim.get(key);
-  if (!a) { a = { at: CZ.first ? 0 : Math.max(now, CZ.queue), k: 'deal', back: cd == null }; if (!CZ.first) CZ.queue = a.at + STEP; CZ.anim.set(key, a); }
-  else if (a.back && cd != null) { a.back = false; a.k = 'flip'; a.at = Math.max(now, CZ.queue); CZ.queue = a.at + FLIP; }
+  const part = key.split(':'), dealer = part[0] === 'd', who = part.slice(0, -1).join(':'), opening = dealer ? +part[2] < 2 : +part[3] === 0 && +part[4] < 2;
+  if (!a) {
+    const gap = CZ.first || opening ? 0 : who !== CZ.lastWho ? GAP : dealer ? DSTEP - STEP : 0;
+    a = { at: CZ.first ? 0 : Math.max(now, CZ.queue) + gap, k: 'deal', back: cd == null }; if (!CZ.first) CZ.queue = a.at + STEP; CZ.anim.set(key, a); CZ.lastWho = who;
+  } else if (a.back && cd != null) { a.back = false; a.k = 'flip'; a.at = Math.max(now, CZ.queue) + GAP; CZ.queue = a.at + FLIP; CZ.lastWho = who; }
   return a;
 }
 // queue the cards in the order a dealer deals them (one to each player, the dealer's up card, a second round, the hole

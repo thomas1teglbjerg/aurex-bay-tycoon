@@ -146,7 +146,7 @@ function take(city, s, v) { if (chipsAt(city, s) < v - 1e-9) return false; pay(c
 function exposed(t, c) { t.shoe.rc += hiLo(c); return c; }
 function draw(t) { const c = shoeOf(t)[t.shoe.pos++]; t.pend = (t.pend || 0) + 1; return exposed(t, c); }
 // a timer starts once the cards dealt since the last one have landed on screen (C.dealMs each), so dealing never eats a player's time
-function due(t, now, sec) { const at = now + sec * 1000 + (t.pend ? t.pend * C.dealMs + C.dealTail : 0); t.pend = 0; return at; }
+function due(t, now, sec) { const at = now + sec * 1000 + (t.pend ? t.pend * C.dealMs + C.dealTail : 0) + (t.gap || 0) * C.turnGap; t.pend = 0; t.gap = 0; return at; }
 function needShuffle(t, now) { const r = ROOMS[t.room]; return r.csm || t.shoe.pos >= t.shoe.cut || (t.pref && t.pref > now); }
 
 function deal(city, t, now, ctx) {
@@ -155,7 +155,7 @@ function deal(city, t, now, ctx) {
   const players = t.seats.filter((s) => s && (s.k === 'b' || (s.ready && s.bet > 0)));
   if (!players.length) { t.dl = null; return; }
   if (needShuffle(t, now)) { const quietShuffle = r.csm; t.shoe = freshShoe(t.shoe); if (!quietShuffle) say(t, t.dealer, C.talk.shuffle, 'dealer'); }
-  t.round++; t.d = { c: [], hole: null, bj: false }; t.turn = null; t.dl = null; t.pend = 0;
+  t.round++; t.d = { c: [], hole: null, bj: false }; t.turn = null; t.dl = null; t.pend = 0; t.gap = 0;
   const tc = t.shoe.rc / Math.max(0.5, (t.shoe.size - t.shoe.pos) / 52);
   t.seats.forEach((s) => {
     if (!s) return;
@@ -208,6 +208,7 @@ function nextTurn(city, t, now, ctx) {
     let found = null;
     for (let i = 0; i < t.seats.length && !found; i++) { const s = t.seats[i]; if (!s || !s.hands.length) continue; const hi = s.hands.findIndex((h) => h.st === 'play'); if (hi >= 0) found = { s: i, h: hi }; }
     if (!found) { t.turn = null; t.dl = null; return dealerPlay(city, t, now, ctx); }
+    if (t.turn && (t.turn.s !== found.s || t.turn.h !== found.h)) t.gap = (t.gap || 0) + 1; // the screen pauses when the turn moves on
     t.turn = found; const s = t.seats[found.s];
     if (s.k === 'b') { const h = s.hands[found.h]; const a = basic(h.c, t.d.c[0], opts(city, t, s, h)); move(city, t, s, h, a === 'surrender' && !opts(city, t, s, h).surrender ? 'hit' : a); continue; }
     t.dl = shared(t) ? due(t, now, C.turnSec) : null; return;

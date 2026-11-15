@@ -1342,7 +1342,7 @@ export const CASINO = {
   chips: [1, 5, 25, 100, 500, 1000],           // chip values in k (img/cas-chip-<v>.webp)
   decks: 6, pen: 0.75,                         // shoe and cut card (share of the shoe dealt before a shuffle)
   seats: 5, betSec: 20, insSec: 10, turnSec: 15, idleMin: 6, awayMax: 3, // timers when more than one tycoon sits at the table (awayMax timed-out hands → the seat is given up)
-  dealMs: 650, dealTail: 600,                  // one card dealt from the shoe on screen (+ the last one turning over); timers start after the cards have landed
+  dealMs: 800, dealTail: 600, turnGap: 1300,                  // one card dealt from the shoe on screen (+ the last one turning over), turnGap = pause when the turn moves on; timers start after the cards have landed
   rooms: {
     main: { name: 'Main Floor', tag: 'The blue room. Lights, music and a full house every night.', min: 1, max: 25, side: 5, tier: 0, tables: 3, csm: true, felt: 'cas-felt-main', back: 'cas-back-main', img: 'cas-room-main', hint: true },
     high: { name: 'High Limit Salon', tag: 'The green salon. Quieter, bigger stacks, a dealer who knows your name.', min: 10, max: 250, side: 25, tier: 2, tables: 2, felt: 'cas-felt-high', back: 'cas-back-high', img: 'cas-room-high' },
