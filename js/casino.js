@@ -5,11 +5,12 @@
 import * as E from '../supabase/functions/_shared/engine.js';
 import { CASINO as C, PRESTIGE_TIERS } from '../supabase/functions/_shared/content.js';
 import { city, me, meId, esc, M } from './util.js';
+import { pokerHTML, pokerRoomHTML, pokerClick, pokerTick, pokerFly, pokerSeat, pokerOpen, POKER_CSS } from './poker.js';
 
 const CAS = E.CAS, ROOMS = C.rooms, V = 2; // V: image version (bump when a cas-*.jpg/webp is replaced)
-const img = (n, ext = 'jpg') => `img/${n}.${ext}?v=${V}`;
-const kM = (k) => M(k / 1000);
-const CZ = { open: false, view: 'lobby', room: null, bet: { main: 0, pp: 0, t3: 0 }, last: null, target: 'main', cashier: false, hint: false, anim: new Map(), next: -1, nextAt: 0, queue: 0, first: true, tick: null, lastTick: 0, act: null, busy: false };
+export const img = (n, ext = 'jpg') => `img/${n}.${ext}?v=${V}`;
+export const kM = (k) => M(k / 1000);
+export const CZ = { open: false, view: 'lobby', room: null, bet: { main: 0, pp: 0, t3: 0 }, last: null, target: 'main', cashier: false, hint: false, anim: new Map(), next: -1, nextAt: 0, queue: 0, first: true, tick: null, lastTick: 0, act: null, busy: false };
 const settleIn = () => Math.max(0, (CZ.queue + 550 - Date.now()) / 1000 + 0.15).toFixed(2); // when the last card is down
 
 // ---------------------------------------------------------------- open, close, refresh
@@ -20,7 +21,8 @@ export function openCasino(act, room) {
   if (!el) { el = document.createElement('div'); el.id = 'casino'; (document.getElementById('app') || document.body).appendChild(el); el.addEventListener('click', onClick); el.addEventListener('change', onChange); window.addEventListener('resize', () => { if (CZ.open) render(); }); }
   el.hidden = false; CZ.open = true;
   const at = city().casino && CAS.seatOf(city(), meId());
-  if (at) { CZ.view = 'table'; CZ.room = at.t.room; } else if (room && ROOMS[room]) { CZ.view = 'room'; CZ.room = room; } else CZ.view = 'lobby';
+  const pk = pokerSeat();
+  if (at) { CZ.view = 'table'; CZ.room = at.t.room; } else if (pk) { pokerOpen(pk.t.id); CZ.room = 'main'; } else if (room && ROOMS[room]) { CZ.view = 'room'; CZ.room = room; } else CZ.view = 'lobby';
   CZ.anim = new Map(); CZ.queue = 0; CZ.first = true;
   render();
   if (!CZ.tick) CZ.tick = setInterval(tick, 200);
@@ -28,12 +30,14 @@ export function openCasino(act, room) {
 export function closeCasino() { const el = document.getElementById('casino'); if (el) { el.hidden = true; el.innerHTML = ''; } CZ.open = false; clearInterval(CZ.tick); CZ.tick = null; }
 export function casinoRefresh() { if (CZ.open) render(); }
 export const casinoOpen = () => CZ.open;
-async function send(action, args) { if (CZ.busy && action !== 'casTick') return { ok: false }; CZ.busy = true; let r; try { r = await CZ.act(action, args || {}); } finally { CZ.busy = false; } render(); return r; }
+export async function send(action, args) { if (CZ.busy && !['casTick', 'pkTick', 'pkHole'].includes(action)) return { ok: false }; CZ.busy = true; let r; try { r = await CZ.act(action, args || {}); } finally { CZ.busy = false; } render(); return r; }
 
 const myTable = () => { const c = city(); const at = c.casino && CAS.seatOf(c, meId()); return at || null; };
-const cas = () => { const p = me(); return (p && p.life && p.life.cas) || { chips: 0, buy: 0, turn: 0, net: 0, best: 0, hands: 0, mTurn: 0, limit: 0 }; };
+export const cas = () => { const p = me(); return (p && p.life && p.life.cas) || { chips: 0, buy: 0, turn: 0, net: 0, best: 0, hands: 0, mTurn: 0, limit: 0 }; };
 const tierGate = (room) => { const c = city(), p = me(); return CAS.gate(c, p, room, { tier: (x) => E.LIFE.tierOf(c, x), tierName: (t) => PRESTIGE_TIERS[t].name }); };
 
+// fill in the clocks right after a redraw (the HTML itself has no seconds in it, so an unchanged table is not redrawn)
+function tick0() { const now = Date.now(); document.querySelectorAll('#casino [data-dl]').forEach((x) => { const left = Math.max(0, +x.dataset.dl - now), tot = +x.dataset.tot || 0, s = Math.ceil(left / 1000); if (tot) { x.style.setProperty('--f', Math.min(1, left / (tot * 1000)).toFixed(3)); x.classList.toggle('low', s <= 5); const b = x.querySelector('b'); if (b) b.textContent = s + ' s'; } else { x.textContent = s + ' s'; x.classList.toggle('low', s <= 5); } }); }
 // the server only moves a table on when somebody acts: whoever sits there asks it to once a timer has run out
 function tick() {
   if (!CZ.open) return;
@@ -43,6 +47,7 @@ function tick() {
     if (tot) { const f = Math.min(1, left / (tot * 1000)); x.style.setProperty('--f', f.toFixed(3)); x.classList.toggle('low', s <= 5); const b = x.querySelector('b'); if (b) b.textContent = s + ' s'; }
     else { x.textContent = s + ' s'; x.classList.toggle('low', s <= 5); }
   });
+  pokerTick();
   if (now < CZ.queue + 900 && CZ.view === 'table' && !CZ.cashier) { if (now - (CZ.drawn || 0) > 180) { CZ.drawn = now; render(); } CZ.held = true; } // cards on their way: totals follow them
   else if (CZ.held) { CZ.held = false; render(); } // the cards have landed: show the buttons
   const at = myTable(); if (!at) return;
@@ -53,8 +58,9 @@ function tick() {
 async function onClick(ev) {
   const b = ev.target.closest('[data-c]'); if (!b) return;
   ev.preventDefault(); const d = b.dataset, cz = cas();
+  if (d.c.startsWith('pk')) { await pokerClick(d); return; }
   switch (d.c) {
-    case 'close': { const at = myTable(); if (at && !(at.t.ph !== 'bet' && at.s.hands.length && !at.s.done)) await send('casLeave'); closeCasino(); return; }
+    case 'close': { const at = myTable(); if (at && !(at.t.ph !== 'bet' && at.s.hands.length && !at.s.done)) await send('casLeave'); if (pokerSeat()) await send('pkLeave'); closeCasino(); return; }
     case 'lobby': CZ.view = 'lobby'; render(); return;
     case 'room': CZ.view = 'room'; CZ.room = d.r; render(); return;
     case 'sit': { const [rm, no] = d.t.split('-'); const r = await loading(`${ROOMS[rm] ? ROOMS[rm].name : 'Marina Royale'} · Table ${no}`, () => send('casSit', { tid: d.t })); if (r && r.ok) { CZ.view = 'table'; CZ.room = d.t.split('-')[0]; CZ.bet = { main: 0, pp: 0, t3: 0 }; CZ.anim = new Map(); CZ.first = true; render(); } return; }
@@ -88,10 +94,14 @@ function render() {
   if (!c.casino) { el.innerHTML = `<div class="cz-wait">Opening Marina Royale…</div>`; return; }
   const at = myTable();
   if (CZ.view === 'table' && !at) CZ.view = CZ.room ? 'room' : 'lobby';
-  const body = CZ.view === 'table' ? tableHTML(at) : CZ.view === 'room' ? roomHTML(CZ.room) : lobbyHTML();
-  el.innerHTML = body + (CZ.cashier ? cashierHTML() : '') + loadHTML();
+  if (CZ.view === 'poker' && pokerSeat() == null && !CZ.pk) CZ.view = 'room';
+  const body = CZ.view === 'poker' ? pokerHTML() : CZ.view === 'table' ? tableHTML(at) : CZ.view === 'room' ? roomHTML(CZ.room) : lobbyHTML();
+  const html = body + (CZ.cashier ? cashierHTML() : '') + loadHTML();
+  if (CZ.view === 'poker' && html === CZ.html) return; // nothing new: keep the buttons under your finger
+  CZ.html = html; el.innerHTML = html; if (CZ.view === 'poker') tick0();
   CZ.first = false;
   if (CZ.view === 'table') fly(el);
+  if (CZ.view === 'poker') pokerFly(el);
 }
 // a short curtain on the way to a table (img/cas-loading.jpg), so sitting down feels like walking up to it
 const LOAD = 2600;
@@ -109,6 +119,7 @@ function loadHTML() {
   return `<div class="cz-load" style="${dl}"><div class="cz-load-img" style="background-image:url('${img('cas-loading')}');${dl}"></div>
     <div class="cz-load-txt"><small>${esc(L.label || 'Marina Royale')}</small><b>Getting ready for action</b><span class="cz-load-bar"><i style="${dl}"></i></span></div></div>`;
 }
+CZ.redraw = () => render();
 // each card on its way starts at the shoe: measure where it will lie and set the flight as --dx/--dy
 function fly(el) {
   const shoe = el.querySelector('.cz-shoe-cards'); if (!shoe) return;
@@ -123,7 +134,7 @@ function fly(el) {
   });
 }
 const CROWN = '<svg viewBox="0 0 48 30" aria-hidden="true"><path d="M4 26h40l3-17-11 8-12-14-12 14-11-8z" fill="currentColor"/><circle cx="24" cy="3" r="2.6" fill="currentColor"/><circle cx="2" cy="8" r="2.2" fill="currentColor"/><circle cx="46" cy="8" r="2.2" fill="currentColor"/></svg>';
-function topBar(left) {
+export function topBar(left) {
   const cz = cas(), p = me(), card = CAS.cardOf(cz);
   return `<header class="cz-top"><div class="cz-brand">${left || `<span class="cz-crown">${CROWN}</span><b>Marina Royale</b><small>Casino</small>`}</div>
     <div class="cz-pills"><span class="cz-pill" title="Your chips">Chips <b>${kM(cz.chips)}</b></span><span class="cz-pill hide-s" title="Your private account">Wallet <b>${M(p.life.wallet)}</b></span>
@@ -136,7 +147,7 @@ function lobbyHTML() {
     const g = tierGate(id), n = Object.values(c.casino.tables).filter((t) => t.room === id).reduce((a, t) => a + t.seats.filter((s) => s && s.k === 'p').length, 0);
     return `<button class="cz-room r-${id}${g ? ' locked' : ''}" data-c="room" data-r="${id}" style="background-image:url('${img(r.img)}')">
       <span class="cz-shade"></span>
-      <span class="cz-room-in"><small>${['I', 'II', 'III'][i]} · Blackjack</small><h2>${esc(r.name)}</h2><p>${esc(r.tag)}</p>
+      <span class="cz-room-in"><small>${['I', 'II', 'III'][i]} · Blackjack${id === 'main' ? ' · Poker' : ''}</small><h2>${esc(r.name)}</h2><p>${esc(r.tag)}</p>
       <span class="cz-lim">${kM(r.min)} – ${kM(CAS.maxBet(c, id))} a hand${n ? ` · ${n} at the tables` : ''}</span>
       ${g ? `<span class="cz-lock">🔒 ${esc(ROOMS[id].black != null ? 'Elite, or Respected with a Black card' : 'Respected tycoons and above')}</span>` : `<span class="cz-enter">Enter</span>`}</span></button>`;
   }).join('');
@@ -153,14 +164,14 @@ function roomHTML(id) {
   return `<div class="cz-roomv" style="background-image:url('${img(r.img)}')"><span class="cz-shade"></span>${topBar(`<button class="cz-back" data-c="lobby">‹ Lobby</button><b>${esc(r.name)}</b>`)}
     <div class="cz-roomp"><h2>${esc(r.name)}</h2><p>${esc(r.tag)}</p>${g ? `<p class="cz-note">${esc(g)}</p>` : ''}
     <div class="cz-rules">Blackjack pays 3 to 2 · Dealer stands on all 17 · Insurance pays 2 to 1 · Double on any two, also after a split · Split to four hands · Late surrender · Side bets Perfect Pairs and 21+3 up to ${kM(r.side)}</div>
-    <div class="cz-tlist">${list}</div>${cas().chips ? '' : `<p class="cz-note">You have no chips yet. <a href="#" data-c="cashier">Visit the cashier</a>.</p>`}</div></div>`;
+    <div class="cz-tlist">${list}</div>${id === 'main' ? pokerRoomHTML() : ''}${cas().chips ? '' : `<p class="cz-note">You have no chips yet. <a href="#" data-c="cashier">Visit the cashier</a>.</p>`}</div></div>`;
 }
 
 // ---------------------------------------------------------------- cards and chips
 const PIPS = { 2: [[50, 18], [50, 82]], 3: [[50, 18], [50, 50], [50, 82]], 4: [[33, 18], [67, 18], [33, 82], [67, 82]], 5: [[33, 18], [67, 18], [50, 50], [33, 82], [67, 82]],
   6: [[33, 18], [67, 18], [33, 50], [67, 50], [33, 82], [67, 82]], 7: [[33, 18], [67, 18], [50, 34], [33, 50], [67, 50], [33, 82], [67, 82]], 8: [[33, 18], [67, 18], [50, 34], [33, 50], [67, 50], [50, 66], [33, 82], [67, 82]],
   9: [[33, 18], [67, 18], [33, 39], [67, 39], [50, 50], [33, 61], [67, 61], [33, 82], [67, 82]], 10: [[33, 18], [67, 18], [50, 29], [33, 39], [67, 39], [33, 61], [67, 61], [50, 71], [33, 82], [67, 82]] };
-function face(cd) {
+export function face(cd) {
   const r = CAS.rank(cd), s = CAS.SUITS[CAS.suit(cd)], R = CAS.RANKS[r], col = CAS.red(cd) ? ' red' : '';
   let mid;
   if (r === 0) mid = `<span class="cz-ace">${s}</span>`;
@@ -206,7 +217,7 @@ function cardHTML(cd, key, room) {
   if (a.at && now < a.at + DUR) { const dl = `animation-delay:${((a.at - now) / 1000).toFixed(2)}s !important`; cls += ' ' + a.k + (a.k === 'deal' && cd != null ? ' up' : ''); style = dl; if (cd != null) over = `<span class="cz-flipb ${a.k}" style="${dl}">${back}</span>`; }
   return `<span class="${cls}" style="${style}">${cd == null ? back : face(cd) + over}</span>`;
 }
-function chipStack(k, small) {
+export function chipStack(k, small) {
   if (!(k > 0)) return '';
   const out = []; let left = k; for (const v of [...C.chips].reverse()) { while (left >= v - 1e-9 && out.length < 9) { out.push(v); left -= v; } }
   if (left > 0.01 && out.length < 9) out.push(C.chips[0]);
@@ -581,5 +592,6 @@ function css() {
 .cz-row input { width: 140px; }
 .cz-check { display: flex; gap: 8px; align-items: center; font-size: 13.5px; cursor: pointer; }
 `;
+  s.textContent += POKER_CSS;
   document.head.appendChild(s);
 }
