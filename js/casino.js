@@ -96,7 +96,7 @@ function fly(el) {
   const shoe = el.querySelector('.cz-shoe-cards'); if (!shoe) return;
   const sr = shoe.getBoundingClientRect(), sx = sr.left + sr.width / 2, sy = sr.top + sr.height / 2;
   el.querySelectorAll('.cz-card.deal').forEach((c) => {
-    c.style.animationName = 'none'; const r = c.getBoundingClientRect(); c.style.animationName = '';
+    c.style.setProperty('animation-name', 'none', 'important'); const r = c.getBoundingClientRect(); c.style.removeProperty('animation-name');
     c.style.setProperty('--dx', `${Math.round(sx - (r.left + r.width / 2))}px`); c.style.setProperty('--dy', `${Math.round(sy - (r.top + r.height / 2))}px`);
   });
 }
@@ -174,7 +174,7 @@ function cardHTML(cd, key, room) {
   if (cd == null) cls += ' back'; else if (CAS.red(cd)) cls += ' red';
   const back = `<span class="cz-backimg" style="background-image:url('${img(ROOMS[room].back, 'webp')}')"></span>`;
   let over = '';
-  if (a.at && now < a.at + DUR) { const dl = `animation-delay:${((a.at - now) / 1000).toFixed(2)}s`; cls += ' ' + a.k + (a.k === 'deal' && cd != null ? ' up' : ''); style = dl; if (cd != null) over = `<span class="cz-flipb ${a.k}" style="${dl}">${back}</span>`; }
+  if (a.at && now < a.at + DUR) { const dl = `animation-delay:${((a.at - now) / 1000).toFixed(2)}s !important`; cls += ' ' + a.k + (a.k === 'deal' && cd != null ? ' up' : ''); style = dl; if (cd != null) over = `<span class="cz-flipb ${a.k}" style="${dl}">${back}</span>`; }
   return `<span class="${cls}" style="${style}">${cd == null ? back : face(cd) + over}</span>`;
 }
 function chipStack(k, small) {
@@ -211,7 +211,7 @@ function tableHTML(at) {
     const hands = s.hands.map((h, hi) => {
       const active = turnHere && t.turn.h === hi && t.ph === 'play';
       const cards = h.c.map((cd, ci) => cardHTML(cd, `s:${t.round}:${s.id}:${hi}:${ci}`, t.room)).join('');
-      const res = h.res && RES[h.res] ? `<span class="cz-res ${RES[h.res][1]}" style="animation-delay:${settleIn()}s">${RES[h.res][0]}${h.res !== 'push' ? ` ${h.won - h.bet > 0 ? '+' : ''}${kM(h.won - h.bet)}` : ''}</span>` : '';
+      const res = h.res && RES[h.res] ? `<span class="cz-res ${RES[h.res][1]}" style="animation-delay:${settleIn()}s !important">${RES[h.res][0]}${h.res !== 'push' ? ` ${h.won - h.bet > 0 ? '+' : ''}${kM(h.won - h.bet)}` : ''}</span>` : '';
       return `<span class="cz-hand${active ? ' on' : ''}">${res}<span class="cz-cards">${cards}</span>${(() => { const lc = landed(h.c, (ci) => `s:${t.round}:${s.id}:${hi}:${ci}`); return lc.length ? `<span class="cz-tot">${totalLabel(lc, h.st !== 'play' && lc.length === h.c.length)}</span>` : ''; })()}${s.hands.length > 1 || h.dbl ? chipStack(h.bet, true) : ''}</span>`;
     }).join('');
     const showBet = isMe && t.ph === 'bet' && !s.ready ? CZ.bet.main : s.hands.length ? (s.hands.length === 1 && !s.hands[0].dbl ? s.hands[0].bet : 0) : s.ready ? s.bet : 0;
@@ -227,7 +227,7 @@ function tableHTML(at) {
   let banner = '';
   if (t.ph === 'bet' && me_.done && me_.hands.length && !me_.ready) {
     const net = me_.net, bj = me_.hands.some((h) => h.res === 'bj');
-    banner = `<div class="cz-banner ${net > 0 ? 'win' : net < 0 ? 'lose' : 'push'}" style="animation-delay:${(+settleIn() + 0.2).toFixed(2)}s"><b>${bj && net > 0 ? 'Blackjack!' : net > 0 ? 'You win' : net < 0 ? (me_.hands.every((h) => h.res === 'bust') ? 'Bust' : 'Dealer wins') : 'Push'}</b>${net ? `<span>${net > 0 ? '+' : '−'}${kM(Math.abs(net))}</span>` : ''}</div>`;
+    banner = `<div class="cz-banner ${net > 0 ? 'win' : net < 0 ? 'lose' : 'push'}" style="animation-delay:${(+settleIn() + 0.2).toFixed(2)}s !important"><b>${bj && net > 0 ? 'Blackjack!' : net > 0 ? 'You win' : net < 0 ? (me_.hands.every((h) => h.res === 'bust') ? 'Bust' : 'Dealer wins') : 'Push'}</b>${net ? `<span>${net > 0 ? '+' : '−'}${kM(Math.abs(net))}</span>` : ''}</div>`;
   }
   const talk = t.log.slice(0, 4).map((x) => `<p class="${x.k}${Date.now() - x.at < 9000 ? ' new' : ''}"><b>${esc(x.who)}</b> ${esc(x.text)}</p>`).join('');
   const shoeLeft = Math.max(0, 1 - t.shoe.pos / t.shoe.size);
@@ -404,6 +404,13 @@ function css() {
 .cz-flipb.deal { animation: czDealB 1.2s steps(1, end) both; }
 @keyframes czFlipB { 0% { opacity: 1; } 50% { opacity: 0; } 100% { opacity: 0; } }
 @keyframes czDealB { 0% { opacity: 1; } 72% { opacity: 0; } 100% { opacity: 0; } }
+/* the dealing is the game's pace, not decoration: keep it when the device asks for reduced motion (index.html turns every other animation off) */
+@media (prefers-reduced-motion: reduce) {
+  #casino .cz-card.deal { animation: czDeal 1.2s both !important; } #casino .cz-card.deal.up { animation-name: czDealUp !important; }
+  #casino .cz-card.flip { animation: czFlip 0.7s ease-in-out both !important; }
+  #casino .cz-flipb.flip { animation: czFlipB 0.7s steps(1, end) both !important; } #casino .cz-flipb.deal { animation: czDealB 1.2s steps(1, end) both !important; }
+  #casino .cz-res { animation: czPop 0.35s both !important; } #casino .cz-banner { animation: czBan 0.5s both !important; }
+}
 .cz-tot { min-width: calc(var(--cw) * 0.5); height: calc(var(--cw) * 0.5); padding: 0 calc(var(--cw) * 0.08); border-radius: 999px; background: #0c0c0c; border: 2px solid #ecc56a; display: grid; place-items: center; font-weight: 800; font-size: calc(var(--cw) * 0.2); color: #fff; font-family: 'Montserrat', sans-serif; white-space: nowrap; }
 .cz-seat { position: absolute; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: calc(var(--cw) * 0.1); }
 .cz-seat:not(.me) { --cw: min(4.3vw, 7.6vh); }
