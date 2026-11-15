@@ -146,7 +146,7 @@ function take(city, s, v) { if (chipsAt(city, s) < v - 1e-9) return false; pay(c
 function exposed(t, c) { t.shoe.rc += hiLo(c); return c; }
 function draw(t) { const c = shoeOf(t)[t.shoe.pos++]; t.pend = (t.pend || 0) + 1; return exposed(t, c); }
 // a timer starts once the cards dealt since the last one have landed on screen (C.dealMs each), so dealing never eats a player's time
-function due(t, now, sec) { const at = now + sec * 1000 + (t.pend || 0) * C.dealMs; t.pend = 0; return at; }
+function due(t, now, sec) { const at = now + sec * 1000 + (t.pend ? t.pend * C.dealMs + C.dealTail : 0); t.pend = 0; return at; }
 function needShuffle(t, now) { const r = ROOMS[t.room]; return r.csm || t.shoe.pos >= t.shoe.cut || (t.pref && t.pref > now); }
 
 function deal(city, t, now, ctx) {

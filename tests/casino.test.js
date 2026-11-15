@@ -115,7 +115,7 @@ E.apply(city, 'u', 'casSit', { tid: 'main-3' }, now); const tq = city.casino.tab
 A_('casDeal', { main: 5 }); assert(tq.ph === 'play' && !tq.dl, 'alone at the table: no turn clock');
 B_('casSit', { tid: 'main-3' }); assert(tq.dl, 'a second tycoon sits down: the turn now has a clock');
 now = tq.dl + 100; E.advance(city, now); assert(tq.ph === 'bet', 'and the hand cannot be stalled');
-for (let k = 0; k < 3; k++) { A_('casDeal', { main: 5 }); for (let g = 0; g < 4 && (tq.ph !== 'bet' || tq.dl); g++) { now = (tq.dl || now) + 100; E.advance(city, now); if (tq.ph === 'play' && tq.turn && tq.seats[tq.turn.s].id === 'u') A_('casStand', {}); } }
+for (let k = 0; k < 3; k++) { A_('casDeal', { main: 5 }); for (let g = 0; g < 4 && (tq.ph !== 'bet' || tq.dl); g++) { now = (tq.dl || now) + 100; E.advance(city, now); if (tq.ph === 'ins') A_('casIns', { take: false }); if (tq.ph === 'play' && tq.turn && tq.seats[tq.turn.s].id === 'u') A_('casStand', {}); } }
 E.advance(city, now + 1); assert(CAS.seatOf(city, 'u') && !CAS.seatOf(city, 'v'), 'a tycoon who sits out three hands without betting gives up the seat');
 A_('casLeave', {}); B_('casLeave', {});
 
