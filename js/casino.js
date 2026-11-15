@@ -22,7 +22,7 @@ export function openCasino(act, room) {
   if (at) { CZ.view = 'table'; CZ.room = at.t.room; } else if (room && ROOMS[room]) { CZ.view = 'room'; CZ.room = room; } else CZ.view = 'lobby';
   CZ.anim = new Map(); CZ.queue = 0; CZ.first = true;
   render();
-  if (!CZ.tick) CZ.tick = setInterval(tick, 500);
+  if (!CZ.tick) CZ.tick = setInterval(tick, 200);
 }
 export function closeCasino() { const el = document.getElementById('casino'); if (el) { el.hidden = true; el.innerHTML = ''; } CZ.open = false; clearInterval(CZ.tick); CZ.tick = null; }
 export function casinoRefresh() { if (CZ.open) render(); }
@@ -36,7 +36,14 @@ const tierGate = (room) => { const c = city(), p = me(); return CAS.gate(c, p, r
 // the server only moves a table on when somebody acts: whoever sits there asks it to once a timer has run out
 function tick() {
   if (!CZ.open) return;
-  document.querySelectorAll('#casino [data-dl]').forEach((x) => { const s = Math.max(0, Math.ceil((+x.dataset.dl - Date.now()) / 1000)); x.textContent = s + ' s'; });
+  const now = Date.now();
+  document.querySelectorAll('#casino [data-dl]').forEach((x) => {
+    const left = Math.max(0, +x.dataset.dl - now), tot = +x.dataset.tot || 0, s = Math.ceil(left / 1000);
+    if (tot) { const f = Math.min(1, left / (tot * 1000)); x.style.setProperty('--f', f.toFixed(3)); x.classList.toggle('low', s <= 5); const b = x.querySelector('b'); if (b) b.textContent = s + ' s'; }
+    else { x.textContent = s + ' s'; x.classList.toggle('low', s <= 5); }
+  });
+  if (now < CZ.queue + 300 && CZ.view === 'table' && !CZ.cashier) { if (now - (CZ.drawn || 0) > 180) { CZ.drawn = now; render(); } CZ.held = true; } // cards on their way: totals follow them
+  else if (CZ.held) { CZ.held = false; render(); } // the cards have landed: show the buttons
   const at = myTable(); if (!at) return;
   if (at.t.dl && Date.now() > at.t.dl + 400 && Date.now() - CZ.lastTick > 2500) { CZ.lastTick = Date.now(); send('casTick'); }
 }
@@ -133,14 +140,32 @@ function face(cd) {
 // one card; key says which card it is in this round, so new ones fly in and the hole card turns over
 // Each card's animation gets a start time the first time it is drawn; cards queue one after another (CZ.queue), and a
 // redraw in the middle simply carries on with a negative delay.
-const STEP = 260, FLIP = 420;
-function cardHTML(cd, key, room) {
-  const now = Date.now(); let a = CZ.anim.get(key), cls = 'cz-card', style = '';
+const STEP = C.dealMs || 650, FLIP = C.dealMs || 650, DUR = 900; // keep STEP in step with CASINO.dealMs: the server's timers wait for it
+function reg(cd, key) {
+  const now = Date.now(); let a = CZ.anim.get(key);
   if (!a) { a = { at: CZ.first ? 0 : Math.max(now, CZ.queue), k: 'deal', back: cd == null }; if (!CZ.first) CZ.queue = a.at + STEP; CZ.anim.set(key, a); }
   else if (a.back && cd != null) { a.back = false; a.k = 'flip'; a.at = Math.max(now, CZ.queue); CZ.queue = a.at + FLIP; }
+  return a;
+}
+// queue the cards in the order a dealer deals them (one to each player, the dealer's up card, a second round, the hole
+// card, then whatever was drawn), not in the order they are drawn on the page
+function queueRound(t) {
+  const dk = (i) => `d:${t.round}:${i}`, sk = (s, hi, ci) => `s:${t.round}:${s.id}:${hi}:${ci}`, live = t.seats.filter((s) => s && s.hands.length);
+  const first = (ci) => live.forEach((s) => { const c = s.hands[0].c[ci]; if (c != null && !s.hands[0].sp) reg(c, sk(s, 0, ci)); });
+  first(0); if (t.d.c.length) reg(t.d.c[0], dk(0));
+  first(1); if (t.d.hole != null) reg(null, dk(1)); else if (t.d.c.length > 1) reg(t.d.c[1], dk(1));
+  live.forEach((s) => s.hands.forEach((h, hi) => h.c.forEach((c, ci) => reg(c, sk(s, hi, ci)))));
+  t.d.c.slice(1).forEach((c, i) => reg(c, dk(i + 1)));
+}
+// the cards of a hand that are already on the table (the total only counts those)
+const landed = (cards, key) => cards.filter((c, i) => { const a = CZ.anim.get(key(i)); return !a || !a.at || Date.now() >= a.at + STEP * 0.8 && !(a.k === 'flip' && Date.now() < a.at + FLIP * 0.6); });
+function cardHTML(cd, key, room) {
+  const now = Date.now(), a = reg(cd, key); let cls = 'cz-card', style = '';
   if (cd == null) cls += ' back'; else if (CAS.red(cd)) cls += ' red';
-  if (a.at && now < a.at + 700) { cls += ' ' + a.k; style = `animation-delay:${((a.at - now) / 1000).toFixed(2)}s`; }
-  return `<span class="${cls}" style="${style}">${cd == null ? `<span class="cz-backimg" style="background-image:url('${img(ROOMS[room].back, 'webp')}')"></span>` : face(cd)}</span>`;
+  const back = `<span class="cz-backimg" style="background-image:url('${img(ROOMS[room].back, 'webp')}')"></span>`;
+  let over = '';
+  if (a.at && now < a.at + DUR) { const dl = `animation-delay:${((a.at - now) / 1000).toFixed(2)}s`; cls += ' ' + a.k; style = dl; if (a.k === 'flip') over = `<span class="cz-flipb" style="${dl}">${back}</span>`; }
+  return `<span class="${cls}" style="${style}">${cd == null ? back : face(cd) + over}</span>`;
 }
 function chipStack(k, small) {
   if (!(k > 0)) return '';
@@ -160,12 +185,14 @@ function tableHTML(at) {
   const inRound = t.ph !== 'bet' || (me_.hands.length && me_.done);
   // the dealer: up card, then the hole card (a back until it is turned), then what the dealer drew
   const dk = (i) => `d:${t.round}:${i}`;
+  queueRound(t);
   let dealer = '';
   if (t.d.c.length || t.d.hole != null) {
     const shown = [cardHTML(t.d.c[0], dk(0), t.room)];
     if (t.d.hole != null) shown.push(cardHTML(null, dk(1), t.room));
     t.d.c.slice(1).forEach((cd, i) => shown.push(cardHTML(cd, dk(i + 1), t.room)));
-    dealer = `<div class="cz-dealer"><span class="cz-tot">${t.d.hole != null ? CAS.cval(t.d.c[0]) === 11 ? 'A' : CAS.cval(t.d.c[0]) : totalLabel(t.d.c, true)}</span><span class="cz-cards">${shown.join('')}</span></div>`;
+    const dl = landed(t.d.c, dk), dn = dl.length === t.d.c.length && t.d.hole == null;
+    dealer = `<div class="cz-dealer">${dl.length ? `<span class="cz-tot">${dn ? totalLabel(t.d.c, true) : dl.length === 1 ? CAS.cval(dl[0]) === 11 ? 'A' : CAS.cval(dl[0]) : totalLabel(dl, false)}</span>` : ''}<span class="cz-cards">${shown.join('')}</span></div>`;
   } else dealer = `<div class="cz-dealer empty"><span class="cz-dname">Dealer ${esc(t.dealer)}</span></div>`;
   // seats, turned so that you sit in the middle
   const seats = t.seats.map((s, i) => {
@@ -175,7 +202,7 @@ function tableHTML(at) {
       const active = turnHere && t.turn.h === hi && t.ph === 'play';
       const cards = h.c.map((cd, ci) => cardHTML(cd, `s:${t.round}:${s.id}:${hi}:${ci}`, t.room)).join('');
       const res = h.res && RES[h.res] ? `<span class="cz-res ${RES[h.res][1]}" style="animation-delay:${settleIn()}s">${RES[h.res][0]}${h.res !== 'push' ? ` ${h.won - h.bet > 0 ? '+' : ''}${kM(h.won - h.bet)}` : ''}</span>` : '';
-      return `<span class="cz-hand${active ? ' on' : ''}">${res}<span class="cz-cards">${cards}</span><span class="cz-tot">${totalLabel(h.c, h.st !== 'play')}</span>${s.hands.length > 1 || h.dbl ? chipStack(h.bet, true) : ''}</span>`;
+      return `<span class="cz-hand${active ? ' on' : ''}">${res}<span class="cz-cards">${cards}</span>${(() => { const lc = landed(h.c, (ci) => `s:${t.round}:${s.id}:${hi}:${ci}`); return lc.length ? `<span class="cz-tot">${totalLabel(lc, h.st !== 'play' && lc.length === h.c.length)}</span>` : ''; })()}${s.hands.length > 1 || h.dbl ? chipStack(h.bet, true) : ''}</span>`;
     }).join('');
     const showBet = isMe && t.ph === 'bet' && !s.ready ? CZ.bet.main : s.hands.length ? (s.hands.length === 1 && !s.hands[0].dbl ? s.hands[0].bet : 0) : s.ready ? s.bet : 0;
     const spot = `<span class="cz-spot${isMe && t.ph === 'bet' && CZ.target === 'main' ? ' sel' : ''}" ${isMe && t.ph === 'bet' ? 'data-c="target" data-t="main"' : ''}>${chipStack(showBet)}</span>`;
@@ -212,22 +239,25 @@ function controlsHTML(at) {
   const rack = `<div class="cz-rack">${C.chips.map((v) => `<button class="cz-chip" data-c="chip" data-v="${v}" ${t.ph !== 'bet' || s.ready || v > cz.chips ? 'disabled' : ''} aria-label="${kM(v)} chip"><img src="${img('cas-chip-' + v, 'webp')}" alt=""></button>`).join('')}
     <span class="cz-bal"><small>Chips</small><b>${kM(cz.chips - (t.ph === 'bet' && !s.ready ? CZ.bet.main + CZ.bet.pp + CZ.bet.t3 : 0))}</b></span></div>`;
   let acts = '';
-  if (t.ph === 'bet') {
+  const bar = (label, tot) => t.dl ? `<div class="cz-timer" data-dl="${t.dl}" data-tot="${tot}"><i></i><span>${label}<b>${Math.max(0, Math.ceil((t.dl - Date.now()) / 1000))} s</b></span></div>` : '';
+  const dealing = Date.now() < CZ.queue && (t.ph !== 'bet' || s.hands.length > 0); if (dealing) CZ.held = true;
+  if (dealing) acts = `<p class="cz-waitp">${t.ph === 'play' && !t.turn ? 'The dealer plays…' : 'Dealing…'}</p>`;
+  else if (t.ph === 'bet') {
     if (s.ready) acts = `<p class="cz-waitp">Waiting for the other players${t.dl ? ` · <span data-dl="${t.dl}"></span>` : ''}</p>`;
     else {
       const sum = CZ.bet.main + CZ.bet.pp + CZ.bet.t3;
-      acts = `<p class="cz-target">Chips go on: <b>${CZ.target === 'main' ? 'the main bet' : CZ.target === 'pp' ? 'Perfect Pairs' : '21+3'}</b> · tap a spot to switch</p>
+      acts = `${bar('The cards are dealt in', C.betSec)}<p class="cz-target">Chips go on: <b>${CZ.target === 'main' ? 'the main bet' : CZ.target === 'pp' ? 'Perfect Pairs' : '21+3'}</b> · tap a spot to switch</p>
         <div class="cz-acts">${CZ.last ? `<button class="cz-act" data-c="rebet"><i>↺</i>Rebet</button><button class="cz-act" data-c="rebet" data-x="2"><i>×2</i>Rebet ×2</button>` : ''}<button class="cz-act" data-c="clear" ${sum ? '' : 'disabled'}><i>✕</i>Clear</button>
         <button class="cz-act deal" data-c="deal" ${CZ.bet.main >= r.min ? '' : 'disabled'}><i>▶</i>Deal${CZ.bet.main ? ` ${kM(sum)}` : ''}</button></div>`;
     }
   } else if (t.ph === 'ins') {
-    acts = s.hands.length && s.ins == null ? `<p class="cz-target">The dealer shows an ace. Insurance costs ${kM(s.hands[0].bet / 2)} and pays 2 to 1.</p><div class="cz-acts"><button class="cz-act" data-c="ins" data-v="1"><i>☂</i>Insurance</button><button class="cz-act" data-c="ins" data-v="0"><i>✕</i>No insurance</button></div>` : `<p class="cz-waitp">Waiting for insurance${t.dl ? ` · <span data-dl="${t.dl}"></span>` : ''}</p>`;
+    acts = s.hands.length && s.ins == null ? `${bar('Decide on insurance', C.insSec)}<p class="cz-target">The dealer shows an ace. Insurance costs ${kM(s.hands[0].bet / 2)} and pays 2 to 1.</p><div class="cz-acts"><button class="cz-act" data-c="ins" data-v="1"><i>☂</i>Insurance</button><button class="cz-act" data-c="ins" data-v="0"><i>✕</i>No insurance</button></div>` : `<p class="cz-waitp">Waiting for insurance${t.dl ? ` · <span data-dl="${t.dl}"></span>` : ''}</p>`;
   } else if (t.ph === 'play') {
     const myTurn = t.turn && t.seats[t.turn.s] === s;
     if (myTurn) {
       const h = s.hands[t.turn.h], o = CAS.opts(city(), t, s, h), hint = r.hint ? CAS.basic(h.c, t.d.c[0], o) : null;
       const B = (m, ic, label) => `<button class="cz-act${hint === m && CZ.hint ? ' hint' : ''}" data-c="move" data-m="${m[0].toUpperCase() + m.slice(1)}" ${o[m] ? '' : 'disabled'}><i>${ic}</i>${label}</button>`;
-      acts = `<div class="cz-acts">${B('hit', '+', 'Hit')}${B('stand', '✋', 'Stand')}${B('double', '×2', 'Double')}${B('split', '⇹', 'Split')}${B('surrender', '⚑', 'Surrender')}${r.hint ? `<button class="cz-act sm" data-c="hint"><i>?</i>Hint</button>` : ''}</div>
+      acts = `${bar('Your turn', C.turnSec)}<div class="cz-acts">${B('hit', '+', 'Hit')}${B('stand', '✋', 'Stand')}${B('double', '×2', 'Double')}${B('split', '⇹', 'Split')}${B('surrender', '⚑', 'Surrender')}${r.hint ? `<button class="cz-act sm" data-c="hint"><i>?</i>Hint</button>` : ''}</div>
         ${CZ.hint && hint ? `<p class="cz-target">Basic strategy says: <b>${hint[0].toUpperCase() + hint.slice(1)}</b></p>` : ''}`;
     } else acts = `<p class="cz-waitp">${t.turn ? `${esc(t.seats[t.turn.s].name)} is playing${t.dl ? ` · <span data-dl="${t.dl}"></span>` : ''}` : 'The dealer plays…'}</p>`;
   }
@@ -352,10 +382,12 @@ function css() {
 .cz-court { position: absolute; inset: 15% 17%; border: 1.5px solid currentColor; border-radius: 4px; display: grid; place-items: center; background: linear-gradient(160deg, #f7e7b8, #e2c57d); overflow: hidden; }
 .cz-court em { font-style: normal; font-size: calc(var(--cw) * 0.5); line-height: 1; } .cz-court i { position: absolute; bottom: 4%; font-style: normal; font-size: calc(var(--cw) * 0.22); }
 .cz-court u { position: absolute; top: 5%; text-decoration: none; width: 46%; display: grid; place-items: center; font-size: calc(var(--cw) * 0.2); color: #8a6516; } .cz-court u svg { width: 100%; }
-.cz-card.deal { animation: czDeal 0.42s cubic-bezier(.2,.8,.25,1) both; }
-@keyframes czDeal { from { transform: translate(calc(var(--cw) * 6), calc(var(--cw) * -5)) rotate(-28deg) scale(0.7); opacity: 0; } 25% { opacity: 1; } }
-.cz-card.flip { animation: czFlip 0.5s ease both; }
-@keyframes czFlip { 0% { transform: rotateY(90deg); } 100% { transform: none; } }
+.cz-card.deal { animation: czDeal 0.62s cubic-bezier(.2,.75,.25,1) both; }
+@keyframes czDeal { 0% { transform: translate(calc(var(--cw) * 7), calc(var(--cw) * -6)) rotate(-34deg) scale(0.72); opacity: 0; } 12% { opacity: 1; } 80% { transform: translate(0, calc(var(--cw) * -0.06)) rotate(2deg) scale(1.02); } 100% { transform: none; } }
+.cz-card.flip { animation: czFlip 0.7s ease-in-out both; }
+@keyframes czFlip { 0% { transform: none; } 45% { transform: translateY(calc(var(--cw) * -0.25)) scaleX(0.02); } 55% { transform: translateY(calc(var(--cw) * -0.25)) scaleX(0.02); } 100% { transform: none; } }
+.cz-flipb { position: absolute; inset: 0; border-radius: inherit; animation: czFlipB 0.7s steps(1, end) both; z-index: 3; }
+@keyframes czFlipB { 0% { opacity: 1; } 50% { opacity: 0; } 100% { opacity: 0; } }
 .cz-tot { min-width: calc(var(--cw) * 0.5); height: calc(var(--cw) * 0.5); padding: 0 calc(var(--cw) * 0.08); border-radius: 999px; background: #0c0c0c; border: 2px solid #ecc56a; display: grid; place-items: center; font-weight: 800; font-size: calc(var(--cw) * 0.2); color: #fff; font-family: 'Montserrat', sans-serif; white-space: nowrap; }
 .cz-seat { position: absolute; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: calc(var(--cw) * 0.1); }
 .cz-seat:not(.me) { --cw: min(4.3vw, 7.6vh); }
@@ -382,7 +414,13 @@ function css() {
 .cz-name { font-size: calc(var(--cw) * 0.16); background: #000a; border: 1px solid #ecc56a55; padding: 2px 9px; border-radius: 10px; white-space: nowrap; margin-top: calc(var(--cw) * 0.14); display: flex; gap: 6px; align-items: center; }
 .cz-seat.me .cz-name { color: #ecc56a; font-weight: 700; }
 .cz-seat.turn .cz-name { border-color: #ecc56a; }
-.cz-clock { color: #ffd27a; font-weight: 800; }
+.cz-clock { color: #ffd27a; font-weight: 800; } .cz-clock.low { color: #ff7b7b; animation: czBlink 1s steps(2) infinite; }
+@keyframes czBlink { 50% { opacity: 0.45; } }
+.cz-timer { position: relative; align-self: stretch; min-width: min(420px, 100%); height: 24px; border-radius: 11px; background: #000b; border: 1px solid #ecc56a66; overflow: hidden; margin-bottom: 6px; --f: 1; }
+.cz-timer i { position: absolute; inset: 0; transform-origin: left; transform: scaleX(var(--f)); background: linear-gradient(90deg, #b88a2c, #ecc56a); transition: transform 0.2s linear; }
+.cz-timer.low i { background: linear-gradient(90deg, #8b1a24, #e0444f); }
+.cz-timer span { position: relative; display: flex; justify-content: space-between; padding: 0 12px; font-size: 13px; line-height: 22px; font-weight: 700; color: #fff; text-shadow: 0 1px 2px #000; }
+.cz-timer.low span b { animation: czBlink 1s steps(2) infinite; }
 .cz-banner { position: absolute; left: 50%; top: 37%; transform: translate(-50%, -50%); padding: calc(var(--cw) * 0.15) calc(var(--cw) * 0.5); border-radius: 12px; background: #000c; border: 1.5px solid #ecc56a; text-align: center; animation: czBan 0.5s both; z-index: 5; pointer-events: none; }
 .cz-banner b { display: block; font-family: 'Playfair Display', Georgia, serif; font-size: calc(var(--cw) * 0.42); color: #fff; }
 .cz-banner span { font-family: 'Montserrat', sans-serif; font-weight: 800; font-size: calc(var(--cw) * 0.3); }

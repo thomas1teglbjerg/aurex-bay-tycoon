@@ -144,7 +144,9 @@ function take(city, s, v) { if (chipsAt(city, s) < v - 1e-9) return false; pay(c
 
 // ---------------------------------------------------------------- the round
 function exposed(t, c) { t.shoe.rc += hiLo(c); return c; }
-function draw(t) { const c = shoeOf(t)[t.shoe.pos++]; return exposed(t, c); }
+function draw(t) { const c = shoeOf(t)[t.shoe.pos++]; t.pend = (t.pend || 0) + 1; return exposed(t, c); }
+// a timer starts once the cards dealt since the last one have landed on screen (C.dealMs each), so dealing never eats a player's time
+function due(t, now, sec) { const at = now + sec * 1000 + (t.pend || 0) * C.dealMs; t.pend = 0; return at; }
 function needShuffle(t, now) { const r = ROOMS[t.room]; return r.csm || t.shoe.pos >= t.shoe.cut || (t.pref && t.pref > now); }
 
 function deal(city, t, now, ctx) {
@@ -153,7 +155,7 @@ function deal(city, t, now, ctx) {
   const players = t.seats.filter((s) => s && (s.k === 'b' || (s.ready && s.bet > 0)));
   if (!players.length) { t.dl = null; return; }
   if (needShuffle(t, now)) { const quietShuffle = r.csm; t.shoe = freshShoe(t.shoe); if (!quietShuffle) say(t, t.dealer, C.talk.shuffle, 'dealer'); }
-  t.round++; t.d = { c: [], hole: null, bj: false }; t.turn = null; t.dl = null;
+  t.round++; t.d = { c: [], hole: null, bj: false }; t.turn = null; t.dl = null; t.pend = 0;
   const tc = t.shoe.rc / Math.max(0.5, (t.shoe.size - t.shoe.pos) / 52);
   t.seats.forEach((s) => {
     if (!s) return;
@@ -174,7 +176,7 @@ function deal(city, t, now, ctx) {
   live.forEach((s) => s.hands[0].c.push(draw(t)));
   t.d.c.push(draw(t));
   live.forEach((s) => s.hands[0].c.push(draw(t)));
-  t.d.hole = t.shoe.pos++; // dealt face down: only its place in the shoe is kept
+  t.d.hole = t.shoe.pos++; t.pend++; // dealt face down: only its place in the shoe is kept
   live.forEach((s) => {
     const h = s.hands[0], [a, b] = h.c, up = t.d.c[0], P = C.pays;
     s.side = {};
@@ -185,7 +187,7 @@ function deal(city, t, now, ctx) {
   const up = t.d.c[0];
   if (rank(up) === 0) { // insurance first
     t.ph = 'ins'; live.forEach((s) => { s.ins = s.k === 'b' ? 0 : null; });
-    if (live.filter((s) => s.k === 'p').length > 1) t.dl = now + C.insSec * 1000;
+    if (live.filter((s) => s.k === 'p').length > 1) t.dl = due(t, now, C.insSec);
     return;
   }
   peek(city, t, now, ctx);
@@ -208,7 +210,7 @@ function nextTurn(city, t, now, ctx) {
     if (!found) { t.turn = null; t.dl = null; return dealerPlay(city, t, now, ctx); }
     t.turn = found; const s = t.seats[found.s];
     if (s.k === 'b') { const h = s.hands[found.h]; const a = basic(h.c, t.d.c[0], opts(city, t, s, h)); move(city, t, s, h, a === 'surrender' && !opts(city, t, s, h).surrender ? 'hit' : a); continue; }
-    t.dl = shared(t) ? now + C.turnSec * 1000 : null; return;
+    t.dl = shared(t) ? due(t, now, C.turnSec) : null; return;
   }
 }
 // what a hand may do right now
@@ -293,11 +295,12 @@ export function step(city, t, now, ctx) {
   for (let guard = 0; guard < 12; guard++) {
     if (t.ph === 'bet') {
       t.seats.forEach((s, i) => { if (s && s.k === 'p' && now - (s.seen || 0) > C.idleMin * 60000) { const p = city.players[s.id]; if (p) cas(p).seat = null; t.seats[i] = null; } });
+      t.seats.forEach((s, i) => { if (s && s.k === 'p' && Math.max(s.idle || 0, s.out || 0) >= C.awayMax) { const p = city.players[s.id]; if (p) cas(p).seat = null; t.seats[i] = null; say(t, t.dealer, `${s.name} has been away for ${C.awayMax} hands and leaves the seat.`, 'dealer'); } });
       const humans = t.seats.filter((s) => s && s.k === 'p'), ready = humans.filter((s) => s.ready && s.bet > 0);
       if (!humans.length) { t.dl = null; t.seats.forEach((s, i) => { if (s && s.k === 'b') { const b = city.players[s.id]; if (b && b.life) b.life.wallet += s.stack / 1000; t.seats[i] = null; } }); return; }
       if (!ready.length) { t.dl = null; return; }
-      if (ready.length === humans.length || (t.dl && now >= t.dl)) { deal(city, t, now, ctx); continue; }
-      if (!t.dl) t.dl = now + C.betSec * 1000;
+      if (ready.length === humans.length || (t.dl && now >= t.dl)) { humans.forEach((s) => { s.out = s.ready && s.bet > 0 ? 0 : (s.out || 0) + 1; }); deal(city, t, now, ctx); continue; }
+      if (!t.dl) t.dl = due(t, now, C.betSec);
       return;
     }
     if (t.ph === 'ins') {
@@ -306,6 +309,7 @@ export function step(city, t, now, ctx) {
       open.forEach((s) => { s.ins = 0; }); t.dl = null; peek(city, t, now, ctx); continue;
     }
     if (t.ph === 'play') {
+      if (t.turn && !t.dl && shared(t)) { t.dl = due(t, now, C.turnSec); return; } // someone sat down mid-hand: from now on the turn has a clock
       if (t.turn && t.dl && now >= t.dl) { const s = t.seats[t.turn.s], h = s && s.hands[t.turn.h]; if (h) { h.st = 'stand'; s.idle = (s.idle || 0) + 1; say(t, t.dealer, `${s.name} is away. Standing.`, 'dealer'); } nextTurn(city, t, now, ctx); continue; }
       return;
     }
@@ -366,7 +370,7 @@ export function act(city, p, action, a, ctx, now = Date.now()) {
       if (i < 0 || i >= C.seats) return err('The table is full. Try another.');
       t.seats[i] = { k: 'p', id: p.id, name: p.name, bet: 0, pp: 0, t3: 0, hands: [], seen: now, ready: false };
       c.seat = t.id; if (t.ph === 'bet' && !t.round) say(t, t.dealer, `Welcome to ${ROOMS[t.room].name}, ${p.name.split(' ')[0]}.`, 'dealer');
-      return ok();
+      step(city, t, now, ctx); return ok();
     }
     case 'casLeave': {
       if (!T) return ok(); if (inHand(T, S)) return err('Finish the hand first.');
@@ -380,7 +384,7 @@ export function act(city, p, action, a, ctx, now = Date.now()) {
       if (pp < 0 || t3 < 0 || pp > r.side || t3 > r.side) return err(`Side bets are up to ${r.side} k.`);
       if (main + pp + t3 > c.chips) return err('Not enough chips. Visit the cashier.');
       if (c.limit && c.buy - c.chips + main + pp + t3 > c.limit) return err(`You set a limit of ${r2(c.limit / 1000)} M tonight. Change it at the cashier.`);
-      S.bet = main; S.pp = pp; S.t3 = t3; S.ready = true; S.idle = 0;
+      S.bet = main; S.pp = pp; S.t3 = t3; S.ready = true;
       step(city, T, now, ctx); return ok();
     }
     case 'casIns': {
@@ -392,7 +396,7 @@ export function act(city, p, action, a, ctx, now = Date.now()) {
       if (!T || T.ph !== 'play' || !T.turn || T.seats[T.turn.s] !== S) return err('It is not your turn.');
       const h = S.hands[T.turn.h], o = opts(city, T, S, h), m = action.slice(3).toLowerCase();
       if (!o[m]) return err({ hit: 'You cannot take another card.', double: 'You can only double on your first two cards (and need the chips).', split: 'You can only split two cards of the same value (and need the chips).', surrender: 'Surrender only on your first two cards.' }[m] || 'Not now.');
-      move(city, T, S, h, m); if (h.st !== 'play') nextTurn(city, T, now, ctx); else if (shared(T)) T.dl = now + C.turnSec * 1000;
+      S.idle = 0; move(city, T, S, h, m); if (h.st !== 'play') nextTurn(city, T, now, ctx); else if (shared(T)) T.dl = due(T, now, C.turnSec);
       return ok();
     }
     case 'casTick': if (T) step(city, T, now, ctx); return ok();

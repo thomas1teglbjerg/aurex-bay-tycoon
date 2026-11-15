@@ -100,9 +100,23 @@ A_('casSit', { tid: 'main-2' }); B_('casSit', { tid: 'main-2' });
 CAS.testShoe(t2, [c(T), c(T, 1), c(8), c(7), c(7, 1), c(9)]); t2.shoe.pos = 1;
 A_('casDeal', { main: 5 }); assert(t2.ph === 'bet' && t2.dl, 'the deal waits for the other tycoon');
 B_('casDeal', { main: 5 }); assert(t2.ph === 'play' && t2.turn && t2.dl, 'both bet: cards out, a turn timer runs');
-const first = t2.seats[t2.turn.s].id; now += (CASINO.turnSec + 1) * 1000; E.advance(city, now);
+assert(t2.dl >= now + CASINO.turnSec * 1000 + 6 * CASINO.dealMs, 'the turn timer starts after the six cards have been dealt on screen');
+const first = t2.seats[t2.turn.s].id; now += 3000; E.advance(city, now); assert(t2.seats[t2.turn.s].id === first, 'still their turn while the cards are dealt');
+now = t2.dl + 100; E.advance(city, now);
 assert(t2.turn && t2.seats[t2.turn.s].id !== first, 'the away player stands when the timer runs out');
-now += (CASINO.turnSec + 1) * 1000; E.advance(city, now); assert(t2.ph === 'bet', 'the round finishes without them');
+now = t2.dl + 100; E.advance(city, now); assert(t2.ph === 'bet', 'the round finishes without them');
+assert(t2.seats.every((s) => !s || (s.idle || 0) === 1), 'each away hand is counted');
+// three hands in a row away: the seat is given up
+for (let k = 0; k < 2; k++) { CAS.testShoe(t2, [c(T), c(T, 1), c(8), c(7), c(7, 1), c(9)]); t2.shoe.pos = 1; A_('casDeal', { main: 5 }); B_('casDeal', { main: 5 }); for (let g = 0; g < 4 && t2.ph !== 'bet'; g++) { now = t2.dl + 100; E.advance(city, now); } }
+E.advance(city, now + 1); assert(!CAS.seatOf(city, 'u') && !CAS.seatOf(city, 'v'), 'after three hands away the players lose their seats');
+A_('casLeave', {}); B_('casLeave', {});
+// a tycoon alone has no clock, but once a second one sits down the hand gets one
+E.apply(city, 'u', 'casSit', { tid: 'main-3' }, now); const tq = city.casino.tables['main-3']; CAS.testShoe(tq, [c(T), c(T, 1), c(8), c(7)]); tq.shoe.pos = 1;
+A_('casDeal', { main: 5 }); assert(tq.ph === 'play' && !tq.dl, 'alone at the table: no turn clock');
+B_('casSit', { tid: 'main-3' }); assert(tq.dl, 'a second tycoon sits down: the turn now has a clock');
+now = tq.dl + 100; E.advance(city, now); assert(tq.ph === 'bet', 'and the hand cannot be stalled');
+for (let k = 0; k < 3; k++) { A_('casDeal', { main: 5 }); for (let g = 0; g < 4 && (tq.ph !== 'bet' || tq.dl); g++) { now = (tq.dl || now) + 100; E.advance(city, now); if (tq.ph === 'play' && tq.turn && tq.seats[tq.turn.s].id === 'u') A_('casStand', {}); } }
+E.advance(city, now + 1); assert(CAS.seatOf(city, 'u') && !CAS.seatOf(city, 'v'), 'a tycoon who sits out three hands without betting gives up the seat');
 A_('casLeave', {}); B_('casLeave', {});
 
 // --- the pit boss notices big bets on a good count
