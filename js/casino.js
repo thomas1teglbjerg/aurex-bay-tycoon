@@ -14,6 +14,7 @@ const settleIn = () => Math.max(0, (CZ.queue + 550 - Date.now()) / 1000 + 0.15).
 
 // ---------------------------------------------------------------- open, close, refresh
 export function openCasino(act, room) {
+  try { new Image().src = img('cas-loading'); } catch (e) { /* preload the curtain */ }
   CZ.act = act; css();
   let el = document.getElementById('casino');
   if (!el) { el = document.createElement('div'); el.id = 'casino'; (document.getElementById('app') || document.body).appendChild(el); el.addEventListener('click', onClick); el.addEventListener('change', onChange); window.addEventListener('resize', () => { if (CZ.open) render(); }); }
@@ -56,7 +57,7 @@ async function onClick(ev) {
     case 'close': { const at = myTable(); if (at && !(at.t.ph !== 'bet' && at.s.hands.length && !at.s.done)) await send('casLeave'); closeCasino(); return; }
     case 'lobby': CZ.view = 'lobby'; render(); return;
     case 'room': CZ.view = 'room'; CZ.room = d.r; render(); return;
-    case 'sit': { const r = await send('casSit', { tid: d.t }); if (r && r.ok) { CZ.view = 'table'; CZ.room = d.t.split('-')[0]; CZ.bet = { main: 0, pp: 0, t3: 0 }; CZ.anim = new Map(); CZ.first = true; render(); } return; }
+    case 'sit': { const [rm, no] = d.t.split('-'); const r = await loading(`${ROOMS[rm] ? ROOMS[rm].name : 'Marina Royale'} · Table ${no}`, () => send('casSit', { tid: d.t })); if (r && r.ok) { CZ.view = 'table'; CZ.room = d.t.split('-')[0]; CZ.bet = { main: 0, pp: 0, t3: 0 }; CZ.anim = new Map(); CZ.first = true; render(); } return; }
     case 'leave': { const r = await send('casLeave'); if (r && r.ok) { CZ.view = 'room'; render(); } return; }
     case 'cashier': CZ.cashier = !CZ.cashier; render(); return;
     case 'buy': { const amt = d.v === 'x' ? Number((document.getElementById('cz-amt') || {}).value) : Number(d.v); await send('casBuy', { amt }); return; }
@@ -88,9 +89,25 @@ function render() {
   const at = myTable();
   if (CZ.view === 'table' && !at) CZ.view = CZ.room ? 'room' : 'lobby';
   const body = CZ.view === 'table' ? tableHTML(at) : CZ.view === 'room' ? roomHTML(CZ.room) : lobbyHTML();
-  el.innerHTML = body + (CZ.cashier ? cashierHTML() : '');
+  el.innerHTML = body + (CZ.cashier ? cashierHTML() : '') + loadHTML();
   CZ.first = false;
   if (CZ.view === 'table') fly(el);
+}
+// a short curtain on the way to a table (img/cas-loading.jpg), so sitting down feels like walking up to it
+const LOAD = 2600;
+// loading(label, then): shows the curtain at once, runs then() meanwhile (e.g. sitting down) and returns its result; the
+// curtain lifts by itself after LOAD ms, or at once if then() fails. Any table can use it (Blackjack, Poker).
+export async function loading(label, then) {
+  CZ.load = { at: Date.now(), label }; render(); setTimeout(render, LOAD + 60);
+  let r; try { r = then ? await then() : { ok: true }; } catch (e) { r = { ok: false }; }
+  if (r && r.ok === false) { CZ.load = null; render(); }
+  return r;
+}
+function loadHTML() {
+  const L = CZ.load; if (!L) return ''; const gone = Date.now() - L.at; if (gone >= LOAD) { CZ.load = null; return ''; }
+  const dl = `animation-delay:${(-gone / 1000).toFixed(2)}s !important`;
+  return `<div class="cz-load" style="${dl}"><div class="cz-load-img" style="background-image:url('${img('cas-loading')}');${dl}"></div>
+    <div class="cz-load-txt"><small>${esc(L.label || 'Marina Royale')}</small><b>Getting ready for action</b><span class="cz-load-bar"><i style="${dl}"></i></span></div></div>`;
 }
 // each card on its way starts at the shoe: measure where it will lie and set the flight as --dx/--dy
 function fly(el) {
@@ -452,6 +469,19 @@ function css() {
 .cz-fly.take, .cz-fly.pay { animation: czChip 0.8s cubic-bezier(.4,0,.3,1) both; }
 @keyframes czChip { 0% { transform: translate(-50%, -50%); opacity: 1; } 85% { opacity: 1; } 100% { transform: translate(calc(-50% + var(--gx, 0px)), calc(-50% + var(--gy, 0px))) scale(0.7); opacity: 0; } }
 
+/* loading curtain before a table */
+.cz-load { position: absolute; inset: 0; z-index: 60; background: #050302; animation: czLoad ${LOAD}ms ease both; pointer-events: auto; overflow: hidden; }
+@keyframes czLoad { 0% { opacity: 0; } 10%, 84% { opacity: 1; } 100% { opacity: 0; } }
+.cz-load-img { position: absolute; inset: 0; background-size: cover; background-position: 60% 72%; animation: czLoadZoom ${LOAD}ms ease-out both; }
+@keyframes czLoadZoom { from { transform: scale(1.08); } to { transform: scale(1); } }
+.cz-load::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, #000d 0%, #0008 45%, #0000 75%), linear-gradient(0deg, #000c, #0000 40%); }
+.cz-load-txt { position: absolute; left: 7%; bottom: 14%; z-index: 1; display: flex; flex-direction: column; gap: 10px; max-width: 86%; }
+.cz-load-txt small { font-family: 'Cinzel', Georgia, serif; color: #ecc56a; letter-spacing: 0.2em; text-transform: uppercase; font-size: 13px; }
+.cz-load-txt b { font-family: 'Playfair Display', Georgia, serif; font-style: italic; font-weight: 600; color: #fff; font-size: clamp(30px, 5vw, 60px); line-height: 1.05; text-shadow: 0 2px 18px #000; }
+.cz-load-bar { width: min(320px, 70vw); height: 3px; background: #ffffff22; border-radius: 2px; overflow: hidden; margin-top: 6px; }
+.cz-load-bar i { display: block; height: 100%; background: linear-gradient(90deg, #b88a2c, #ecc56a); transform-origin: left; animation: czLoadBar ${LOAD - 400}ms ease-in-out both; }
+@keyframes czLoadBar { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
 /* the dealing is the game's pace, not decoration: keep it when the device asks for reduced motion (index.html turns every other animation off) */
 @media (prefers-reduced-motion: reduce) {
   #casino .cz-card.deal { animation: czDeal 1.2s both !important; } #casino .cz-card.deal.up { animation-name: czDealUp !important; }
@@ -459,6 +489,7 @@ function css() {
   #casino .cz-flipb.flip { animation: czFlipB 0.7s steps(1, end) both !important; } #casino .cz-flipb.deal { animation: czDealB 1.2s steps(1, end) both !important; }
   #casino .cz-card.gone { animation: czGone 0.75s cubic-bezier(.4,0,.7,1) both !important; } #casino .cz-flipb.gone { animation: czGoneB 0.75s steps(1, end) both !important; }
   #casino .cz-fly.take, #casino .cz-fly.pay { animation: czChip 0.8s cubic-bezier(.4,0,.3,1) both !important; } #casino .cz-win { animation: czPop 0.35s both !important; }
+  #casino .cz-load { animation: czLoad ${LOAD}ms ease both !important; } #casino .cz-load-bar i { animation: czLoadBar ${LOAD - 400}ms ease-in-out both !important; }
   #casino .cz-res { animation: czPop 0.35s both !important; } #casino .cz-banner { animation: czBan 0.5s both !important; }
 }
 .cz-tot { min-width: calc(var(--cw) * 0.5); height: calc(var(--cw) * 0.5); padding: 0 calc(var(--cw) * 0.08); border-radius: 999px; background: #0c0c0c; border: 2px solid #ecc56a; display: grid; place-items: center; font-weight: 800; font-size: calc(var(--cw) * 0.2); color: #fff; font-family: 'Montserrat', sans-serif; white-space: nowrap; }
