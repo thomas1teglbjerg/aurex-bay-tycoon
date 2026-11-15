@@ -98,7 +98,10 @@ function render() {
   const body = CZ.view === 'poker' ? pokerHTML() : CZ.view === 'table' ? tableHTML(at) : CZ.view === 'room' ? roomHTML(CZ.room) : lobbyHTML();
   const html = body + (CZ.cashier ? cashierHTML() : '') + loadHTML();
   if (CZ.view === 'poker' && html === CZ.html) return; // nothing new: keep the buttons under your finger
+  // keep the room's scroll position when it is redrawn (a seat picker opening, the tables moving on)
+  const sc = el.querySelector('.cz-roomv'), keep = sc && CZ.view === 'room' && CZ.scrollRoom === CZ.room ? sc.scrollTop : 0;
   CZ.html = html; el.innerHTML = html; if (CZ.view === 'poker') tick0();
+  if (CZ.view === 'room') { const n = el.querySelector('.cz-roomv'); if (n && keep) n.scrollTop = keep; CZ.scrollRoom = CZ.room; } else CZ.scrollRoom = null;
   CZ.first = false;
   if (CZ.view === 'table') fly(el);
   if (CZ.view === 'poker') pokerFly(el);
@@ -163,7 +166,7 @@ function roomHTML(id) {
   }).join('');
   return `<div class="cz-roomv" style="background-image:url('${img(r.img)}')"><span class="cz-shade"></span>${topBar(`<button class="cz-back" data-c="lobby">‹ Lobby</button><b>${esc(r.name)}</b>`)}
     <div class="cz-roomp"><h2>${esc(r.name)}</h2><p>${esc(r.tag)}</p>${g ? `<p class="cz-note">${esc(g)}</p>` : ''}
-    <div class="cz-rules">Blackjack pays 3 to 2 · Dealer stands on all 17 · Insurance pays 2 to 1 · Double on any two, also after a split · Split to four hands · Late surrender · Side bets Perfect Pairs and 21+3 up to ${kM(r.side)}</div>
+    <h3 class="pk-h">Blackjack</h3><div class="cz-rules">Blackjack pays 3 to 2 · Dealer stands on all 17 · Insurance pays 2 to 1 · Double on any two, also after a split · Split to four hands · Late surrender · Side bets Perfect Pairs and 21+3 up to ${kM(r.side)}</div>
     <div class="cz-tlist">${list}</div>${id === 'main' ? pokerRoomHTML() : ''}${cas().chips ? '' : `<p class="cz-note">You have no chips yet. <a href="#" data-c="cashier">Visit the cashier</a>.</p>`}</div></div>`;
 }
 
