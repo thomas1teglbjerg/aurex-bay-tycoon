@@ -344,7 +344,7 @@ export function view(t, T) {
   const v = { n: h.n, stack: { ...h.st }, bet: {}, put: {}, fold: {}, all: {}, last: {}, board: [], show: {}, win: [], pot: 0, dealt: [], dealAt: 0, boardAt: [], sweepAt: 0, swept: {}, ended: 0, lastAt: 0, act: null };
   h.in.forEach((i) => { v.bet[i] = 0; v.put[i] = 0; });
   for (const e of h.ev) {
-    if (e.at > T) { v.pending = true; break; }
+    if (e.at > T) { v.pending = true; if (e.k === 'act') v.next = e.s; break; }
     v.lastAt = e.at;
     if (e.k === 'blind' || e.k === 'act') {
       if (e.k === 'act' && e.a === 'fold') v.fold[e.s] = true;
@@ -358,7 +358,7 @@ export function view(t, T) {
   }
   v.pot = Object.values(v.put).reduce((a, b) => a + b, 0) - Object.values(v.bet).reduce((a, b) => a + b, 0) - v.win.reduce((a, w) => a + w.v, 0) - (v.win.length ? h.rake : 0);
   if (v.pot < 0) v.pot = 0;
-  v.caught = !v.pending; v.turn = v.caught && !h.done ? h.turn : null; v.dl = v.caught ? h.dl : null;
+  v.caught = !v.pending && T >= (t.vis || 0); v.turn = v.caught && !h.done ? h.turn : null; v.dl = v.caught ? h.dl : null;
   return v;
 }
 

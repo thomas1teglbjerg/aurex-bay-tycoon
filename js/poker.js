@@ -6,7 +6,7 @@
 import * as E from '../supabase/functions/_shared/engine.js';
 import { CASINO } from '../supabase/functions/_shared/content.js';
 import { city, meId, esc } from './util.js';
-import { CZ, img, kM, face, chipStack, topBar, send, cas } from './casino.js';
+import { CZ, img, kM, face, chipStack, topBar, send, cas, loading } from './casino.js';
 
 const PK = E.PK, P = CASINO.poker, MS = P.ms, DUR = 1200, GONE = 750;
 const S = () => (CZ.pk = CZ.pk || { tid: null, raise: 0, rkey: '', hole: null, asked: '', buy: null, lastTick: 0 });
@@ -41,9 +41,10 @@ export function pokerTick() {
 export async function pokerClick(d) {
   const st = S(), at = pokerSeat();
   switch (d.c) {
-    case 'pkWatch': pokerOpen(d.t); CZ.redraw(); psend('pkTick', { tid: d.t }); return true;
+    case 'pkWatch': { const here = pokerSeat(); if (here && here.t.id === d.t) { pokerOpen(d.t); CZ.redraw(); return true; }
+      await loading(label(d.t), () => psend('pkTick', { tid: d.t })); pokerOpen(d.t); CZ.redraw(); return true; }
     case 'pkBuy': st.buy = st.buy === d.t ? null : d.t; CZ.redraw(); return true;
-    case 'pkSit': { const r = await psend('pkSit', { tid: d.t, buy: Number(d.v) }); if (r && r.ok) { pokerOpen(d.t); CZ.redraw(); } return true; }
+    case 'pkSit': { const watching = CZ.view === 'poker' && st.tid === d.t, go = () => psend('pkSit', { tid: d.t, buy: Number(d.v) }), r = watching ? await go() : await loading(label(d.t), go); if (r && r.ok) { pokerOpen(d.t); CZ.redraw(); } return true; }
     case 'pkLeave': { if (at) { const r = await psend('pkLeave', {}); if (!(r && r.ok)) return true; } st.tid = null; CZ.view = 'room'; CZ.room = 'main'; CZ.redraw(); return true; }
     case 'pkTop': await psend('pkTop', {}); return true;
     case 'pkChip': { const o = myOpts(); if (!o) return true; st.raise = Math.min(o.max, Math.max(o.min, (st.raise || o.min) + Number(d.v))); CZ.redraw(); return true; }
@@ -58,6 +59,7 @@ export async function pokerClick(d) {
   }
   return false;
 }
+const label = (tid) => { const t = tableOf(tid); return `Main Floor · Hold'em ${t ? t.no : ''}`; };
 function myOpts() {
   const at = pokerSeat(); if (!at || at.t.id !== S().tid) return null;
   const v = PK.view(at.t, Date.now()); if (!v || v.turn !== at.i) return null;
@@ -120,7 +122,7 @@ export function pokerHTML() {
     const last = v && v.last[i] && !cleared ? v.last[i] : null, fresh = last && now - last.at < 2600;
     const tag = v && v.fold[i] && !cleared ? `<em class="pk-tag fold">Fold</em>` : last && (fresh || last.a === 'allin') ? `<em class="pk-tag ${last.a}">${SAY[last.a] || last.a}${['bet', 'raise', 'call'].includes(last.a) ? ' ' + kM(last.v) : ''}</em>` : '';
     const sh = v && v.show[i] && !clearing ? `<em class="pk-hn">${esc(v.show[i].name)}</em>` : '';
-    const turn = v && v.turn === i, clock = turn && v.dl ? `<span class="pk-clock" data-dl="${v.dl}" data-tot="${P.turnSec}"><b></b></span>` : turn ? '<span class="pk-think">…</span>' : '';
+    const turn = v && (v.turn === i || (v.turn == null && v.next === i && !v.fold[i])), clock = turn && v.turn === i && v.dl ? `<span class="pk-clock" data-dl="${v.dl}" data-tot="${P.turnSec}"><b></b></span>` : turn ? '<span class="pk-think">…</span>' : '';
     const won = v && v.win.find((w) => w.s === i) && !clearing;
     return `<div data-i="${i}" class="pk-seat${y < 15 ? ' top' : ''}${isMe ? ' me' : ''}${k === 'b' ? ' bot' : ''}${turn ? ' turn' : ''}${v && v.fold[i] ? ' out' : ''}${won ? ' won' : ''}" style="left:${x}%;top:${y}%">
       <span class="pk-cards">${cards}</span>${sh}
@@ -128,7 +130,7 @@ export function pokerHTML() {
       <span class="pk-name">${esc(isMe ? 'You' : name)}${k === 'b' ? ' · rival' : ''}</span><span class="pk-stack">${kM(stack)}</span>${tag}</div>`;
   }).join('');
   // bets in front of the seats (a third of the way to the middle), the pot and the board
-  const toward = (i, f) => { const [x, y] = seatAt(i); return [x + (50 - x) * f, y + (46 - y) * f]; };
+  const toward = (i, f) => { const [x, y] = seatAt(i); if (i === mine && f > 0.3) f = 0.56; return [x + (50 - x) * f, y + (46 - y) * f]; };
   let bets = '';
   if (v && !cleared) {
     Object.entries(v.bet).forEach(([k, b]) => { if (!(b > 0)) return; const i = +k, [x, y] = toward(i, 0.36), l = v.last[i], pop = l && now - l.at < 450; bets += `<span class="pk-bet${pop ? ' new' : ''}" style="left:${x}%;top:${y}%">${chipStack(b, true)}</span>`; });
@@ -184,6 +186,7 @@ function controlsHTML(t, v, mine, now) {
     else if (h.done || (v && v.win.length)) msg = `Next hand in <span data-dl="${t.next}"></span>`;
     else if (!h.in.includes(mine) || h.ids[mine] !== meId()) msg = 'You are in from the next hand.';
     else if (v && v.fold[mine]) msg = 'You folded. Wait for the next hand.';
+    else if (v && v.turn == null && v.next != null) msg = `${esc((t.seats[v.next] && t.seats[v.next].name) || h.names[v.next])} is thinking…`;
     else if (v && v.turn != null) msg = `${esc((t.seats[v.turn] && t.seats[v.turn].name) || h.names[v.turn])} is thinking${v.dl ? ` · <span data-dl="${v.dl}"></span>` : '…'}`;
     else msg = 'Dealing…';
     const between = !h || h.done || !h.in.includes(mine);
@@ -211,7 +214,7 @@ export const POKER_CSS = `
   box-shadow: 0 0 0 calc(var(--cw) * 0.06) #c79a4a, 0 0 0 calc(var(--cw) * 0.36) #151515, 0 0 0 calc(var(--cw) * 0.39) #2b2b2b, 0 calc(var(--cw) * 0.3) calc(var(--cw) * 0.9) #000; }
 .pk-felt::before { content: ''; position: absolute; inset: calc(var(--cw) * -0.36); border-radius: 50%; background: repeating-linear-gradient(45deg, #ffffff06 0 2px, #0000 2px 5px); pointer-events: none; }
 .pk-line { position: absolute; inset: 9% 7%; border-radius: 50%; border: 1.5px solid #ecc56a55; }
-.pk-print { position: absolute; left: 50%; top: 73%; transform: translateX(-50%); font-family: 'Cinzel', Georgia, serif; color: #e7c77a; opacity: 0.55; font-size: calc(var(--cw) * 0.18); letter-spacing: 0.2em; white-space: nowrap; text-transform: uppercase; }
+.pk-print { position: absolute; left: 50%; top: 27%; transform: translateX(-50%); font-family: 'Cinzel', Georgia, serif; color: #e7c77a; opacity: 0.55; font-size: calc(var(--cw) * 0.18); letter-spacing: 0.2em; white-space: nowrap; text-transform: uppercase; }
 .pk-deck { position: absolute; left: 31%; top: 45%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .pk-deck span { width: calc(var(--cw) * 0.62); height: calc(var(--cw) * 0.9); border-radius: 5px; background-size: cover; box-shadow: 1px 1px 0 #e8e0cc, 2px 2px 0 #f4eedf, 3px 3px 0 #e8e0cc, 0 6px 12px #000a; transform: rotate(-8deg); }
 .pk-deck small { font-family: 'Playfair Display', Georgia, serif; font-style: italic; color: #e7c77a; font-size: calc(var(--cw) * 0.15); white-space: nowrap; }
@@ -256,7 +259,7 @@ export const POKER_CSS = `
 .cz-tablev.pk .cz-act { width: auto; min-width: 72px; white-space: nowrap; }
 .pk-seat.top { flex-direction: column-reverse; } .pk-seat.top .pk-cards { margin: calc(var(--cw) * -0.3) 0 0; order: -1; } .pk-seat.top .pk-hn { top: auto; bottom: calc(var(--cw) * -0.35); }
 .cz-tablev.pk.tall .pk-deck { left: 50%; top: 31%; }
-.cz-tablev.pk.tall .cz-stage { bottom: 250px; }
+.cz-tablev.pk.tall .cz-stage { bottom: 250px; } .cz-tablev.pk.tall .pk-print { display: none; }
 .cz-tablev.pk.tall .pk-felt { left: 9%; right: 9%; top: 9%; bottom: 13%; }
 .cz-tablev.pk.tall .pk-seat { --cw: min(10vw, 6.2vh); } .cz-tablev.pk.tall .pk-seat.me { --cw: min(13vw, 7.8vh); }
 .cz-tablev.pk.tall .pk-board { --cw: min(11vw, 7vh); }
