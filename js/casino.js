@@ -9,7 +9,7 @@ import { city, me, meId, esc, M } from './util.js';
 const CAS = E.CAS, ROOMS = C.rooms, V = 2; // V: image version (bump when a cas-*.jpg/webp is replaced)
 const img = (n, ext = 'jpg') => `img/${n}.${ext}?v=${V}`;
 const kM = (k) => M(k / 1000);
-const CZ = { open: false, view: 'lobby', room: null, bet: { main: 0, pp: 0, t3: 0 }, last: null, target: 'main', cashier: false, hint: false, anim: new Map(), queue: 0, first: true, tick: null, lastTick: 0, act: null, busy: false };
+const CZ = { open: false, view: 'lobby', room: null, bet: { main: 0, pp: 0, t3: 0 }, last: null, target: 'main', cashier: false, hint: false, anim: new Map(), next: -1, nextAt: 0, queue: 0, first: true, tick: null, lastTick: 0, act: null, busy: false };
 const settleIn = () => Math.max(0, (CZ.queue + 550 - Date.now()) / 1000 + 0.15).toFixed(2); // when the last card is down
 
 // ---------------------------------------------------------------- open, close, refresh
@@ -70,6 +70,7 @@ async function onClick(ev) {
       bet[CZ.target] += v; CZ.flash = ''; render(); return;
     }
     case 'clear': CZ.bet = { main: 0, pp: 0, t3: 0 }; render(); return;
+    case 'next': { const at = myTable(); if (!at) return; CZ.next = at.t.round; CZ.nextAt = Date.now(); CZ.bet = { main: 0, pp: 0, t3: 0 }; render(); setTimeout(render, COL + 80); return; }
     case 'deal': { const bet = { ...CZ.bet }; if (!bet.main) { CZ.flash = 'Put chips on the main spot first.'; render(); return; } const r = await send('casDeal', bet); if (r && r.ok) { CZ.last = bet; CZ.bet = { main: 0, pp: 0, t3: 0 }; CZ.hint = false; } render(); return; }
     case 'ins': await send('casIns', { take: d.v === '1' }); return;
     case 'move': CZ.hint = false; await send('cas' + d.m); return;
@@ -95,6 +96,10 @@ function render() {
 function fly(el) {
   const shoe = el.querySelector('.cz-shoe-cards'); if (!shoe) return;
   const sr = shoe.getBoundingClientRect(), sx = sr.left + sr.width / 2, sy = sr.top + sr.height / 2;
+  const to = (sel, cls) => { const tg = el.querySelector(sel); if (!tg) return; const tr = tg.getBoundingClientRect(), tx = tr.left + tr.width / 2, ty = tr.top + tr.height / 2;
+    el.querySelectorAll(cls).forEach((c) => { c.style.setProperty('animation-name', 'none', 'important'); const r = c.getBoundingClientRect(); c.style.removeProperty('animation-name');
+      c.style.setProperty('--gx', `${Math.round(tx - (r.left + r.width / 2))}px`); c.style.setProperty('--gy', `${Math.round(ty - (r.top + r.height / 2))}px`); }); };
+  to('.cz-discard span', '.cz-card.gone'); to('.cz-dealer', '.cz-fly.take'); to('.cz-bal', '.cz-fly.pay');
   el.querySelectorAll('.cz-card.deal').forEach((c) => {
     c.style.setProperty('animation-name', 'none', 'important'); const r = c.getBoundingClientRect(); c.style.removeProperty('animation-name');
     c.style.setProperty('--dx', `${Math.round(sx - (r.left + r.width / 2))}px`); c.style.setProperty('--dy', `${Math.round(sy - (r.top + r.height / 2))}px`);
@@ -194,6 +199,18 @@ const totalLabel = (cards, done) => { const t = CAS.total(cards); return t.soft 
 const RES = { bj: ['Blackjack', 'win'], win: ['Win', 'win'], push: ['Push', 'push'], lose: ['Lose', 'lose'], bust: ['Bust', 'lose'], sur: ['Surrender', 'push'] };
 
 // ---------------------------------------------------------------- the table
+// After a hand: the cards stay with the results until you press Next hand; then the dealer gathers them (COL ms) onto
+// the discard pile, takes the chips that lost and pushes the winnings to you. Betting opens the moment you press it.
+const COL = 1300;
+const roundState = (t, s) => {
+  const over = t.ph === 'bet' && t.round > 0, mine = over && s.done && s.hands.length > 0, col = over && CZ.next === t.round ? Date.now() - CZ.nextAt : -1;
+  return { over, waitNext: mine && CZ.next !== t.round, col, collecting: col >= 0 && col < COL, gone: col >= COL };
+};
+function goneCard(cd, i, room) {
+  if (cd == null) return `<span class="cz-card back gone" style="animation-delay:${(CZ.nextAt + i * 45 - Date.now()) / 1000}s !important"><span class="cz-backimg" style="background-image:url('${img(ROOMS[room].back, 'webp')}')"></span></span>`;
+  const dl = `animation-delay:${((CZ.nextAt + i * 45 - Date.now()) / 1000).toFixed(2)}s !important`;
+  return `<span class="cz-card gone${CAS.red(cd) ? ' red' : ''}" style="${dl}">${face(cd)}<span class="cz-flipb gone" style="${dl}"><span class="cz-backimg" style="background-image:url('${img(ROOMS[room].back, 'webp')}')"></span></span></span>`;
+}
 const WIDE = [[17, 50], [32, 59], [50, 61], [68, 59], [83, 50]], TALL = [[15, 30], [16, 52], [50, 60], [84, 52], [85, 30]];
 function tableHTML(at) {
   const c = city(), t = at.t, me_ = at.s, r = ROOMS[t.room], tall = innerWidth / Math.max(1, innerHeight) < 0.95;
@@ -202,9 +219,12 @@ function tableHTML(at) {
   const inRound = t.ph !== 'bet' || (me_.hands.length && me_.done);
   // the dealer: up card, then the hole card (a back until it is turned), then what the dealer drew
   const dk = (i) => `d:${t.round}:${i}`;
-  queueRound(t);
+  const RS = roundState(t, me_); let gi = 0; // gi: order in which the dealer gathers the cards
+  if (!RS.collecting && !RS.gone) queueRound(t);
   let dealer = '';
-  if (t.d.c.length || t.d.hole != null) {
+  if (RS.gone) dealer = `<div class="cz-dealer empty"><span class="cz-dname">Dealer ${esc(t.dealer)}</span></div>`;
+  else if (RS.collecting) dealer = `<div class="cz-dealer"><span class="cz-cards">${t.d.c.map((cd) => goneCard(cd, gi++, t.room)).join('')}</span></div>`;
+  else if (t.d.c.length || t.d.hole != null) {
     const shown = [cardHTML(t.d.c[0], dk(0), t.room)];
     if (t.d.hole != null) shown.push(cardHTML(null, dk(1), t.room));
     t.d.c.slice(1).forEach((cd, i) => shown.push(cardHTML(cd, dk(i + 1), t.room)));
@@ -215,16 +235,20 @@ function tableHTML(at) {
   const seats = t.seats.map((s, i) => {
     if (!s) return '';
     const [x, y] = pos[(i - mine + 2 + 5) % 5], isMe = i === mine, turnHere = t.turn && t.turn.s === i;
-    const hands = s.hands.map((h, hi) => {
+    const hands = RS.gone ? '' : RS.collecting ? s.hands.map((h) => `<span class="cz-hand"><span class="cz-cards">${h.c.map((cd) => goneCard(cd, gi++, t.room)).join('')}</span></span>`).join('') : s.hands.map((h, hi) => {
       const active = turnHere && t.turn.h === hi && t.ph === 'play';
       const cards = h.c.map((cd, ci) => cardHTML(cd, `s:${t.round}:${s.id}:${hi}:${ci}`, t.room)).join('');
       const res = h.res && RES[h.res] ? `<span class="cz-res ${RES[h.res][1]}" style="animation-delay:${settleIn()}s !important">${RES[h.res][0]}${h.res !== 'push' ? ` ${h.won - h.bet > 0 ? '+' : ''}${kM(h.won - h.bet)}` : ''}</span>` : '';
       return `<span class="cz-hand${active ? ' on' : ''}">${res}<span class="cz-cards">${cards}</span>${(() => { const lc = landed(h.c, (ci) => `s:${t.round}:${s.id}:${hi}:${ci}`); return lc.length ? `<span class="cz-tot">${totalLabel(lc, h.st !== 'play' && lc.length === h.c.length)}</span>` : ''; })()}${s.hands.length > 1 || h.dbl ? chipStack(h.bet, true) : ''}</span>`;
     }).join('');
-    const showBet = isMe && t.ph === 'bet' && !s.ready ? CZ.bet.main : s.hands.length ? (s.hands.length === 1 && !s.hands[0].dbl ? s.hands[0].bet : 0) : s.ready ? s.bet : 0;
-    const spot = `<span class="cz-spot${isMe && t.ph === 'bet' && CZ.target === 'main' ? ' sel' : ''}" ${isMe && t.ph === 'bet' ? 'data-c="target" data-t="main"' : ''}>${chipStack(showBet)}</span>`;
+    const staked = s.hands.reduce((a, h) => a + h.bet, 0), won = s.hands.reduce((a, h) => a + (h.won || 0), 0);
+    const showBet = isMe && RS.waitNext ? staked : isMe && t.ph === 'bet' && !s.ready ? CZ.bet.main : RS.over && (RS.collecting || RS.gone) && !s.ready ? 0 : s.hands.length ? (s.hands.length === 1 && !s.hands[0].dbl ? s.hands[0].bet : 0) : s.ready ? s.bet : 0;
+    // the chips after the hand: what you won waits beside the bet; on Next hand the losing chips go to the dealer, the rest to you
+    const pay = isMe && RS.waitNext && won > staked ? `<span class="cz-win" style="animation-delay:${settleIn()}s !important">${chipStack(won - staked, true)}</span>` : '';
+    const fly = isMe && RS.collecting ? `${won < staked ? `<span class="cz-fly take" style="animation-delay:${((CZ.nextAt + 150 - Date.now()) / 1000).toFixed(2)}s !important">${chipStack(staked - won)}</span>` : ''}${won > 0 ? `<span class="cz-fly pay" style="animation-delay:${((CZ.nextAt + 350 - Date.now()) / 1000).toFixed(2)}s !important">${chipStack(won)}</span>` : ''}` : '';
+    const spot = `<span class="cz-spot${isMe && t.ph === 'bet' && CZ.target === 'main' ? ' sel' : ''}" ${isMe && t.ph === 'bet' ? 'data-c="target" data-t="main"' : ''}>${chipStack(showBet)}${pay}${fly}</span>`;
     const side = isMe ? ['pp', 't3'].map((k) => { const v = t.ph === 'bet' && !s.ready ? CZ.bet[k] : s.side && s.side[k] ? s.side[k].bet : 0, sr = s.side && s.side[k];
-      return `<span class="cz-side ${k}${t.ph === 'bet' && CZ.target === k ? ' sel' : ''}" ${t.ph === 'bet' ? `data-c="target" data-t="${k}"` : ''}><small>${k === 'pp' ? 'Pairs' : '21+3'}</small>${chipStack(v, true)}${sr && t.round && inRound ? `<em class="${sr.won ? 'win' : 'lose'}">${sr.won ? `${CAS.SIDE_NAME[sr.k]} +${kM(sr.won - sr.bet)}` : '–'}</em>` : ''}</span>`; }).join('') : '';
+      return `<span class="cz-side ${k}${t.ph === 'bet' && CZ.target === k ? ' sel' : ''}" ${t.ph === 'bet' ? `data-c="target" data-t="${k}"` : ''}><small>${k === 'pp' ? 'Pairs' : '21+3'}</small>${chipStack(v, true)}${sr && t.round && inRound && !RS.collecting && !RS.gone ? `<em class="${sr.won ? 'win' : 'lose'}">${sr.won ? `${CAS.SIDE_NAME[sr.k]} +${kM(sr.won - sr.bet)}` : '–'}</em>` : ''}</span>`; }).join('') : '';
     const wait = t.dl && ((t.ph === 'play' && turnHere) || (t.ph === 'bet' && s.ready)) ? `<span class="cz-clock" data-dl="${t.dl}">${Math.max(0, Math.ceil((t.dl - Date.now()) / 1000))} s</span>` : '';
     return `<div class="cz-seat${isMe ? ' me' : ''}${s.k === 'b' ? ' bot' : ''}${turnHere ? ' turn' : ''}" style="left:${x}%;top:${y}%">
       <span class="cz-hands">${hands}</span><span class="cz-bets">${isMe ? `<span class="cz-side-l">${side}</span>` : ''}${spot}</span>
@@ -232,7 +256,7 @@ function tableHTML(at) {
   }).join('');
   // the result of your round, once the cards are down
   let banner = '';
-  if (t.ph === 'bet' && me_.done && me_.hands.length && !me_.ready) {
+  if (RS.waitNext) {
     const net = me_.net, bj = me_.hands.some((h) => h.res === 'bj');
     banner = `<div class="cz-banner ${net > 0 ? 'win' : net < 0 ? 'lose' : 'push'}" style="animation-delay:${(+settleIn() + 0.2).toFixed(2)}s !important"><b>${bj && net > 0 ? 'Blackjack!' : net > 0 ? 'You win' : net < 0 ? (me_.hands.every((h) => h.res === 'bust') ? 'Bust' : 'Dealer wins') : 'Push'}</b>${net ? `<span>${net > 0 ? '+' : '−'}${kM(Math.abs(net))}</span>` : ''}</div>`;
   }
@@ -244,6 +268,7 @@ function tableHTML(at) {
       <div class="cz-felt"></div>
       ${t.room === 'vault' ? '<div class="cz-print">Blackjack pays 3 to 2 · Dealer stands on all 17 · Insurance pays 2 to 1</div>' : ''}
       <div class="cz-shoe" title="${Math.round(shoeLeft * 100)}% of the shoe left"><span class="cz-shoe-cards" style="--left:${shoeLeft};background-image:url('${img(r.back, 'webp')}')"></span><span class="cz-shoe-box"></span></div>
+      <div class="cz-discard" title="Discard tray"><span style="--n:${Math.min(1, t.shoe.pos / (t.shoe.size * 0.75)).toFixed(2)};background-image:url('${img(r.back, 'webp')}')"></span></div>
       <div class="cz-plaque"><b>${esc(r.name)}</b>${kM(r.min)} – ${kM(CAS.maxBet(c, t.room))}<br>${r.csm ? 'Shuffled every round' : '6 decks · cut at 75%'}</div>
       ${dealer}${seats}${banner}
       <div class="cz-talk">${talk}</div>
@@ -253,12 +278,14 @@ function tableHTML(at) {
 }
 function controlsHTML(at) {
   const t = at.t, s = at.s, r = ROOMS[t.room], cz = cas(), msg = CZ.flash ? `<div class="cz-flash">${esc(CZ.flash)}</div>` : '';
-  const rack = `<div class="cz-rack">${C.chips.map((v) => `<button class="cz-chip" data-c="chip" data-v="${v}" ${t.ph !== 'bet' || s.ready || v > cz.chips ? 'disabled' : ''} aria-label="${kM(v)} chip"><img src="${img('cas-chip-' + v, 'webp')}" alt=""></button>`).join('')}
+  const rack = `<div class="cz-rack">${C.chips.map((v) => `<button class="cz-chip" data-c="chip" data-v="${v}" ${t.ph !== 'bet' || s.ready || v > cz.chips || roundState(t, s).waitNext ? 'disabled' : ''} aria-label="${kM(v)} chip"><img src="${img('cas-chip-' + v, 'webp')}" alt=""></button>`).join('')}
     <span class="cz-bal"><small>Chips</small><b>${kM(cz.chips - (t.ph === 'bet' && !s.ready ? CZ.bet.main + CZ.bet.pp + CZ.bet.t3 : 0))}</b></span></div>`;
   let acts = '';
   const bar = (label, tot) => t.dl ? `<div class="cz-timer" data-dl="${t.dl}" data-tot="${tot}"><i></i><span>${label}<b>${Math.max(0, Math.ceil((t.dl - Date.now()) / 1000))} s</b></span></div>` : '';
   const dealing = Date.now() < CZ.queue + DUR - STEP && (t.ph !== 'bet' || s.hands.length > 0); if (dealing) CZ.held = true;
-  if (dealing) acts = `<p class="cz-waitp">${t.ph === 'play' && !t.turn ? 'The dealer plays…' : 'Dealing…'}</p>`;
+  const RS = roundState(t, s);
+  if (!dealing && RS.waitNext) acts = `${bar('The cards are dealt in', C.betSec)}<div class="cz-acts"><button class="cz-act deal" data-c="next"><i>↻</i>Next hand</button></div>`;
+  else if (dealing) acts = `<p class="cz-waitp">${t.ph === 'play' && !t.turn ? 'The dealer plays…' : 'Dealing…'}</p>`;
   else if (t.ph === 'bet') {
     if (s.ready) acts = `<p class="cz-waitp">Waiting for the other players${t.dl ? ` · <span data-dl="${t.dl}"></span>` : ''}</p>`;
     else {
@@ -411,11 +438,27 @@ function css() {
 .cz-flipb.deal { animation: czDealB 1.2s steps(1, end) both; }
 @keyframes czFlipB { 0% { opacity: 1; } 50% { opacity: 0; } 100% { opacity: 0; } }
 @keyframes czDealB { 0% { opacity: 1; } 72% { opacity: 0; } 100% { opacity: 0; } }
+/* gathered after Next hand: each card turns face down on its way to the discard tray (--gx/--gy from fly()) */
+.cz-card.gone { animation: czGone 0.75s cubic-bezier(.4,0,.7,1) both; z-index: 4; }
+@keyframes czGone { 0% { transform: none; } 30% { transform: translateY(calc(var(--cw) * -0.2)) scaleX(0.02); } 45% { transform: translateY(calc(var(--cw) * -0.2)); } 100% { transform: translate(var(--gx, 0), var(--gy, -200px)) rotate(12deg) scale(0.62); opacity: 0.9; } }
+.cz-flipb.gone { animation: czGoneB 0.75s steps(1, end) both; }
+@keyframes czGoneB { 0% { opacity: 0; } 30% { opacity: 1; } 100% { opacity: 1; } }
+.cz-discard { position: absolute; left: 27%; top: 5%; width: calc(var(--cw) * 1.1); height: calc(var(--cw) * 1.5); transform: rotate(9deg); border-radius: 8px; border: 1.5px solid #ecc56a55; background: #0005; box-shadow: inset 0 2px 8px #000a; }
+.cz-discard span { position: absolute; left: 7%; right: 7%; bottom: 5%; height: calc(var(--n) * 88% + 2%); border-radius: 4px; background-size: cover; background-position: center top; box-shadow: 0 -1px 0 #e8e0cc, 0 -3px 0 #f4eedf; opacity: calc(0.25 + var(--n)); }
+.cz-tablev.tall .cz-discard { left: 6%; top: 3%; }
+.cz-spot { overflow: visible; }
+.cz-win { position: absolute; left: 105%; top: 18%; animation: czPop 0.35s both; }
+.cz-fly { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 6; }
+.cz-fly.take, .cz-fly.pay { animation: czChip 0.8s cubic-bezier(.4,0,.3,1) both; }
+@keyframes czChip { 0% { transform: translate(-50%, -50%); opacity: 1; } 85% { opacity: 1; } 100% { transform: translate(calc(-50% + var(--gx, 0px)), calc(-50% + var(--gy, 0px))) scale(0.7); opacity: 0; } }
+
 /* the dealing is the game's pace, not decoration: keep it when the device asks for reduced motion (index.html turns every other animation off) */
 @media (prefers-reduced-motion: reduce) {
   #casino .cz-card.deal { animation: czDeal 1.2s both !important; } #casino .cz-card.deal.up { animation-name: czDealUp !important; }
   #casino .cz-card.flip { animation: czFlip 0.7s ease-in-out both !important; }
   #casino .cz-flipb.flip { animation: czFlipB 0.7s steps(1, end) both !important; } #casino .cz-flipb.deal { animation: czDealB 1.2s steps(1, end) both !important; }
+  #casino .cz-card.gone { animation: czGone 0.75s cubic-bezier(.4,0,.7,1) both !important; } #casino .cz-flipb.gone { animation: czGoneB 0.75s steps(1, end) both !important; }
+  #casino .cz-fly.take, #casino .cz-fly.pay { animation: czChip 0.8s cubic-bezier(.4,0,.3,1) both !important; } #casino .cz-win { animation: czPop 0.35s both !important; }
   #casino .cz-res { animation: czPop 0.35s both !important; } #casino .cz-banner { animation: czBan 0.5s both !important; }
 }
 .cz-tot { min-width: calc(var(--cw) * 0.5); height: calc(var(--cw) * 0.5); padding: 0 calc(var(--cw) * 0.08); border-radius: 999px; background: #0c0c0c; border: 2px solid #ecc56a; display: grid; place-items: center; font-weight: 800; font-size: calc(var(--cw) * 0.2); color: #fff; font-family: 'Montserrat', sans-serif; white-space: nowrap; }
