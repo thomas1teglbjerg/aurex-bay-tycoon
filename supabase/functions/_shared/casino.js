@@ -49,6 +49,17 @@ export function shoeOf(t) {
   return a;
 }
 
+// one shuffled 52-card deck for a poker hand (poker.js), from the same secret
+export function deckOf(key) {
+  const k = 'pk|' + key; if (SHOES.has(k)) return SHOES.get(k);
+  const a = Array.from({ length: 52 }, (_, i) => i), sec = secret();
+  let buf = [], ctr = 0; const next = () => { if (!buf.length) buf = sha256(sec + '|' + k + '|' + ctr++); return buf.pop(); };
+  for (let i = 51; i > 0; i--) { const j = next() % (i + 1); const x = a[i]; a[i] = a[j]; a[j] = x; }
+  SHOES.set(k, a); if (SHOES.size > 40) SHOES.delete(SHOES.keys().next().value);
+  return a;
+}
+export function testDeck(key, cards) { const a = deckOf(key).slice(); cards.forEach((c, i) => { if (c != null) a[i] = c; }); SHOES.set('pk|' + key, a); }
+
 // tests only: put a known order of cards in a table's current shoe (card 0 is burned)
 export function testShoe(t, cards) { const a = shoeOf(t).slice(); cards.forEach((c, i) => { a[1 + i] = c; }); SHOES.set(t.id + '|' + t.shoe.key, a); }
 
@@ -365,6 +376,7 @@ export function act(city, p, action, a, ctx, now = Date.now()) {
     case 'casSit': {
       const t = city.casino.tables[a.tid]; if (!t) return err('Unknown table.');
       const g = gate(city, p, t.room, ctx); if (g) return err(g);
+      if (Object.values(city.casino.pk || {}).some((x) => x.seats.some((q) => q && q.id === p.id))) return err('Leave the poker table first.');
       if (T === t) return ok();
       if (T) { if (inHand(T, S)) return err('Finish the hand first.'); T.seats[at.i] = null; }
       let i = Number.isInteger(a.seat) && !t.seats[a.seat] ? a.seat : t.seats.indexOf(null);

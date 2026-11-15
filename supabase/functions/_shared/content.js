@@ -1371,6 +1371,32 @@ export const CASINO = {
     pit1: 'Nice run tonight. We are keeping an eye on this table, that is all.',
     pit2: 'The house will shuffle more often at this table for a while. Nothing personal.',
     shuffle: 'Shuffling a fresh shoe.'
+  },
+  // Texas Hold'em (No-Limit) on the Main Floor (poker.js): tycoons and rival bots play each other, the house takes a rake.
+  // Every hand is a list of events with the time each one shows on screen (the browser replays them), so bots act at a
+  // human pace and a tycoon's clock only starts once everything before their turn has been shown.
+  poker: {
+    seats: 6, turnSec: 20, awayMax: 3, idleMin: 6,
+    // on screen (ms): one hole card from the dealer, a bot thinking, a tycoon's move, a street turned, a hand shown,
+    // the pot pushed to the winner, and the pause after a hand (the table is cleared in the last clearMs of it)
+    ms: { card: 260, botMin: 900, botMax: 2000, you: 250, street: 1100, show: 1100, win: 1400, rest: 5200, clear: 1300 },
+    rake: 0.05, rakeCap: 3,                    // 5% of the pot, at most 3 big blinds, only when the flop is dealt
+    tables: [
+      { id: 'pk-1', room: 'main', sb: 1, bb: 2, min: 40, max: 200 },
+      { id: 'pk-2', room: 'main', sb: 5, bb: 10, min: 200, max: 1000 }
+    ],
+    // rival bots: at least `min` at every table at all times, at most `max` (a seat stays free for tycoons)
+    bots: { min: 2, max: 4, join: 0.25, swap: 0.04, buyBB: 100, rebuyBB: 35, sims: 160 },
+    dealers: ['Lena', 'Oscar'],
+    talk: {
+      sit: ['Evening. Deal me in.', 'Room for one more?', 'Let us see some flops.', 'Who is feeling brave tonight?'],
+      win: ['Thank you, thank you.', 'Ship it.', 'I had a feeling about that one.', 'Read you like a newspaper.'],
+      bad: ['Unbelievable river.', 'Nice hand. Lucky, but nice.', 'Every single time.'],
+      fold: ['Too rich for me.', 'Not this time.', 'You can have it.'],
+      allin: ['All in.', 'Let us gamble.', 'I am all in.'],
+      leave: ['That is my night.', 'Good game, everyone.', 'I will leave you to it.'],
+      away: 'is away and folds.'
+    }
   }
 };
 
