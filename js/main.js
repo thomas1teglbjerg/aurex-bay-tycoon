@@ -976,7 +976,7 @@ async function onClick(e) {
     case 'cbRate': await act('cbRate', { target: Number(d.v) }); return;
     case 'cbLevy': await act('cbLevy', { sector: d.sector || null, sp: Number(d.sp) || 0, supply: d.supply || null, gp: Number(d.gp) || 0 }); return;
     case 'buyas': await act('buy', { lid: d.lid, as: d.hid }); return;
-    case 'sell': { const r = await act('sell', { lid: d.lid }); if (r && r.vote) await act('holdingPropose', { hid: E.HD.divOf(city(), me()).id, kind: 'divSell', lid: d.lid }); return; }
+    case 'sell': await act('sell', { lid: d.lid }); return;
     case 'upgrade': await act('upgrade', { lid: d.lid }); return;
     case 'hire': { const r = await act('hire', { tid: d.tid || d.id, salary: Number(d.v), years: Number(d.y), coop: d.coop }); return; }
     case 'fire': { const r = await act('fire', { tid: d.tid || d.id, coop: d.coop }); if (r && r.ok) closeModal(); return; }

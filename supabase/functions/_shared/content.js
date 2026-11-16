@@ -1248,8 +1248,6 @@ export const PORTRAITS = { 'Thomas Teglbjærg': 'p-thomas-debenhams', 'Mikkel Te
 export const HOLDING = {
   bidrag: 0.1,          // share of a division's monthly profit that goes to the central account by default
   bidragMax: 0.5,
-  buyPct: 0.25,         // a CEO buys alone up to this share of the holding's value; above it the owners vote
-  sellPct: 0.1,         // ... and sells alone up to this share
   grantPct: 0.1,        // the joint division's CEO sends money from the central account to a division alone up to this share of the holding's value
   salaryNav: 0.03,      // one CEO's salary above this share of the holding's value a year needs every owner's yes
   salaryProfit: 0.5,    // all salaries above this share of last year's profit need every owner's yes
