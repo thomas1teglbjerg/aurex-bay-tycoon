@@ -123,6 +123,9 @@ Deno.serve(async (req) => {
       result = Engine.closeBooks(city);
       console.log(JSON.stringify({ city: cityId, admin: user?.email, closeBooks: city.m }));
       changed = true;
+    } else if (action === 'pkHole') {
+      // your own two poker cards: read from the hidden deck, nothing to save
+      result = Engine.pkHole(city, asId ?? userId!);
     } else if (action !== 'sync' && action !== 'tick') {
       if (asId) Engine.ensureAs(city, asId, now);
       result = Engine.apply(city, asId ?? userId!, action, args, now);
