@@ -21,7 +21,8 @@ import * as BK from './banks.js';
 import * as CH from './chance.js';
 import * as AUTO from './cars.js';
 import * as CAS from './casino.js';
-export { OPS, LOG, LIFE, TAL, BR, ADS, MAIL, CAR, DEAL, GZ, QT, HD, BOT, BK, CH, AUTO, CAS };
+import * as PK from './poker.js';
+export { OPS, LOG, LIFE, TAL, BR, ADS, MAIL, CAR, DEAL, GZ, QT, HD, BOT, BK, CH, AUTO, CAS, PK };
 OPS.setFreightQuote((cid, v, q, route) => LOG.freight(cid, v, q, route));
 
 const TRADE_MULT = { Boom: 1.3, Stable: 1, Recession: 0.6, Crisis: 0.4 };
@@ -627,7 +628,7 @@ function trimSmall(city) {
   city.smallV = 1;
 }
 export function advance(city, now) {
-  migrate(city); migrateLife(city); trimSmall(city); CAS.ensure(city); coopRunMode(city); HD.migrate(city, hx(city)); BK.migrate(city, kx(city));
+  migrate(city); migrateLife(city); trimSmall(city); CAS.ensure(city); PK.ensure(city); coopRunMode(city); HD.migrate(city, hx(city)); BK.migrate(city, kx(city));
   Object.values(city.players).forEach((p) => { if (!p.bot && !p.admin && !(p.career && p.career.seeded)) CAR.seed(city, p, cctx(city)); });
   mailSync(city);
   if (city.over) return;
@@ -647,7 +648,7 @@ export function advance(city, now) {
   settleAll(city, g);
   city.listings.forEach((l) => { if (l.ops && l.owner && !l.ops.managed) OPS.releaseQueue(city, l, g); });
   LOG.arrivals(city, city.g, (sh) => shipmentArrived(city, sh));
-  if (city.casino) CAS.stepAll(city, now, csx(city)); // tables whose timers ran out
+  if (city.casino) { CAS.stepAll(city, now, csx(city)); PK.stepAll(city, now, csx(city)); } // tables whose timers ran out; poker tables deal the next hand
   refillAdmin(city);
 }
 function shipmentArrived(city, sh) {
@@ -1425,6 +1426,7 @@ function applyAs(city, pid, p, action, a, now) {
   }
   if (/^site[A-Z]/.test(action)) return BLD.act(city, p, action, a, bctx(city)) || err('Unknown action.');
   if (/^car[A-Z]/.test(action)) return AUTO.act(city, p, action, a, ax(city)) || err('Unknown action.');
+  if (/^pk[A-Z]/.test(action)) return PK.act(city, p, action, a, csx(city), now) || err('Unknown action.');
   if (/^cas[A-Z]/.test(action)) return CAS.act(city, p, action, a, csx(city), now) || err('Unknown action.');
   switch (action) {
     case 'buy': {
@@ -1670,3 +1672,6 @@ function applyAs(city, pid, p, action, a, now) {
     default: return err('Unknown action.');
   }
 }
+
+// your own two hole cards at a poker table (the game function answers pkHole with them without saving)
+export function pkHole(city, pid) { const p = city.players[pid]; if (!p) return { ok: false, msg: 'Join the city first.' }; const hc = PK.holeFor(city, pid); return hc ? { ok: true, hole: hc } : { ok: true }; }
