@@ -15,7 +15,10 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 
 const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
 const CRON_SECRET = Deno.env.get('CRON_SECRET') ?? '';
-const SPEED = Number(Deno.env.get('GAME_SPEED') ?? '1'); // 1 = one game year per real week
+const SPEED = Number(Deno.env.get('GAME_SPEED') ?? '1');
+// The casino's shoes are shuffled from this secret, so the cards still in the shoe are never in the city state that
+// browsers read. CASINO_SECRET may be set on its own; otherwise the service role key (server-only) serves.
+Engine.CAS.setSecret(Deno.env.get('CASINO_SECRET') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''); // 1 = one game year per real week
 // Admin accounts (time speed for everyone, test tools). The ADMIN_EMAILS secret (comma-separated) overrides this list.
 const ADMIN_LIST = ['thomas@teglbjerg.com', 'mikkel@teglbjerg.com'];
 const ADMINS = (Deno.env.get('ADMIN_EMAILS') ?? ADMIN_LIST.join(',')).split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);

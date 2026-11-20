@@ -12,6 +12,8 @@ const store = {
 };
 
 export function createLocalBackend(opts = {}) {
+  // the demo shuffles the casino's shoes from a key kept in this browser
+  { let k = store.get('aurex-cas-key'); if (!k) { k = Math.random().toString(36).slice(2) + Date.now().toString(36); store.set('aurex-cas-key', k); } E.CAS.setSecret(k); }
   const subs = new Set();
   let city = null, me = store.get(ME_KEY);
   try { const raw = opts.city || JSON.parse(store.get(CITY_KEY) || 'null'); if (raw && raw.v === 2) city = raw; } catch (e) { city = null; }

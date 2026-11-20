@@ -149,7 +149,7 @@ export function monthly(city, p) {
   return { salaryGross, tax, salaryNet: salaryGross - tax, rent, lend, charges, propTax, upkeep, interest, principal, lifestyle, care, overdraft, inflow, outflow, net: inflow - outflow, rate };
 }
 export function equity(city, p) { return p.life.homes.reduce((a, h) => a + homeValue(city, h) - (h.bal || 0), 0); }
-export function netWorth(city, p) { if (!p.life) return 0; return p.life.wallet + (p.life.savings || 0) + equity(city, p) + collectionValue(city, p); }
+export function netWorth(city, p) { if (!p.life) return 0; return p.life.wallet + (p.life.savings || 0) + (p.life.cas ? p.life.cas.chips / 1000 : 0) + equity(city, p) + collectionValue(city, p); }
 
 // ---------------------------------------------------------------- prestige
 export function prestige(city, p) {

@@ -48,7 +48,7 @@ export const condPrice = (l) => { if (unbuilt(l)) return 1; const c = cond(l); r
 // which sites start as plots: the car factories, everything from L42 on, every Medium and Large company but the
 // few kept standing (BUILD.keep), and every warehouse
 export const isPlot = (l) => (isWh(l) ? !!B.warehouses
-  : B.plots.includes(l.id) || Number(String(l.id).slice(1)) >= B.firstPlot || ((B.sizes || []).includes(l.size) && !(B.keep || []).includes(l.id)));
+  : !(B.keep || []).includes(l.id) && (B.plots.includes(l.id) || Number(String(l.id).slice(1)) >= B.firstPlot || (B.sizes || []).includes(l.size)));
 export const isBuilder = (l) => !!l && l.type === 'construction' && !idle(l);
 export const kindName = (s) => (s.kind === 'new' ? 'New building' : s.kind === 'reno' ? 'Renovation' : `Upgrade to level ${s.to}`);
 
