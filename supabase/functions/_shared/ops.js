@@ -427,7 +427,7 @@ export function marketMonth(city) {
 export function closeMonth(l, m, x = {}) {
   const o = l.ops, rc = runningCosts(l), c = o.cur;
   o.hist.push({ m, b2c: r2(c.b2c), goods: r2(c.goods), sup: r2(c.sup), fr: r4(c.fr || 0), run: r2(rc.total / 12), sal: r4(rc.salaries / 12), bud: r4(rc.budgets / 12 + (c.ads || 0)), workers: rc.workers || 0,
-    ypi: r4(x.ypi || 0), maint: r4(x.maint || 0), heads: r4(x.heads || 0), units: o.last ? o.last.units : 0, sold: r2(c.sold || 0), orders: c.orders || 0, eff: r2(o.eff) });
+    ypi: r4(x.ypi || 0), tbl: r4(c.tbl || 0), maint: r4(x.maint || 0), heads: r4(x.heads || 0), units: o.last ? o.last.units : 0, sold: r2(c.sold || 0), orders: c.orders || 0, eff: r2(o.eff) });
   if (o.hist.length > 24) o.hist.shift();
   o.cur = { b2c: 0, goods: 0, sup: 0, fr: 0, sold: 0, orders: 0 };
 }

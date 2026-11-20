@@ -10,6 +10,7 @@ import { city, me, esc, lname, coImg, faceUrl, dollars, M, K, N, P, dateLabel, s
 
 import { siteHTML, builderBox, statusOf as siteStatus } from './build.js';
 import { lendingBox } from './banks.js';
+import { casinoBox } from './casino.js';
 const O = E.OPS;
 const STAFF_BY = Object.fromEntries(STAFF.map((s) => [s.id, s]));
 export const DEPT_TINT = { ops: '#22344f', procurement: '#5c4220', sales: '#175c3b', social: '#7a2f5f', hr: '#24578f', finance: '#34502a', rnd: '#3f347e', legal: '#4d3f31' };
@@ -70,8 +71,8 @@ function boardHTML(l, ro) {
 // ---------------------------------------------------------------- accounts: a full income statement per company
 function acctMonth(l, x, y) {
   const o = l.ops, sal = x.sal ?? x.run ?? 0, bud = x.sal == null ? 0 : (x.bud || 0);
-  const r = { m: x.m, b2c: x.b2c || 0, goods: x.goods || 0, ypi: x.ypi ?? Math.max(0, y.ypi) * (x.eff ?? o.eff) / 12, sup: x.sup || 0, fr: x.fr || 0, sal, bud, heads: x.heads || 0, maint: x.maint ?? (MAINT[l.type] || 0) * SIZES[l.size].mult / 12, units: x.units || 0, sold: x.sold || 0, orders: x.orders || 0, workers: x.workers || 0 };
-  r.rev = r.b2c + r.goods + r.ypi; r.cost = r.sup + r.fr + r.sal + r.bud + r.heads + r.maint; r.profit = r.rev - r.cost; return r;
+  const r = { m: x.m, b2c: x.b2c || 0, goods: x.goods || 0, ypi: x.ypi ?? Math.max(0, y.ypi) * (x.eff ?? o.eff) / 12, sup: x.sup || 0, fr: x.fr || 0, sal, bud, heads: x.heads || 0, maint: x.maint ?? (MAINT[l.type] || 0) * SIZES[l.size].mult / 12, units: x.units || 0, sold: x.sold || 0, orders: x.orders || 0, workers: x.workers || 0, tbl: x.tbl || 0 };
+  r.rev = r.b2c + r.goods + r.ypi + r.tbl; r.cost = r.sup + r.fr + r.sal + r.bud + r.heads + r.maint; r.profit = r.rev - r.cost; return r;
 }
 const sumAcct = (ms) => ms.reduce((a, r) => { Object.keys(r).forEach((k) => { if (k !== 'm' && k !== 'workers') a[k] = (a[k] || 0) + r[k]; }); a.workers = r.workers; return a; }, {});
 function accountsBox(l, ui, y) {
@@ -91,7 +92,7 @@ function accountsBox(l, ui, y) {
     <div class="kpis sm"><div class="stat"><small>Revenue</small><b class="num">${M(t.rev)}</b></div><div class="stat"><small>Costs</small><b class="num">${M(t.cost)}</b></div><div class="stat"><small>Profit</small><b class="num ${t.profit >= 0 ? 'up' : 'down'}">${M(t.profit, true)}</b></div><div class="stat"><small>Margin</small><b class="num">${t.rev > 0 ? Math.round(t.profit / t.rev * 100) + '%' : '–'}</b></div></div>
     <div class="tbl-wrap"><table class="tbl ac"><thead><tr><th>Income statement</th><th class="num">Amount</th><th class="num">Share</th><th class="num">${pv ? 'vs prev.' : ''}</th></tr></thead><tbody>
       <tr class="ac-h"><td colspan="4">Revenue</td></tr>
-      ${line('Customer sales', 'b2c', t.orders ? `${N(t.orders)} orders · ${N(t.sold)} units` : t.sold ? `${N(t.sold)} units` : '')}${line('Supply sales', 'goods')}${line('Contract income (YPI)', 'ypi', o.eff < 1 ? `cut to ${Math.round(o.eff * 100)}% by supply gaps` : '')}
+      ${line('Customer sales', 'b2c', t.orders ? `${N(t.orders)} orders · ${N(t.sold)} units` : t.sold ? `${N(t.sold)} units` : '')}${line('Supply sales', 'goods')}${l.type === 'casino' ? line('Table results', 'tbl', 'what players lost minus what they won') : ''}${line('Contract income (YPI)', 'ypi', o.eff < 1 ? `cut to ${Math.round(o.eff * 100)}% by supply gaps` : '')}
       ${tot('Total revenue', 'rev')}
       <tr class="ac-h"><td colspan="4">Costs</td></tr>
       ${line('Supplies', 'sup')}${line('Freight', 'fr')}${line('Wages', 'sal', `${t.workers} workers`)}${line('Department budgets', 'bud', 'marketing, R&amp;D, training, compliance')}${line('Specialists', 'heads', 'heads leading this company')}${t.maint > 0 ? line('Maintenance', 'maint') : ''}
@@ -163,6 +164,7 @@ export function companyHTML(lid, ui = {}) {
       ${l.site ? `<div class="box"><h2>Building work<small>${esc(E.BLD.kindName(l.site).toUpperCase())}</small></h2><div class="in">${siteHTML(l)}</div></div>` : ''}
       ${builderBox(l, ro)}
       ${lendingBox(c, l, ro)}
+      ${casinoBox(c, l, ro)}
       ${cellarBox(c, l, ro)}
       ${yardBox(c, l, ro)}
       ${newsroomBox(c, l, ro)}

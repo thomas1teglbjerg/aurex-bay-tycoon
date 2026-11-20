@@ -18,6 +18,7 @@ import { logoMark, logoFull, symbolIcon } from './brand.js';
 import { initChat, openChat, unreadFrom, inboxOf } from './chat.js';
 import { openMixer } from './mixer.js';
 import { openCrane } from './crane.js';
+import { openCasino, casinoRefresh } from './casino.js';
 import { openCredit, UIB } from './banks.js';
 import { siteHTML, statusOf as siteStatus } from './build.js';
 import { dealsToDo, dealsNeedingMe, newDealHTML, moveHTML, deliveryRun, DUI, RUN_S } from './deals.js';
@@ -473,6 +474,7 @@ function companyCard(l) {
 }
 function listingActions(l) {
   const c = city(), p = me(), o = ownerLabel(c, l), out = [];
+  if (l.type === 'casino' && !E.BLD.unbuilt(l)) out.push(`<button class="btn gold" data-a="casino">Enter Marina Royale · Blackjack</button>`);
   if (!l.owner) {
     const price = E.listingPrice(l);
     if (E.CB.isBank(l)) { const e = E.cbEligible(c, p); out.push(`<p class="empty" style="font-size:13.5px">The national bank: its owner sets the bank rate and levies for the whole city. ${e.ok ? '' : esc(e.why)} <a href="#" data-a="webGo" data-u="bankofaurex.ab/policy">How it works ›</a></p>`); if (!e.ok) return out.join(''); }
@@ -887,6 +889,8 @@ async function onClick(e) {
     case 'mixStart': { const inp = document.getElementById('mix-qty-' + d.lid), r = await act('mixStart', { lid: d.lid, qty: Number(inp && inp.value) || 0 }); if (r && r.ok) openMixer(d.lid, act); return; }
     case 'mixOpen': openMixer(d.lid, act); return;
     case 'crane': openCrane(d.lid, act); return;
+    case 'casino': closeModal(); openCasino(act, d.r); return;
+    case 'casCfg': await act('casCfg', d.room ? { room: d.room, x: Number(d.x) } : { comp: Number(d.comp) }); return;
     case 'siteTender': await act('siteTender', { lid: d.lid, turnkey: d.v === '1' }); return;
     case 'siteCancel': case 'siteCity': case 'siteFire': case 'siteRenovate': await act(a, { lid: d.lid }); return;
     case 'siteAccept': case 'siteDecline': case 'siteWithdraw': await act(a, { lid: d.lid, bid: d.v }); return;
@@ -1105,7 +1109,7 @@ function drumTick() {
     const k = lid + ':' + ready; if (left <= 0 && !DRUM_ASKED[k]) { DRUM_ASKED[k] = 1; const l = E.listing(city(), lid); if (l && E.canRun(city(), meId(), l)) act('mixCheck', { lid }).then((r) => { if (r && r.left > 0) setTimeout(() => delete DRUM_ASKED[k], r.left + 500); }); }
   });
 }
-function renderAll() { if (!me()) return; renderTop(); updatePins(); renderPanel(); measureTop(); if (UI.web) renderWeb(); }
+function renderAll() { if (!me()) return; renderTop(); updatePins(); renderPanel(); measureTop(); if (UI.web) renderWeb(); casinoRefresh(); }
 // ---------------------------------------------------------------- in-game browser
 function openWeb(url) { if (!UI.web) UI.web = { url: parseUrl(url).url, back: [], fwd: [], q: '' }; else if (parseUrl(url).url !== UI.web.url) { UI.web.back.push(UI.web.url); UI.web.fwd = []; UI.web.url = parseUrl(url).url; } $('web').hidden = false; renderWeb(true); }
 function navWeb(url) { const u = parseUrl(url).url; if (u !== UI.web.url) { UI.web.back.push(UI.web.url); UI.web.fwd = []; UI.web.url = u; UI.web.amt = null; UI.web.down = null; } renderWeb(true); }
