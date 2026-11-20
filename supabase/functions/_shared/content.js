@@ -1127,7 +1127,16 @@ export const CARRIERS = [
 // The house ad: one advertisement run by the administrator / system (never by players). It shows in the
 // Gazette box on the Market tab and stays fixed on The Aurex Gazette website. Change it here.
 export const HOUSE_AD = { img: 'img/x-bergwald-s7.jpg', pos: '50% 60%', from: 'Bergwald', head: 'Bergwald cars is coming to Aurex Bay', line: 'See you soon' };
-// [file under img/, name, group]: every car and company picture plus a few others (the select groups them)
+// [file under img/, name, group]: every car and company picture plus a few others (the select groups them).
+// Company pictures come by themselves from LISTINGS (own picture, else c-<type>), so a new company's picture is
+// always in the list; HOUSE_CO_EXTRA holds c-*.jpg files no listing uses. tests/gazette.test.js checks every img/c-*.jpg is in.
+export const HOUSE_CO_EXTRA = [['c-finance', 'Finance & Banking']];
+const houseCo = () => {
+  const by = {};
+  LISTINGS.forEach((l) => { const k = l.img || 'c-' + l.type; (by[k] = by[k] || []).push(l); });
+  const own = Object.entries(by).map(([k, ls]) => [k, ls.length > 1 ? TYPES[ls[0].type].name : ls[0].title || (ls[0].img ? `${TYPES[ls[0].type].name} · ${ls[0].district}` : TYPES[ls[0].type].name)]);
+  return [...own, ...HOUSE_CO_EXTRA.filter(([k]) => !by[k])].sort((x, y) => x[1].localeCompare(y[1])).map(([k, n]) => [k, n, 'Companies']);
+};
 export const HOUSE_PICS = [
   ['x-bergwald-s7', 'Bergwald S7', 'Cars'],
   ['x-bergwald-x7', 'Bergwald X7', 'Cars'],
@@ -1140,35 +1149,7 @@ export const HOUSE_PICS = [
   ['x-tuner-takemi', 'Takemi VTEC', 'Cars'],
   ['x-tuner-trailhawk', 'Rivermore Trailhawk', 'Cars'],
   ['x-c4', 'Vellano V9', 'Cars'],
-  ['c-autorepair', 'Auto Repair', 'Companies'],
-  ['c-bank', 'Community Bank', 'Companies'],
-  ['c-bankofaurex', 'Bank of Aurex', 'Companies'],
-  ['c-car', 'Car Factory', 'Companies'],
-  ['c-dealer', 'Car Dealership', 'Companies'],
-  ['c-chemical', 'Chemical Plant', 'Companies'],
-  ['c-chip', 'Chip Factory', 'Companies'],
-  ['c-clothing', 'Clothing Store', 'Companies'],
-  ['c-concrete', 'Bayside Concrete', 'Companies'],
-  ['c-construction', 'Structura Construction', 'Companies'],
-  ['c-data', 'Data & Software', 'Companies'],
-  ['c-fashion', 'Fashion House', 'Companies'],
-  ['c-film', 'Film Production', 'Companies'],
-  ['c-finance', 'Finance & Banking', 'Companies'],
-  ['c-harbortrust', 'Harbor Trust', 'Companies'],
-  ['c-nervous', 'Nervous Software', 'Companies'],
-  ['c-hotel', 'Hotel & Resort', 'Companies'],
-  ['c-hotel-sunset', 'Sunset hotel', 'Companies'],
-  ['c-metal', 'Metal Production', 'Companies'],
-  ['c-music', 'Music Studio', 'Companies'],
-  ['c-pharma', 'Pharma Industry', 'Companies'],
-  ['c-power', 'Aurex Energy', 'Companies'],
-  ['c-powerplant', 'Aurex City PowerPlant', 'Companies'],
-  ['c-woodworks', 'Old Oak Joinery', 'Companies'],
-  ['c-timberworks', 'Crown Hills Timberworks', 'Companies'],
-  ['c-restaurant', 'Restaurant & Café', 'Companies'],
-  ['c-gazette', 'The Aurex Gazette', 'Companies'],
-  ['c-textile', 'Textile Mill', 'Companies'],
-  ['c-vineyard', 'Vineyard', 'Companies'],
+  ...houseCo(),
   ['h1-watch', 'Watches', 'Other'],
   ['h1-wine', 'Wine', 'Other'],
   ['h1-art', 'Art', 'Other'],
