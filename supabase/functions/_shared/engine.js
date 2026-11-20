@@ -1431,7 +1431,6 @@ function applyAs(city, pid, p, action, a, now) {
         h.proposals.push(pr); botVotes(city, h, pr); closeProposal(city, h, pr, false);
         return ok(pr.status === 'passed' ? `${h.name} bought it.` : pr.status === 'open' ? 'Proposal sent to your co-owners. It closes next game month.' : `Proposal ${pr.status}.`);
       }
-      { const md = HD.mandate(city, p, 'buy', price, hx(city)); if (md) return md; }
       if (p.cash < price) return err(`You need ${price} M and have ${r2(p.cash)} M. Borrow at the bank or bring in co-owners through a coop.`);
       p.cash -= price; assignOwner(city, l, { k: 'p', id: pid }, m);
       news(city, m, `${p.name} buys ${TYPES[l.type].name}`, `${l.district} · ${price} M.`, 'info', { who: pid });
@@ -1455,7 +1454,7 @@ function applyAs(city, pid, p, action, a, now) {
       // a coop's company is sold by a vote of its owners (by stake); the money goes to the coop treasury
       if (l && l.owner && l.owner.k === 'h') { const h = city.holdings[l.owner.id]; if (!h || !h.members[pid]) return err('Not your coop.'); if (h.proposals.some((x) => x.status === 'open' && x.kind === 'sell' && x.lid === l.id)) return err('A sale vote is already running.');
         const pr = { id: uid('p'), by: pid, kind: 'sell', lid: l.id, votes: { [pid]: true }, m, dueM: m + 1, status: 'open' }; h.proposals.push(pr); botVotes(city, h, pr); closeProposal(city, h, pr, false); return ok(pr.status === 'passed' ? 'Sold. The money is in the coop treasury.' : 'Sale proposed to your co-owners.'); }
-      if (!l || !ownerIs(l, 'p', pid)) return err('You do not own this company.'); if (l.site && l.site.c) return err('A builder is working on it. End the contract first.'); { const md = HD.mandate(city, p, 'sell', listingValue(l), hx(city)); if (md) return md; } const v = r2(listingValue(l) * 0.8); p.cash += v; releaseListing(city, l); return ok(`Sold for ${v} M.`); }
+      if (!l || !ownerIs(l, 'p', pid)) return err('You do not own this company.'); if (l.site && l.site.c) return err('A builder is working on it. End the contract first.'); const v = r2(listingValue(l) * 0.8); p.cash += v; releaseListing(city, l); return ok(`Sold for ${v} M.`); }
     case 'upgrade': {
       const l = listing(city, a.lid); if (!l) return err('Unknown company.');
       if (l.owner && l.owner.k === 'h') { const h = city.holdings[l.owner.id]; if (!h.members[pid]) return err('Not your coop.'); const pr = { id: uid('p'), by: pid, kind: 'upgrade', lid: l.id, votes: { [pid]: true }, m, dueM: m + 1, status: 'open' }; h.proposals.push(pr); botVotes(city, h, pr); closeProposal(city, h, pr, false); return ok(pr.status === 'passed' ? 'Upgrade started.' : 'Proposal sent to your co-owners.'); }
