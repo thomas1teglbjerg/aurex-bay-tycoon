@@ -1073,7 +1073,7 @@ async function onClick(e) {
     case 'itemLend': { const r = await act('itemLend', { uid: d.uid }); if (r && r.ok && UI.modal) { UI.modal.lend = false; if (LIFE_MODALS.includes(UI.modal.t)) openLife(UI.modal); } return; }
     case 'itemGift': { const r = await act('itemGift', { uid: d.uid, to: $('gift-to').value }); if (r && r.ok) closeModal(); return; }
     case 'itemDonate': { if (d.v !== 'yes') { UI.modal.confirm = true; openLife(UI.modal); return; } const r = await act('itemDonate', { uid: d.uid }); if (r && r.ok) closeModal(); return; }
-    case 'tradeOpen': openLife({ t: 'trade', to: d.to || null, give: d.give ? [d.give] : [], get: [], cash: 0 }); return;
+    case 'tradeOpen': openLife({ t: 'trade', to: d.to || null, give: d.give ? [d.give] : [], get: d.get ? [d.get] : [], cash: 0 }); return;
     case 'tradePick': { const k = d.side === 'give' ? 'give' : 'get', a = UI.modal[k]; UI.modal[k] = a.includes(d.uid) ? a.filter((x) => x !== d.uid) : [...a, d.uid]; openLife(UI.modal); return; }
     case 'tradeCash': { const step = Math.abs(UI.modal.cash + Number(d.v) * 0.05) > 1 ? 0.5 : 0.05; UI.modal.cash = Math.round((UI.modal.cash + Number(d.v) * step) * 100) / 100; openLife(UI.modal); return; }
     case 'tradeSend': { const st = UI.modal; const r = await act('tradePropose', { to: st.to, give: st.give, get: st.get, cash: st.cash }); if (r && r.ok) closeModal(); return; }

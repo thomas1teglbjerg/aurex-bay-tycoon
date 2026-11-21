@@ -460,6 +460,8 @@ export function act(city, p, action, a, ctx) {
       const give = (a.give || []).map((id) => findItem(p, id)), get = (a.get || []).map((id) => findItem(to, id)), cash = r4(Number(a.cash) || 0);
       if (give.some((x) => !canMove(p, x)) || get.some((x) => !canMove(to, x))) return err('One of the pieces is no longer available.');
       if (!give.length && !get.length) return err('Add at least one piece.');
+      // a trade must bring the proposer something back: a piece from the other side or cash from them (a gift goes through Give away)
+      if (!get.length && cash >= 0) return err(`Pick what you want from ${to.name}: one of their pieces, or cash from them.`);
       const t = { id: uid('t'), from: p.id, to: to.id, give: give.map((x) => x.uid), get: get.map((x) => x.uid), cash, m, status: 'open' };
       if (to.bot) {
         const val = (pl, its) => its.reduce((s, x) => s + instValue(city, pl, x), 0);
@@ -545,6 +547,7 @@ function settleTrade(city, t, ctx) {
   a.life.items = a.life.items.filter((x) => !give.includes(x)); b.life.items = b.life.items.filter((x) => !get.includes(x));
   give.forEach((x) => b.life.items.push({ ...x, lent: false, m, cost: r4(instValue(city, a, x)) }));
   get.forEach((x) => a.life.items.push({ ...x, lent: false, m, cost: r4(instValue(city, b, x)) }));
+  [[a, give], [b, get]].forEach(([pl, its]) => { if (pl.life.daily && its.some((x) => x.uid === pl.life.daily)) pl.life.daily = null; });
   a.life.wallet -= t.cash; b.life.wallet += t.cash; t.status = 'done'; if (t.cash) { tx(a.life, m, `Trade with ${b.name}`, -t.cash); tx(b.life, m, `Trade with ${a.name}`, t.cash); }
   if (!b.bot) ctx.feed(a, m, `Trade with ${b.name} completed`, '', 'good');
   return ok('Trade completed.');

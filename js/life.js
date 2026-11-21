@@ -300,7 +300,7 @@ function cidModal(st) {
   const owner = Object.values(c.players).find((x) => x.life && x.life.items.some((i) => i.cid === st.cid));
   return `<article class="sheet lifep"><span class="cap">${esc(ROOMS[it.cat].name)} · ${esc(it.maker)}</span><h2>${esc(it.name)}</h2>${itemInfo(st.cid)}
     <div class="kpis sm"><div class="stat"><small>Market value</small><b>${money(L.itemValue(c, st.cid))}</b></div>${atDealer ? `<div class="stat"><small>Dealer price</small><b>${money(price)}</b></div>` : ''}</div>
-    ${atDealer ? `<button class="btn gold" data-a="itemBuy" data-cid="${st.cid}" ${p.life.wallet < price ? 'disabled' : ''}>Buy now · ${money(price)}</button>${L.roomFree(p, it.cat) < 1 ? `<p class="empty">You need a free spot in a ${esc(ROOMS[it.cat].name.toLowerCase())} first.</p>` : ''}` : owner && owner.id !== meId() ? `<button class="btn" data-a="tradeOpen" data-to="${owner.id}">Owned by ${esc(owner.name)} · propose a trade</button>` : ''}</article>`;
+    ${atDealer ? `<button class="btn gold" data-a="itemBuy" data-cid="${st.cid}" ${p.life.wallet < price ? 'disabled' : ''}>Buy now · ${money(price)}</button>${L.roomFree(p, it.cat) < 1 ? `<p class="empty">You need a free spot in a ${esc(ROOMS[it.cat].name.toLowerCase())} first.</p>` : ''}` : owner && owner.id !== meId() ? `<button class="btn" data-a="tradeOpen" data-to="${owner.id}" data-get="${owner.life.items.find((i) => i.cid === st.cid && !i.lot)?.uid || ''}">Owned by ${esc(owner.name)} · propose a trade</button>` : ''}</article>`;
 }
 function lotModal(st) {
   const c = city(), p = me(), l = c.life.lots.find((x) => x.id === st.lot); if (!l) return '<article class="sheet lifep"><p>The hammer has fallen on this lot.</p></article>';
@@ -323,7 +323,8 @@ function tradeModal(st) {
     <span class="cap">You get from ${esc(to.name)} · ${money(vGet)}</span><div class="cstrip">${to.life.items.filter((i) => !i.lot).map((i) => pickCard(to, i, 'get')).join('') || '<p class="empty">Nothing to trade.</p>'}</div>
     <div><span class="cap">Cash ${st.cash >= 0 ? 'you add' : 'they add'}</span><div class="stepper"><button data-a="tradeCash" data-v="-1">−</button><output>${money(Math.abs(st.cash))}</output><button data-a="tradeCash" data-v="1">+</button></div></div>
     <p class="empty">Balance for you: <b class="${vGet - vGive - st.cash >= 0 ? 'up' : 'down'}">${money(vGet - vGive - st.cash, true)}</b>. ${to.bot ? 'Rivals want about 5% more than they give.' : 'They will see it in their Life tab.'}</p>
-    <button class="btn gold" data-a="tradeSend">Send proposal</button></article>`;
+    ${!st.get.length && st.cash >= 0 ? `<p class="empty">Pick what you want from ${esc(to.name)} above, or ask them for cash.</p>` : ''}
+    <button class="btn gold" data-a="tradeSend" ${!st.get.length && st.cash >= 0 ? 'disabled' : ''}>Send proposal</button></article>`;
 }
 export function dinnerHTML(st) {
   const c = city(), p = me(), res = p.life.homes.find((h) => h.uid === p.life.res);
