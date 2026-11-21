@@ -56,6 +56,9 @@ if (theirs) {
   const room = L.ITEM[theirs.cid].cat; if (L.roomFree(p, room) < 1) A('homeRoom', { uid: h.uid, room });
   const v = L.instValue(city, bot, theirs);
   assert(!A('tradePropose', { to: bot.id, give: [], get: [theirs.uid], cash: v * 0.5 }).ok, 'lowball trade is declined');
+  // the bug Thomas hit: a piece plus cash for nothing back must be refused, not swallowed by the rival
+  const mineC = p.life.items.find((i) => !i.lot), nB = bot.life.items.length;
+  if (mineC) { const w0 = p.life.wallet, r0 = A('tradePropose', { to: bot.id, give: [mineC.uid], get: [], cash: 0.1 }); assert(!r0.ok && p.life.items.includes(mineC) && p.life.wallet === w0 && bot.life.items.length === nB, 'a trade with nothing in return is refused ' + r0.msg); }
   p.life.wallet = Math.max(p.life.wallet, v * 2); const r = A('tradePropose', { to: bot.id, give: [], get: [theirs.uid], cash: v * 1.2 }); assert(r.ok && p.life.items.some((i) => i.uid === theirs.uid), 'fair trade with a rival is accepted ' + r.msg);
 }
 // gift to another human
@@ -64,7 +67,7 @@ const gift = p.life.items.find((i) => L.ITEM[i.cid].cat === 'watch' && !i.lot);
 if (gift) assert(A('itemGift', { uid: gift.uid, to: 'v' }).ok && q.life.items.some((i) => i.uid === gift.uid), 'gift a watch to a friend');
 // human-human trade proposal and accept
 const mine = p.life.items.find((i) => !i.lot && L.ITEM[i.cid].cat === 'watch');
-if (mine && q.life.items.length) { assert(A('tradePropose', { to: 'v', give: [mine.uid], get: [], cash: 0 }).ok && city.life.trades.length === 1, 'propose trade to a player'); assert(E.apply(city, 'v', 'tradeAccept', { id: city.life.trades[0].id }, now).ok, 'they accept'); }
+if (mine && q.life.items.length) { assert(A('tradePropose', { to: 'v', give: [mine.uid], get: [], cash: -0.01 }).ok && city.life.trades.length === 1, 'propose trade to a player'); assert(E.apply(city, 'v', 'tradeAccept', { id: city.life.trades[0].id }, now).ok, 'they accept'); }
 // time passes: values move, history recorded
 for (let i = 0; i < 24; i++) step();
 assert(p.life.hist.length > 20 && city.life.ixh.art.length > 20, 'values tracked over time');
