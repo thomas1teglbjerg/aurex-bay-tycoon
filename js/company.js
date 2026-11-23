@@ -308,10 +308,9 @@ function cellarBox(c, l, ro) {
   const od = E.vintageOdds(c, l), hw = E.harvestWeek(l), yr = Math.floor(c.m / 12), done = l.vintY === yr || c.wk % 48 > hw;
   const when = `${E.monthName(Math.floor(hw / 4))}, Year ${yr + (done ? 2 : 1)}`;
   const groups = {}; (l.cellar || []).forEach((x) => (groups[x.cid] = groups[x.cid] || []).push(x));
-  const solo = l.owner.k === 'p';
   const rows = Object.entries(groups).filter(([cid]) => E.LIFE.ITEM[cid]).map(([cid, xs]) => {
     const v = E.LIFE.itemValue(c, cid), free = xs.filter((x) => !x.lot), lots = xs.filter((x) => x.lot), b = (how, uid, label, cls = '') => `<button class="btn sm ${cls}" data-a="cellar" data-lid="${l.id}" data-uid="${uid}" data-v="${how}">${label}</button>`;
-    const acts = ro ? '' : `<div class="btns" style="margin-top:6px">${free.length ? b('dealer', free[0].uid, `Sell 1 to ${w.dealer} · ${money(v * LC.dealerBuyback)}`) + (free.length > 1 ? b('dealerAll', free[0].uid, `Sell all ${free.length} · ${money(v * LC.dealerBuyback * free.length)}`) : '') + b('auction', free[0].uid, `Auction 1 ${w.unit} · est. ${money(v)}`, 'gold') + (solo ? b('take', free[0].uid, `Move 1 to my ${w.home}`) : '') : ''}${lots.map((x) => b('withdraw', x.uid, 'Withdraw from auction')).join('')}</div>`;
+    const acts = ro ? '' : `<div class="btns" style="margin-top:6px">${free.length ? b('dealer', free[0].uid, `Sell 1 to ${w.dealer} · ${money(v * LC.dealerBuyback)}`) + (free.length > 1 ? b('dealerAll', free[0].uid, `Sell all ${free.length} · ${money(v * LC.dealerBuyback * free.length)}`) : '') + b('auction', free[0].uid, `Auction 1 ${w.unit} · est. ${money(v)}`, 'gold') + b('take', free[0].uid, `Buy 1 for my ${w.home} · ${money(E.LIFE.takePrice(c, cid))}`) : ''}${lots.map((x) => b('withdraw', x.uid, 'Withdraw from auction')).join('')}</div>`;
     const it = E.LIFE.ITEM[cid], note = wine ? E.LIFE.wineWindow(it, c.m / 12) || '' : it.medium || '';
     return `<div class="row" style="align-items:flex-start;gap:12px">${cardHTML(cid, { cls: 'sm', noDelta: true })}<div class="grow"><b>${free.length} ${U(free.length)} in the ${w.place}${lots.length ? ` · ${lots.length} at auction` : ''}</b><span>${money(v)} per ${w.unit} · ${esc(note)}</span>${acts}</div></div>`;
   }).join('');
@@ -320,7 +319,7 @@ function cellarBox(c, l, ro) {
     <p style="margin:0 0 8px">Next ${w.event}: <b>${when}</b> · ${Math.round(od.chance * 100)}% chance of a collectible ${w.item}${od.heads ? ` (${od.heads} specialist${od.heads > 1 ? 's' : ''} leading: +${Math.round((od.chance - od.base) * 100)}% chance, ${Math.round(od.bump * 100)}% chance of a rarer ${wine ? 'wine' : 'car'}${od.somm.length ? `, with sommelier ${od.somm.map((t) => esc(E.TAL.PERSON[t].name)).join(' and ')}` : ''})` : ''}. Best this ${w.who} can make: ${od.top}.</p>
     ${!wine && cf.spec.models ? `<p class="empty" style="font-size:13px;margin:0 0 8px">Cars this ${w.who} can ${l.type === 'dealer' ? 'get' : 'build'}: ${cf.spec.models.map((m) => `${esc(m.name)} (${m.rar.join(' / ')})`).join(', ')}.</p>` : ''}
     ${rows ? `<div class="rows">${rows}</div>` : `<p class="empty">The ${w.place} is empty. ${w.empty}, ready to sell to the ${w.dealerKind}, put up at the auction house or keep.</p>`}
-    <p class="empty" style="font-size:13px">Specialists who lead a department here raise the chance and the rarity${wine ? '; a sommelier raises them most' : ''}. Sales go to the company${solo ? `. ${Cap(w.units)} moved to your ${w.home} can be traded with other players from the Life tab` : ''}.</p>
+    <p class="empty" style="font-size:13px">Specialists who lead a department here raise the chance and the rarity${wine ? '; a sommelier raises them most' : ''}. Sales go to the company. You can buy a ${w.unit} for your ${w.home} at the dealer's price, paid from your private account to the company; then trade it with other players from the Life tab.</p>
   </div></div>`;
 }
 function deptCardRO(l, d) {
