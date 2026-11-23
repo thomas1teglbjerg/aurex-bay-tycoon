@@ -2,7 +2,7 @@
 import './open-doors.js';
 import './standing.js';
 import * as E from '../supabase/functions/_shared/engine.js';
-import { PAPER, HOUSE_AD } from '../supabase/functions/_shared/content.js';
+import { PAPER, HOUSE_AD, HOUSE_PICS } from '../supabase/functions/_shared/content.js';
 const assert = (c, m) => { if (!c) { console.error('FAIL', m); process.exit(1); } console.log('ok ', m); };
 const G = E.GZ;
 let now = 1_700_000_000_000;
@@ -78,4 +78,13 @@ assert(!E.setHouseAd(city, { pic: 'nope', head: 'x' }).ok, 'house ad needs one o
 assert(E.setHouseAd(city, { pic: 'x-bergwald-gt', from: 'Bergwald', head: 'The GT is here', line: 'Test drive today' }).ok && G.houseAd(city).img === 'img/x-bergwald-gt.jpg', 'admin sets a new house ad');
 assert(E.setHouseAd(city, { off: true }).ok && G.houseAd(city) === null, 'admin turns it off');
 assert(E.setHouseAd(city, { reset: true }).ok && G.houseAd(city).head === HOUSE_AD.head, 'admin goes back to the default');
+// every company picture (img/c-*.jpg and each listing's own picture) can be the house ad, and every choice exists
+{ const fs = await import('node:fs'), have = new Set(HOUSE_PICS.map(([k]) => k));
+  const cos = fs.readdirSync(new URL('../img/', import.meta.url)).filter((f) => /^c-.*\.jpg$/.test(f)).map((f) => f.slice(0, -4));
+  const miss = cos.filter((k) => !have.has(k));
+  assert(!miss.length, `house ad pictures include every company picture${miss.length ? ' (missing ' + miss.join(', ') + ': add to a listing or HOUSE_CO_EXTRA)' : ''}`);
+  assert(have.has('cas-room-main'), 'house ad pictures include Marina Royale');
+  const gone = HOUSE_PICS.filter(([k]) => !fs.existsSync(new URL(`../img/${k}.jpg`, import.meta.url))).map(([k]) => k);
+  assert(!gone.length, `every house ad picture exists${gone.length ? ' (no file: ' + gone.join(', ') + ')' : ''}`);
+  assert(E.setHouseAd(city, { pic: 'cas-room-main', from: 'Marina Royale', head: 'Tables open tonight' }).ok && G.houseAd(city).img === 'img/cas-room-main.jpg', 'casino picture works as house ad'); }
 console.log('gazette ok');
