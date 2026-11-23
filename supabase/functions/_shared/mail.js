@@ -81,6 +81,6 @@ export function insightBody(card, rnd = Math.random) {
   const quiet = STOCKS.filter((s) => !(s.id in (card.shock || {})));
   if (quiet.length && rnd() < 0.5) lines.push(INSIGHT.rumour.replace('{x}', INSIGHT.hint[any(quiet).id][rnd() < 0.5 ? 0 : 1]));
   if (!hit.length) lines.push('Honestly, my contacts are quiet. No sector stands out.');
-  const fx = card.fx && INSIGHT.fx[card.fx];
+  const fx = (card.fx && INSIGHT.fx[card.fx]) || card.tip;
   return [any(INSIGHT.open), ...lines, ...(fx ? [fx] : []), INSIGHT.macro[card.econ] || INSIGHT.macro.none, any(INSIGHT.close)].join('\n');
 }

@@ -30,6 +30,7 @@ const ECON_IX = { Boom: 0, Stable: 1, Recession: 2, Crisis: 3 };
 const HOLDING_NAMES = ['Harborline Holdings', 'Nordic Capital Partners', 'Bluewater Group', 'Crown & Isle Ventures'];
 const r2 = (v) => Math.round(v * 100) / 100;
 const rand = Math.random;
+const WORLD_V = () => Math.max(...WORLD.map((w) => w.v || 1));
 const pick = (a) => a[Math.floor(rand() * a.length)];
 const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const uid = (p) => p + Math.random().toString(36).slice(2, 9);
@@ -230,7 +231,7 @@ export function createCity(now, opts = {}) {
   const city = {
     v: 2, id: opts.id || 'aurex-bay', season: 1, createdAt: now,
     clock: { g: 0, at: now, speed: opts.speed || 1 }, m: 0, g: 0, over: false,
-    econ: 'Stable', fx: null, deck: shuffle(WORLD.map((w) => w.id)), lastCard: null,
+    econ: 'Stable', fx: null, deck: shuffle(WORLD.map((w) => w.id)), wv: WORLD_V(), lastCard: null,
     stocks: {}, listings: LISTINGS.map((l) => ({ ...l, level: 1, owner: null, boughtM: null, upgrade: null, contracts: 0 })),
     players: {}, holdings: {}, contracts: [], netReqs: [], offers: [], news: []
   };
@@ -556,6 +557,10 @@ function migrate(city) {
 }
 // the 2026 map: districts and new positions for every place and client
 function migrateMap(city) {
+  // world cards added later (w.v) join the deck once, at random places (never in front: the next card may already be in the market insight)
+  { const v = WORLD_V(); if (Array.isArray(city.deck) && (city.wv || 1) < v) {
+    WORLD.filter((w) => (w.v || 1) > (city.wv || 1) && !city.deck.includes(w.id)).forEach((w) => { const i = 1 + Math.floor(rand() * city.deck.length); city.deck.splice(Math.min(i, city.deck.length), 0, w.id); });
+    city.wv = v; } }
   const known = Object.fromEntries(LISTINGS.map((n) => [n.id, n.type]));
   // a listing replaced by a new business: the owner is bought out at full value before the old one closes
   city.listings.filter((l) => known[l.id] !== l.type && l.owner).forEach((l) => {
@@ -1017,6 +1022,11 @@ function worldCard(city, m) {
   });
   const bonus = { viral: 'fashion', tourism: 'hotel', ai: 'data' }[card.fx];
   if (bonus) city.listings.filter((l) => l.owner && (l.type === bonus || (bonus === 'fashion' && l.type === 'clothing'))).forEach((l) => { const v = r2((l.type === 'clothing' ? 1 : 2) * SIZES[l.size].mult); payOwner(city, l, v); notifyOwner(city, l, `${card.title}: +${v} M`, `Your ${TYPES[l.type].name} in ${l.district} cashed in.`, 'good'); });
+  if (card.co) city.listings.filter((l) => l.owner && card.co[l.type] && !BLD.unbuilt(l) && !BLD.ruined(l)).forEach((l) => {
+    const v = r2(card.co[l.type] * SIZES[l.size].mult), name = lname(l);
+    if (v > 0) { payOwner(city, l, v); notifyOwner(city, l, `${card.title}: +${v} M`, `Your ${name} in ${l.district} cashed in.`, 'good'); }
+    else { debit(city, l.owner, -v); notifyOwner(city, l, `${card.title}: −${-v} M`, `Your ${name} in ${l.district} took the hit.`, 'bad'); }
+  });
   city.lastCard = { id: card.id, m, prev };
   BOT.onWorld(city, card, bx(city));
   news(city, m, card.title, card.text + (city.econ !== prev ? ` The economy moves from ${prev.toLowerCase()} to ${city.econ.toLowerCase()}.` : '') + policy, card.econ === 'Crisis' || card.econ === 'Recession' ? 'bad' : card.econ === 'Boom' ? 'good' : 'info', { world: card.id, at: card.at });
