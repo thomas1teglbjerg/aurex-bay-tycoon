@@ -446,10 +446,12 @@ export function act(city, p, action, a, ctx) {
       if (cs.lot) return err(`This ${w.unit} is up for auction.`);
       if (a.how === 'auction') { cs.lot = uid('lot'); city.life.lots.push({ id: cs.lot, cid: cs.cid, est: r4(v), endM: m + 1, bids: {}, seller: p.id, uid: cs.uid, lid: l.id, tier: lotTier(c) }); return ok(`${c.name} goes under the hammer at Aurex & Co. at the end of the month. Estimate ${r4(v)} M. The money goes to the company.`); }
       if (a.how === 'take') {
-        if (l.owner.k !== 'p') return err(`A ${w.item} from a co-owned company stays with the company. Sell it instead.`);
+        // the company is its own entity: you buy the piece from it at the dealer's price, so the company (and any co-owner) gets what a sale would bring
         if (roomFree(p, c.cat) < 1) return err(roomMsg(p, c.cat));
-        l.cellar = l.cellar.filter((x) => x !== cs); L.items.push({ uid: cs.uid, cid: cs.cid, m, cost: 0, lent: false });
-        return ok(`${c.name} is ${street(p, c.cat) ? 'parked on the street outside' : `in your ${w.home}`} now. Keep it, trade it with other players or give it away${c.cat === 'wine' ? ' or serve it at a dinner' : ''}.`);
+        const price = takePrice(city, cs.cid); if (L.wallet < price) return err(`You need ${r2(price)} M in your private account to buy it from the company.`);
+        L.wallet -= price; tx(L, m, `Bought from ${l.title || 'your company'} · ${c.name}`, -price); ctx.credit(city, l.owner, price);
+        l.cellar = l.cellar.filter((x) => x !== cs); L.items.push({ uid: cs.uid, cid: cs.cid, m, cost: price, lent: false });
+        return ok(`You bought ${c.name} from the company for ${r2(price)} M. It is ${street(p, c.cat) ? 'parked on the street outside' : `in your ${w.home}`} now. Keep it, trade it with other players or give it away${c.cat === 'wine' ? ' or serve it at a dinner' : ''}.`);
       }
       const all = a.all ? l.cellar.filter((x) => x.cid === cs.cid && !x.lot) : [cs], price = r4(v * LIFE.dealerBuyback * all.length);
       l.cellar = l.cellar.filter((x) => !all.includes(x)); ctx.credit(city, l.owner, price); toDealer(city, cs.cid);
@@ -494,6 +496,8 @@ export function act(city, p, action, a, ctx) {
 // once a year: a chance to make a collectible. The odds come from CRAFT[l.type].spec (VINTAGE for vineyards, TUNER for auto repair).
 // o.heads = ratings of the specialists leading the company, o.extra = sommelier bonuses, o.name = the company's name.
 const RAR = ['Common', 'Rare', 'Epic', 'Legendary'];
+// what you pay your own company to take a piece home: the dealer's buyback price
+export const takePrice = (city, cid) => r4(itemValue(city, cid) * LIFE.dealerBuyback);
 export const craftOf = (l) => CRAFT[l && l.type] || CRAFT.vineyard;
 export function vintage(city, l, o) {
   ensure(city); const cf = craftOf(l), V = cf.spec, m = city.m, g = m / 12, year = Math.floor(m / 12) + 1, heads = o.heads || [], x = o.extra || { chance: 0, bump: 0 };

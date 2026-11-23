@@ -61,4 +61,24 @@ p.life.homes.push({ uid: 'hv', hid: 'H3', boughtM: 0, paid: 1, bal: 0, rented: f
 res = E.apply(city, 'u', 'itemCellar', { lid: l.id, uid: t.uid, how: 'take' }, now);
 assert(res.ok && /own garage/.test(res.msg), `moved the car to the beach house garage: ${res.msg}`);
 assert(p.life.items.some((y) => y.uid === t.uid), 'it is in your collection, ready to trade');
+
+// taking it home is a purchase from the company at the dealer's price: the wallet pays, the company is paid
+const p3 = L.takePrice(city, r.def.id);
+assert(Math.abs(p3 - L.itemValue(city, r.def.id) * 0.8) < 1e-3 && Math.abs(p.life.items.find((y) => y.uid === t.uid).cost - p3) < 0.01, `bought at the dealer's price (${p3} M), which is its cost`);
+p.life.homes.push({ uid: 'hw', hid: 'H3', boughtM: 0, paid: 1, bal: 0, rented: false, rooms: {}, improve: 0 });
+do { r = L.vintage(city, l, { heads: [], name: l.title }); } while (!r.def); t = l.cellar.find((x) => x.cid === r.def.id);
+const pr = L.takePrice(city, r.def.id);
+p.life.wallet = pr / 2; res = E.apply(city, 'u', 'itemCellar', { lid: l.id, uid: t.uid, how: 'take' }, now);
+assert(!res.ok && /private account/.test(res.msg) && l.cellar.includes(t), `not enough in the private account: the car stays (${res.msg})`);
+p.life.wallet = 10; const w0 = p.life.wallet, c0b = p.cash;
+assert(E.apply(city, 'u', 'itemCellar', { lid: l.id, uid: t.uid, how: 'take' }, now).ok, 'bought it with enough money');
+assert(Math.abs(p.life.wallet - (w0 - pr)) < 1e-6 && Math.abs(p.cash - (c0b + pr)) < 1e-6, 'the wallet paid and the company got the money');
+
+// a co-owned company: co-owners may buy too, the money goes to the coop treasury
+const co = { id: 'hX', name: 'Test Coop', members: { u: 0.5, x: 0.5 }, treasury: 0, accrued: 0 };
+city.holdings[co.id] = co; l.owner = { k: 'h', id: co.id };
+do { r = L.vintage(city, l, { heads: [], name: l.title }); } while (!r.def); t = l.cellar.find((x) => x.cid === r.def.id);
+const pc = L.takePrice(city, r.def.id), tr0 = co.treasury; p.life.wallet = 10;
+res = E.apply(city, 'u', 'itemCellar', { lid: l.id, uid: t.uid, how: 'take' }, now);
+assert(res.ok && Math.abs(co.treasury - (tr0 + pc)) < 1e-6, `a co-owner buys from the co-owned shop, the treasury gets ${pc} M (${res.msg})`);
 console.log('ALL OK');
